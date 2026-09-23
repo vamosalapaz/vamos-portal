@@ -255,7 +255,7 @@ function openAgreementGate(){
   head.appendChild(el("h2","ml-ed-title","Before you start"));
   pan.appendChild(head);
   var scroll=el("div","ml-ed-body");pan.appendChild(scroll);
-  scroll.appendChild(el("p","ml-ed-intro","Please read and accept the partner agreement. It takes a couple of minutes, and you only do this once."));
+  scroll.appendChild(el("p","ml-ed-intro",(D(AG&&AG.accepted)?"We've updated the partner agreement. Please read and accept the new version.":"Please read and accept the partner agreement. It takes a couple of minutes.")));
   scroll.appendChild(agreementBody());
   var fw=el("div","ml-ed-footwrap");
   var err=el("p","ml-ed-err");fw.appendChild(err);
@@ -622,7 +622,7 @@ function render(){
 function loadAgreement(after){
   return fetch(AGHOOK+"?formType=agreement_status&k="+encodeURIComponent(K))
     .then(function(r){return r.json()})
-    .then(function(d){if(d&&d.ok){AG=d;if(!D(d.accepted)&&!after)openAgreementGate();}})
+    .then(function(d){if(d&&d.ok){AG=d;if((!D(d.accepted)||D(d.version)!==AGV)&&!after)openAgreementGate();}})
     .catch(function(){});
 }
 
