@@ -330,14 +330,17 @@ function openDocs(){
 }
 
 // ---------- Edit and add panel ----------
-var TOUR=["Private Tour","Shared Tour"],UNIT=["per tour","per person"],PLAT=["","Bokun","FareHarbor","Other"];
+var WHERE="Where it shows on the site",TOUR=["Private Tour","Shared Tour"],UNIT=["per tour","per person"],PLAT=["","Bokun","FareHarbor","Other"];
 var BTYPE=["","Powerboat","Panga","Sportfishing Boat","Sailboat","Sailing Catamaran","Power Catamaran","Motor Yacht","Luxury Yacht"];
 var MARINA=["","Marina de La Paz","La Marina del Palmar","Marina Palmira","Muelle Fiscal"];
 var FIELDS={
  o:[["#","Basics"],["name","Name","text",0],["tourType","Tour type","select",1,TOUR],["duration","Duration","text",1],
     ["capacity","Max guests","number",1],["priceUnit","Price unit","select",1,UNIT],
     ["boatId","Boat","select",0,null,"The boat this trip runs on. Leave it unset for a land-based trip, or if the boat varies."],
-    ["#","Price and online booking"],
+    ["#",WHERE],
+["activityIds","What guests do","multi",0,"Activity","Pick at least one. This decides which activity pages list this trip."],
+["destinationIds","Where it goes","multi",0,"Destination","Optional. Leave it empty if the trip isn't tied to one place."],
+["#","Price and online booking"],
     ["priceRange","Price range","text",0,null,"Shown on browse pages, including IVA. Your booking widget shows the real price at checkout."],
     ["bookingPlatform","Online booking","select",0,PLAT],["otherBookingPlatform","Name of your booking platform","text",0],
     ["widgetCode","Booking widget code","textarea",0,null,"Paste the widget code from your booking platform. We check it before it goes live."],
@@ -385,6 +388,16 @@ var FIELDS={
 ".ml-prog{margin-bottom:10px}"+
 ".ml-prog-bar{height:6px;border-radius:3px;background:#F0ECE3;overflow:hidden;margin:8px 0}"+
 ".ml-prog-bar div{height:100%;width:0;background:#2B4A8B;transition:width .3s}"+
+".ml-ms-box{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-height:40px;box-sizing:border-box;padding:6px 32px 6px 10px;border:1px solid #D9D2C3;border-radius:6px;background:#fff;cursor:pointer;position:relative}"+
+".ml-ms-box:focus-visible{outline:2px solid #2B4A8B;outline-offset:1px}"+
+".ml-ms-ph{font-size:15px;color:#8A949B}"+
+".ml-ms-chip{display:inline-flex;align-items:center;gap:2px;font-size:13px;padding:3px 4px 3px 9px;border-radius:999px;background:#E8EEFB;color:#2B4A8B}"+
+".ml-ms-x{background:none;border:0;color:#2B4A8B;font-size:15px;line-height:1;padding:0 4px;cursor:pointer}"+
+".ml-ms-chev{position:absolute;right:10px;top:50%;transform:translateY(-50%);color:#6B757D;font-size:12px}"+
+".ml-ms-menu{border:1px solid #D9D2C3;border-radius:6px;background:#fff;margin-top:4px;padding:4px 0}"+
+".ml-ed-f .ml-ms-opt{display:flex;align-items:center;gap:10px;padding:8px 12px;font-size:15px;margin:0;color:inherit;cursor:pointer}"+
+".ml-ed-f .ml-ms-opt:hover{background:#F6F2EA}"+
+".ml-ed-f .ml-ms-opt input{width:auto;margin:0;padding:0}"+
 "@media (max-width:600px){.ml-ed{max-width:none;border-left:0;padding:18px 18px 0}.ml-ed-footwrap{margin:0 -18px;padding:12px 18px calc(12px + env(safe-area-inset-bottom,0px))}}";
 document.head.appendChild(s)})();
 
@@ -396,6 +409,31 @@ function picker(multiple,onFiles){
   var i=document.createElement("input");i.type="file";i.accept="image/*";i.multiple=!!multiple;i.style.display="none";
   i.onchange=function(){onFiles(Array.prototype.slice.call(i.files||[]));i.value=""};
   document.body.appendChild(i);return i;
+}
+
+function msNorm(ids,opts){ids=ids.filter(Boolean);var known=opts.map(function(o){return o.id});
+return known.filter(function(i){return ids.indexOf(i)>-1}).concat(ids.filter(function(i){return known.indexOf(i)<0}));}
+function msWidget(inp,opts,boxId,ph){
+var root=el("div","ml-ms"),box=el("div","ml-ms-box"),menu=el("div","ml-ms-menu");
+box.id=boxId;box.tabIndex=0;box.setAttribute("role","button");box.setAttribute("aria-haspopup","listbox");menu.style.display="none";
+root.appendChild(box);root.appendChild(menu);
+function sel(){return inp.value?inp.value.split(","):[]}
+function set(a){inp.value=msNorm(a,opts).join(",");inp.dispatchEvent(new Event("change",{bubbles:true}));draw()}
+function draw(){
+var s=sel(),open=menu.style.display!="none";box.innerHTML="";box.setAttribute("aria-expanded",open?"true":"false");
+var shown=opts.filter(function(o){return s.indexOf(o.id)>-1});
+if(!shown.length)box.appendChild(el("span","ml-ms-ph",ph));
+shown.forEach(function(o){var c=el("span","ml-ms-chip",o.label);var x=el("button","ml-ms-x","\u00d7");x.type="button";x.setAttribute("aria-label","Remove "+o.label);
+x.onclick=function(e){e.stopPropagation();set(sel().filter(function(i){return i!==o.id}))};c.appendChild(x);box.appendChild(c)});
+box.appendChild(el("span","ml-ms-chev",open?"\u25B4":"\u25BE"));
+menu.innerHTML="";
+opts.forEach(function(o){var lb=el("label","ml-ms-opt");var cb=el("input");cb.type="checkbox";cb.checked=s.indexOf(o.id)>-1;
+cb.onchange=function(){var a=sel().filter(function(i){return i!==o.id});if(cb.checked)a.push(o.id);set(a)};
+lb.appendChild(cb);lb.appendChild(document.createTextNode(o.label));menu.appendChild(lb)});
+}
+function tog(){menu.style.display=menu.style.display=="none"?"block":"none";draw()}
+box.onclick=tog;box.onkeydown=function(e){if(e.target===box&&(e.key=="Enter"||e.key==" ")){e.preventDefault();tog()}};
+draw();return root;
 }
 
 function openEditor(kind,it){
@@ -412,14 +450,22 @@ function openEditor(kind,it){
   var scroll=el("div","ml-ed-body");pan.appendChild(scroll);
   scroll.appendChild(el("p","ml-ed-intro",isNew?"New listings are reviewed before they appear on the site.":"Changes are reviewed before they appear on the site. Your current listing stays live while we review them."));
   var grid=el("div","ml-ed-grid");scroll.appendChild(grid);
-  var inputs={},wraps={};
+  var inputs={},wraps={},OPTS=(DATA&&DATA.options)||[];
   FIELDS[kind].forEach(function(f){
-    if(f[0]=="#"){grid.appendChild(el("h3","ml-ed-sec",f[1]));return;}
+    if((f[0]=="#"&&f[1]==WHERE||f[2]=="multi")&&!OPTS.length)return;
+if(f[0]=="#"){grid.appendChild(el("h3","ml-ed-sec",f[1]));return;}
     var w=el("div","ml-ed-f"+(f[3]?" half":""));
     var id="ml-ed-"+f[0];
     var l=el("label",null,f[1]);l.setAttribute("for",id);w.appendChild(l);
     var v=it?D(it[f[0]]):"";var inp;
-    if(f[0]=="boatId"){
+    if(f[2]=="multi"){
+inp=el("input");inp.type="hidden";
+var mo=OPTS.filter(function(o){return o.type==f[4]}).map(function(o){return{id:o.id,label:D(o.label)}}).sort(function(a,b){return a.label.localeCompare(b.label)});
+inp.value=msNorm(v.split(","),mo).join(",");
+l.setAttribute("for",id+"-box");
+w.appendChild(msWidget(inp,mo,id+"-box",f[4]=="Activity"?"Choose activities":"Choose destinations"));
+}
+else if(f[0]=="boatId"){
       inp=el("select");
       var none=el("option",null,"Not tied to a specific boat");none.value="";inp.appendChild(none);
       (DATA&&DATA.boats||[]).forEach(function(b){var op=el("option",null,D(b.name));op.value=b.id;inp.appendChild(op)});
@@ -467,6 +513,7 @@ function openEditor(kind,it){
   }
   function upd(){if(!send||isNew||textSent)return;send.disabled=!dirty();}
   grid.addEventListener("input",upd);grid.addEventListener("change",upd);
+grid.addEventListener("change",function(e){if(e.target&&e.target.type=="hidden")err.style.display="none"});
 
   grid.appendChild(el("h3","ml-ed-sec","Photos"));
   var ph=el("div");scroll.appendChild(ph);
@@ -578,6 +625,7 @@ function openEditor(kind,it){
   }
   send.onclick=function(){
     if(!inputs.name.value.trim()){err.textContent="Enter a name first.";err.style.display="block";inputs.name.focus();return;}
+if(inputs.activityIds&&!inputs.activityIds.value){err.textContent="Choose at least one activity, so your trip shows on the right pages.";err.style.display="block";return;}
     var params={};Object.keys(inputs).forEach(function(k){params[k]=inputs[k].value.trim()});
     if(params.bookingPlatform!==undefined&&params.bookingPlatform!="Other")params.otherBookingPlatform="";
     if(kind=="o"&&!params.bookingPlatform)params.widgetCode="";
