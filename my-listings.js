@@ -1,5 +1,5 @@
 (function(){
-// Vamos a La Paz partner portal — v3 (Oct 2026)
+// Vamos a La Paz partner portal — v6 (Oct 2026)
 // Spanish-first interface with an English switch; bilingual listing text (ES/EN tabs,
 // AI translation via the "Vamos Portal — translate" Make scenario); cancellation policy.
 // Spanish + cancellation fields are read/saved through "Vamos Portal — bilingual fields".
@@ -663,9 +663,13 @@ function biEdit(st,L,val){
  if(st.ai[O]||!st[O].trim()||st.pend[O]){st.pend[O]=true;st.stale[O]=false;}
  else st.stale[O]=true;
 }
-function biApply(st,res){
+function biApply(st,res,input){
  if(!res||(!res.es&&!res.en))return false;
- var src=res.source=="en"?"en":"es",O=src=="es"?"en":"es";
+ var src=res.source=="en"?"en":"es";
+ // Trust what the partner typed over the model's label: the side that matches the input is theirs.
+ var norm=function(x){return String(x||"").replace(/\s+/g," ").trim()};
+ if(input!=null){var ni=norm(input);if(norm(res.en)==ni&&norm(res.es)!=ni)src="en";else if(norm(res.es)==ni&&norm(res.en)!=ni)src="es";}
+ var O=src=="es"?"en":"es";
  st.es=res.es||"";st.en=res.en||"";
  st.ai[src]=false;st.ai[O]=true;st.pend.en=st.pend.es=false;st.stale.en=st.stale.es=false;st.tuned={en:false,es:false};
  return true;
@@ -730,7 +734,7 @@ function openEditor(kind,it,restore){
    var src=biSource(st);if(!st[src].trim())return;
    btn.disabled=true;btn.textContent=t("translating");
    var o={};o[f0]={text:st[src],lang:src};
-   translate(o).then(function(d){if(!biApply(st,d[f0]))throw 0;draw();upd();})
+   translate(o).then(function(d){if(!biApply(st,d[f0],o[f0].text))throw 0;draw();upd();})
    .catch(function(){err.textContent=t("tFail");err.style.display="block";draw();});
   }
   inp.addEventListener("input",function(){biEdit(st,st.tab,inp.value);
@@ -931,7 +935,7 @@ function openEditor(kind,it,restore){
   Object.keys(BI).forEach(function(k){var s=BI[k];
    if(s.pend.en||s.pend.es){var src=biSource(s);if(s[src].trim()){o[k]={text:s[src],lang:src};keys.push(k);}else{s.pend.en=s.pend.es=false;}}});
   if(!keys.length)return Promise.resolve();
-  return translate(o).then(function(d){keys.forEach(function(k){if(!biApply(BI[k],d[k]))throw 0;});});
+  return translate(o).then(function(d){keys.forEach(function(k){if(!biApply(BI[k],d[k],o[k].text))throw 0;});});
  }
  function saveExtras(){
   var p={formType:"save_extras",target:target,recordId:rowId,aiTranslated:aiTags()};
