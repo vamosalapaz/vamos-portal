@@ -1,9 +1,9 @@
 (function(){
-// Vamos a La Paz partner portal — v16 (Oct 2026): clicking Show/Hide (or Edit) no longer also opens the editor via the card click. v15: hide/show, remove and cancel-remove go to the standalone "Vamos Portal — visibility & removal" Make scenario, and failures are now reported instead of silently treated as success. v14: creates, edits, Spanish text and photo copies go to the standalone "Vamos Portal — partner edits" Make scenario. v13: listings (incl. Spanish + cancellation fields) come from the standalone "Vamos Portal — listings" Make scenario in one call; the v10–v12 feed workarounds are gone because the feed is fixed at source. v9: Duplicate an offering from the ••• menu (photos copied server-side). v8: language from the invite link (?lang=es|en), language switch on the agreement screen. v7: final partner agreement, Spanish-first (Spanish prevails)
+// Vamos a La Paz partner portal — v17 (Oct 2026): photo uploads go to the standalone "Vamos Portal — photo uploads" scenario; the old consolidated scenario is no longer called; transparent images (e.g. PNG logos) get a white background instead of black when converted to JPEG. v16: clicking Show/Hide (or Edit) no longer also opens the editor via the card click. v15: hide/show, remove and cancel-remove go to the standalone "Vamos Portal — visibility & removal" Make scenario, and failures are now reported instead of silently treated as success. v14: creates, edits, Spanish text and photo copies go to the standalone "Vamos Portal — partner edits" Make scenario. v13: listings (incl. Spanish + cancellation fields) come from the standalone "Vamos Portal — listings" Make scenario in one call; the v10–v12 feed workarounds are gone because the feed is fixed at source. v9: Duplicate an offering from the ••• menu (photos copied server-side). v8: language from the invite link (?lang=es|en), language switch on the agreement screen. v7: final partner agreement, Spanish-first (Spanish prevails)
 // Spanish-first interface with an English switch; bilingual listing text (ES/EN tabs,
 // AI translation via the "Vamos Portal — translate" Make scenario); cancellation policy.
 // Spanish + cancellation fields are read/saved through "Vamos Portal — bilingual fields".
-var HOOK="https://hook.us2.make.com/esw01fv9bnkd8azj4squvtynr5s7t8xs";
+var UHOOK="https://hook.us2.make.com/dievg7xgc44me4bpc9glhf9h84reg9ht";
 var LHOOK="https://hook.us2.make.com/ya7lhckys8969y52v6hbpd7715gebdev"; // Vamos Portal — listings (read)
 var AGHOOK="https://hook.us2.make.com/q1khmq1vvcc3usokx3370l9xvhh14yeh";
 var THOOK="https://hook.us2.make.com/y36pjclzg086op6y9vkg3dmwvvgjtnw3";
@@ -366,7 +366,7 @@ function save(){
 }
 function showBanner(x){$("ml-banner").textContent=x;$("ml-banner").style.display="block";window.scrollTo({top:0});}
 function sendForm(params,url){
- return fetch(url||HOOK,{method:"POST",body:new URLSearchParams(Object.assign({k:K},params))})
+ return fetch(url||UHOOK,{method:"POST",body:new URLSearchParams(Object.assign({k:K},params))})
  .then(function(r){return r.json()}).then(function(d){if(!d||!d.ok)throw 0;return d});
 }
 function shrink(file){
@@ -375,7 +375,7 @@ function shrink(file){
   im.onload=function(){
    var w=im.naturalWidth,h=im.naturalHeight,s=Math.min(1,2000/Math.max(w,h));
    var c=document.createElement("canvas");c.width=Math.round(w*s);c.height=Math.round(h*s);
-   c.getContext("2d").drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(url);
+   var g=c.getContext("2d");g.fillStyle="#fff";g.fillRect(0,0,c.width,c.height);g.drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(url);
    var data=c.toDataURL("image/jpeg",0.82);
    res({b64:data.split(",")[1],preview:data,small:w<1600});
   };
