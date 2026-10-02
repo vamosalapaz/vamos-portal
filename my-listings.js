@@ -1,5 +1,5 @@
 (function(){
-// Vamos a La Paz partner portal — v7 (Oct 2026): final partner agreement, Spanish-first (Spanish prevails)
+// Vamos a La Paz partner portal — v8 (Oct 2026): language from the invite link (?lang=es|en), language switch on the agreement screen. v7: final partner agreement, Spanish-first (Spanish prevails)
 // Spanish-first interface with an English switch; bilingual listing text (ES/EN tabs,
 // AI translation via the "Vamos Portal — translate" Make scenario); cancellation policy.
 // Spanish + cancellation fields are read/saved through "Vamos Portal — bilingual fields".
@@ -17,6 +17,9 @@ var pending={},DATA=null,AG=null,EXTRAS_OK=false;
 // ---------- Language ----------
 var LANG="es";
 try{var sl=localStorage.getItem("vamos-portal-lang");if(sl=="en"||sl=="es")LANG=sl}catch(e){}
+// The invite link carries the partner's language (?lang=es|en); it wins over whatever this browser last used.
+try{var ul=new URLSearchParams(location.search).get("lang");if(ul=="en"||ul=="es"){LANG=ul;try{localStorage.setItem("vamos-portal-lang",LANG)}catch(e){}}}catch(e){}
+function rememberLang(){try{localStorage.setItem("vamos-portal-lang",LANG)}catch(e){}try{var u=new URL(location.href);u.searchParams.set("lang",LANG);history.replaceState(null,"",u.toString())}catch(e){}}
 var S={
 es:{
  live:"\u25CF Publicado",removal:"Eliminaci\u00f3n solicitada",review:"En revisi\u00f3n",hidden:"Oculto",hiddenProfile:"Oculto porque tu perfil est\u00e1 oculto",
@@ -200,7 +203,7 @@ function langSwitch(onChange){
  var w=el("div","ml-lang");w.setAttribute("role","group");w.setAttribute("aria-label","Idioma / Language");
  [["es","Espa\u00f1ol"],["en","English"]].forEach(function(p){
   var b=el("button",null,p[1]);b.type="button";b.setAttribute("data-l",p[0]);b.setAttribute("aria-pressed",LANG==p[0]?"true":"false");
-  b.onclick=function(){if(LANG==p[0])return;LANG=p[0];try{localStorage.setItem("vamos-portal-lang",LANG)}catch(e){}applyStatic();render();if(onChange)onChange();};
+  b.onclick=function(){if(LANG==p[0])return;LANG=p[0];rememberLang();applyStatic();render();if(onChange)onChange();};
   w.appendChild(b)});
  return w;
 }
@@ -460,11 +463,14 @@ function agreementBody(){
  wrap.appendChild(body);
  return wrap;
 }
-function openAgreementGate(){
+function openAgreementGate(prev){
  var scrim=el("div","ml-ed-scrim");scrim.style.justifyContent="center";
  var pan=el("div","ml-ed");pan.style.maxWidth="620px";pan.setAttribute("role","dialog");
  var head=el("div","ml-ed-head");
  head.appendChild(el("h2","ml-ed-title",t("before")));
+ // Language switch inside the agreement screen: rebuilds the screen in the other language, keeping what was typed and ticked.
+ var gsw=langSwitch(function(){var st={n:nm.value,c1:c1.checked,c2:c2.checked};if(scrim.parentNode)scrim.parentNode.removeChild(scrim);openAgreementGate(st);});
+ gsw.style.margin="8px 0 0";head.appendChild(gsw);
  pan.appendChild(head);
  var scroll=el("div","ml-ed-body");pan.appendChild(scroll);
  scroll.appendChild(el("p","ml-ed-intro",(D(AG&&AG.accepted)?t("agUpdated"):t("agRead"))));
@@ -487,6 +493,7 @@ function openAgreementGate(){
  foot.appendChild(go);fw.appendChild(foot);pan.appendChild(fw);
  function upd(){go.disabled=!(nm.value.trim()&&c1.checked&&c2.checked)}
  nm.addEventListener("input",upd);c1.addEventListener("change",upd);c2.addEventListener("change",upd);
+ if(prev){nm.value=prev.n||"";c1.checked=!!prev.c1;c2.checked=!!prev.c2;upd();}
  go.onclick=function(){
   go.disabled=true;go.textContent=t("saving");err.style.display="none";
   fetch(AGHOOK,{method:"POST",body:new URLSearchParams({formType:"accept_agreement",k:K,signedBy:nm.value.trim(),version:AGV})})
