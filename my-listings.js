@@ -1,5 +1,5 @@
 (function(){
-// Vamos a La Paz partner portal — v13 (Oct 2026): listings (incl. Spanish + cancellation fields) come from the standalone "Vamos Portal — listings" Make scenario in one call; the v10–v12 feed workarounds are gone because the feed is fixed at source. v9: Duplicate an offering from the ••• menu (photos copied server-side). v8: language from the invite link (?lang=es|en), language switch on the agreement screen. v7: final partner agreement, Spanish-first (Spanish prevails)
+// Vamos a La Paz partner portal — v14 (Oct 2026): creates, edits, Spanish text and photo copies go to the standalone "Vamos Portal — partner edits" Make scenario. v13: listings (incl. Spanish + cancellation fields) come from the standalone "Vamos Portal — listings" Make scenario in one call; the v10–v12 feed workarounds are gone because the feed is fixed at source. v9: Duplicate an offering from the ••• menu (photos copied server-side). v8: language from the invite link (?lang=es|en), language switch on the agreement screen. v7: final partner agreement, Spanish-first (Spanish prevails)
 // Spanish-first interface with an English switch; bilingual listing text (ES/EN tabs,
 // AI translation via the "Vamos Portal — translate" Make scenario); cancellation policy.
 // Spanish + cancellation fields are read/saved through "Vamos Portal — bilingual fields".
@@ -7,7 +7,7 @@ var HOOK="https://hook.us2.make.com/esw01fv9bnkd8azj4squvtynr5s7t8xs";
 var LHOOK="https://hook.us2.make.com/ya7lhckys8969y52v6hbpd7715gebdev"; // Vamos Portal — listings (read)
 var AGHOOK="https://hook.us2.make.com/q1khmq1vvcc3usokx3370l9xvhh14yeh";
 var THOOK="https://hook.us2.make.com/y36pjclzg086op6y9vkg3dmwvvgjtnw3";
-var XHOOK="https://hook.us2.make.com/juhnqhttwvi3gphci16587r1t736xbfq";
+var EHOOK="https://hook.us2.make.com/bp3es6qs5gufdg2nnbs6k4gtx84aew5c"; // Vamos Portal — partner edits
 var AGV="2026-10";
 var K=new URLSearchParams(location.search).get("k")||"";
 var $=function(i){return document.getElementById(i)};
@@ -984,7 +984,7 @@ function openEditor(kind,it,restore,dup){
   var p={formType:"save_extras",target:target,recordId:rowId,aiTranslated:aiTags()};
   Object.keys(BI).forEach(function(k){p[k+"Es"]=BI[k].es.trim();});
   if(kind=="o"){p.cancellationPolicy=inputs.cancellationPolicy.value;p.cancellationNotes=BI.cancellationNotes.en.trim();p.cancellationNotesEs=BI.cancellationNotes.es.trim();}
-  return sendForm(p,XHOOK).catch(function(){return sendForm(p,XHOOK)});
+  return sendForm(p,EHOOK).catch(function(){return sendForm(p,EHOOK)});
  }
  send.onclick=function(){
   var nm=BI.name?(BI.name.en.trim()||BI.name.es.trim()):inputs.name.value.trim();
@@ -1008,14 +1008,14 @@ function openEditor(kind,it,restore,dup){
    if(PH.logo)queue.push({slot:"logo",name:"logo.jpg",p:PH.logo,label:t("logoLabel")});
    if(PH.cover)queue.push({slot:"cover",name:"cover.jpg",p:PH.cover,label:t("coverLabel")});
    PH.gallery.forEach(function(p,i){queue.push({slot:"gallery",name:"photo-"+(i+1)+".jpg",p:p,label:t("photoLabel")(i+1)})});
-   return sendForm(params).then(function(d){
+   return sendForm(params,EHOOK).then(function(d){
     textSent=true;rowId=d.id;target=isNew?kind:kind+"u";
     if(!rowId){BUSY=false;closeEditor();done();return;}
     return saveExtras().catch(function(){extrasWarn=true}).then(function(){
      // Duplicate: copy the original's photos onto the new offering before any new uploads,
      // so a replacement cover or extra gallery photos land on top of the copied ones.
      if(!DUP||!(D(DUP.coverPhoto)||D(DUP.photos)))return;
-     return sendForm({formType:"copy_photos",recordId:rowId,sourceId:DUP.id,copyCover:PH.cover?"0":"1"},XHOOK)
+     return sendForm({formType:"copy_photos",recordId:rowId,sourceId:DUP.id,copyCover:PH.cover?"0":"1"},EHOOK)
       .catch(function(){copyWarn=true});
     }).then(function(){
      BUSY=false;
