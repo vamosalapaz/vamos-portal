@@ -1,5 +1,5 @@
 (function(){
-// Vamos a La Paz partner portal — v10 (Oct 2026): ignore the empty placeholder row Make returns when a partner has no offerings or boats. v9: Duplicate an offering from the ••• menu (photos copied server-side). v8: language from the invite link (?lang=es|en), language switch on the agreement screen. v7: final partner agreement, Spanish-first (Spanish prevails)
+// Vamos a La Paz partner portal — v11 (Oct 2026): clean activity/destination ID lists (the listings feed wraps them in stray quotes, which created junk Reference Data records). v10: ignore the empty placeholder row Make returns when a partner has no offerings or boats. v9: Duplicate an offering from the ••• menu (photos copied server-side). v8: language from the invite link (?lang=es|en), language switch on the agreement screen. v7: final partner agreement, Spanish-first (Spanish prevails)
 // Spanish-first interface with an English switch; bilingual listing text (ES/EN tabs,
 // AI translation via the "Vamos Portal — translate" Make scenario); cancellation policy.
 // Spanish + cancellation fields are read/saved through "Vamos Portal — bilingual fields".
@@ -1068,6 +1068,9 @@ function load(){
   var d=rs[0];if(!d||!d.ok){bad();return}
   // Make's aggregators return one empty row when a search finds nothing; drop rows with no id.
   d.offerings=(d.offerings||[]).filter(function(x){return x&&x.id});d.boats=(d.boats||[]).filter(function(x){return x&&x.id});
+  // The listings feed joins linked IDs with a quoted separator; keep only well-formed record IDs.
+  var ids=function(v){return (D(v).match(/rec[A-Za-z0-9]{14}/g)||[]).join(",")};
+  d.offerings.forEach(function(o){o.activityIds=ids(o.activityIds);o.destinationIds=ids(o.destinationIds);o.boatId=ids(o.boatId).split(",")[0]||"";});
   DATA=d;EXTRAS_OK=!!(rs[1]&&rs[1].ok);if(EXTRAS_OK)mergeExtras(rs[1]);
   $("ml-who").textContent=D(d.operator&&d.operator.name)||D(d.partnerName);render();
  }).catch(bad);
