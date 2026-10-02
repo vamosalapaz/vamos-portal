@@ -1,5 +1,5 @@
 (function(){
-// Vamos a La Paz partner portal — v6 (Oct 2026)
+// Vamos a La Paz partner portal — v7 (Oct 2026): final partner agreement, Spanish-first (Spanish prevails)
 // Spanish-first interface with an English switch; bilingual listing text (ES/EN tabs,
 // AI translation via the "Vamos Portal — translate" Make scenario); cancellation policy.
 // Spanish + cancellation fields are read/saved through "Vamos Portal — bilingual fields".
@@ -7,7 +7,7 @@ var HOOK="https://hook.us2.make.com/esw01fv9bnkd8azj4squvtynr5s7t8xs";
 var AGHOOK="https://hook.us2.make.com/q1khmq1vvcc3usokx3370l9xvhh14yeh";
 var THOOK="https://hook.us2.make.com/y36pjclzg086op6y9vkg3dmwvvgjtnw3";
 var XHOOK="https://hook.us2.make.com/juhnqhttwvi3gphci16587r1t736xbfq";
-var AGV="draft-2026-09";
+var AGV="2026-10";
 var K=new URLSearchParams(location.search).get("k")||"";
 var $=function(i){return document.getElementById(i)};
 var D=function(v){if(v==null||v==="")return "";try{return decodeURIComponent(String(v))}catch(e){return String(v)}};
@@ -37,8 +37,8 @@ es:{
  foot:"\u00bfNecesitas ayuda? Escr\u00edbele a Vamos a La Paz por WhatsApp y lo resolvemos.",save:"Guardar cambios",discard:"Descartar",
  badTitle:"Este enlace no funciona",badBody:"Puede que haya vencido o que se haya cortado al copiarlo. Escr\u00edbenos y te enviamos uno nuevo.",
  // agreement
- agNote:"Este es un borrador del acuerdo que a\u00fan no ha sido revisado legalmente. Es posible que te pidamos firmar una versi\u00f3n nueva cuando lo est\u00e9.",
- agEnNote:"Por ahora el texto del acuerdo est\u00e1 en ingl\u00e9s. Tendremos la versi\u00f3n en espa\u00f1ol cuando termine la revisi\u00f3n legal. Si tienes dudas sobre alg\u00fan punto, escr\u00edbenos por WhatsApp.",
+ agNote:"",
+ agEnNote:"",
  agIntro:"Entre Peter Jostrom (persona f\u00edsica), RFC JOPE801231DS8, La Paz, Baja California Sur, con el nombre comercial Vamos a La Paz, y t\u00fa.",
  before:"Antes de empezar",agUpdated:"Actualizamos el acuerdo de socios. Por favor l\u00e9elo y acepta la nueva versi\u00f3n.",agRead:"Por favor lee y acepta el acuerdo de socios. Toma un par de minutos.",
  agName:"Tu nombre completo y cargo",agNamePh:"Mar\u00eda Garc\u00eda, due\u00f1a",agC1:"Acepto este acuerdo en nombre de mi negocio.",
@@ -111,7 +111,7 @@ en:{
  offEmpty:"You don't have any offerings listed yet.",boatEmpty:"You don't have any boats listed yet. Boats are the vessels your trips run on. Add one and you'll be able to attach your offerings to it.",
  foot:"Need help? Message Vamos a La Paz on WhatsApp and we'll sort it out.",save:"Save changes",discard:"Discard",
  badTitle:"This link isn't working",badBody:"It may have expired, or part of it may have been cut off when it was copied. Send us a message and we'll issue you a fresh one.",
- agNote:"This is a draft agreement that has not been legally reviewed. We may ask you to sign a new version once it has been.",
+ agNote:"",
  agEnNote:"",
  agIntro:"Between Peter Jostrom (persona f\u00edsica), RFC JOPE801231DS8, La Paz, Baja California Sur, trading as Vamos a La Paz, and you.",
  before:"Before you start",agUpdated:"We've updated the partner agreement. Please read and accept the new version.",agRead:"Please read and accept the partner agreement. It takes a couple of minutes.",
@@ -380,7 +380,7 @@ function translate(fieldsObj){
  });
 }
 
-// ---------- Agreement text (English; legal draft) ----------
+// ---------- Agreement text (final, Oct 2026). Spanish and English; the Spanish version prevails. ----------
 var AG_CORE=[
 ["What this is",["Vamos a La Paz lists La Paz operators, boats and experiences at vamosalapaz.com so travellers can find them.","How bookings reach you depends on the arrangement in your Schedule below. Either way, you run the experience and you are responsible for it.","This is not exclusive. You can list and sell anywhere else, and we list other partners, including your competitors."]],
 ["Your listings",["You give us your business details, boats, experiences, prices and photos, and keep them current.","You confirm the information is accurate, that you own the photos or have permission to use them and we may publish them, and that you will honour bookings made through us at the price and terms shown.","All prices you give us include IVA and any other taxes and fees, so travellers see the final price.","We may edit listing copy, choose which photos to show, decide where listings appear, and pause or remove any listing at any time."]],
@@ -389,7 +389,7 @@ var AG_CORE=[
 ["Your information and portal access",["We hold your business and contact details to run the directory and contact you. We do not sell your information, and we publish only what appears in your listings.","Anyone holding your partner portal link can edit your listings, so treat it like a password. Tell us if it should be reissued."]],
 ["Ending it",["Either of us can end this at any time, effective immediately, by telling the other. Your listings come off the site.","Trips already booked still run on the terms that applied when they were booked, and amounts owed are still owed."]],
 ["Changes",["We will tell you before changed terms apply to you. Carrying on listing with us means the new terms apply; otherwise you can end the agreement."]],
-["Law",["The laws of Mexico apply, and the courts of La Paz, Baja California Sur have jurisdiction."]]
+["Law",["The laws of Mexico apply, and the courts of La Paz, Baja California Sur have jurisdiction.","This agreement is provided in Spanish and English. If the two versions differ, the Spanish version prevails."]]
 ];
 var AG_A=["Travellers book with you \u2014 15% commission",[
 "15% of the total booking value, IVA included.",
@@ -405,26 +405,51 @@ var AG_B=["We sell the trip \u2014 15% margin",[
 "Published cancellation terms for the trip apply, and we pass on what you are owed under them.",
 "You invoice us for each trip."]];
 var AG_PRICE=["Pricing",["The price on vamosalapaz.com will not be higher than the price you advertise for the same experience, on the same terms, anywhere else. If you lower a price elsewhere, tell us so we can match it."]];
+var AG_CORE_ES=[
+["Qu\u00e9 es esto",["Vamos a La Paz publica operadores, barcos y experiencias de La Paz en vamosalapaz.com para que los viajeros puedan encontrarlos.","La forma en que te llegan las reservas depende del esquema indicado en tu Anexo, m\u00e1s abajo. En cualquier caso, t\u00fa operas la experiencia y eres responsable de ella.","Esto no es exclusivo. Puedes publicar y vender en cualquier otro lugar, y nosotros publicamos a otros socios, incluidos tus competidores."]],
+["Tus publicaciones",["Nos proporcionas los datos de tu negocio, barcos, experiencias, precios y fotos, y los mantienes actualizados.","Confirmas que la informaci\u00f3n es correcta, que eres due\u00f1o de las fotos o tienes permiso para usarlas y que podemos publicarlas, y que respetar\u00e1s las reservas hechas a trav\u00e9s de nosotros al precio y en los t\u00e9rminos mostrados.","Todos los precios que nos das incluyen el IVA y cualquier otro impuesto o cargo, para que los viajeros vean el precio final.","Podemos editar el texto de las publicaciones, elegir qu\u00e9 fotos mostrar, decidir d\u00f3nde aparecen las publicaciones y pausar o quitar cualquier publicaci\u00f3n en cualquier momento."]],
+["Requisitos legales",["Confirmas que cuentas con todas las licencias, permisos, registros, p\u00f3lizas de seguro y autorizaciones requeridos para las experiencias que publicas, que est\u00e1n vigentes y que nos avisar\u00e1s de inmediato si alguno vence o cambia."]],
+["La operaci\u00f3n de la experiencia",["Eres responsable de prestar la experiencia de forma segura y tal como se describe: embarcaci\u00f3n, tripulaci\u00f3n, equipo, itinerario y la seguridad de los viajeros mientras est\u00e1n contigo.","T\u00fa atiendes las quejas e incidentes derivados de tus experiencias. Te hacemos llegar cualquier asunto que un viajero nos plantee y, cuando nosotros recibimos el pago, coordinamos contigo los reembolsos.","Nos cubrir\u00e1s frente a reclamaciones y costos derivados de tus experiencias, de tu cumplimiento normativo o de la informaci\u00f3n que nos diste. Nuestra responsabilidad frente a ti se limita a las cantidades que nos pagaste, o que retuvimos, en los tres meses anteriores a la reclamaci\u00f3n.","Nada de lo aqu\u00ed establecido crea una sociedad, asociaci\u00f3n en participaci\u00f3n ni relaci\u00f3n laboral entre nosotros."]],
+["Tu informaci\u00f3n y acceso al portal",["Guardamos los datos de tu negocio y de contacto para operar el directorio y comunicarnos contigo. No vendemos tu informaci\u00f3n y solo publicamos lo que aparece en tus publicaciones.","Cualquier persona que tenga el enlace de tu portal de socios puede editar tus publicaciones, as\u00ed que tr\u00e1talo como una contrase\u00f1a. Av\u00edsanos si hay que emitir uno nuevo."]],
+["Terminaci\u00f3n",["Cualquiera de las partes puede terminar este acuerdo en cualquier momento, con efecto inmediato, avisando a la otra. Tus publicaciones se retiran del sitio.","Los viajes ya reservados se realizan conforme a los t\u00e9rminos vigentes cuando se reservaron, y las cantidades adeudadas siguen siendo exigibles."]],
+["Cambios",["Te avisaremos antes de que se te apliquen t\u00e9rminos modificados. Si sigues publicando con nosotros, se aplican los nuevos t\u00e9rminos; de lo contrario, puedes terminar el acuerdo."]],
+["Ley aplicable",["Se aplican las leyes de M\u00e9xico y son competentes los tribunales de La Paz, Baja California Sur.","Este acuerdo se presenta en espa\u00f1ol y en ingl\u00e9s. En caso de discrepancia entre ambas versiones, prevalece la versi\u00f3n en espa\u00f1ol."]]
+];
+var AG_A_ES=["Los viajeros reservan contigo: comisi\u00f3n del 15%",[
+"15% del valor total de la reserva, IVA incluido.",
+"Aplica solo a las reservas que llegan a trav\u00e9s de Vamos a La Paz: mediante un widget o enlace de reservas en nuestro sitio, una solicitud que te enviamos o una reserva que nosotros gestionamos.",
+"No aplica a tus propias reservas directas ni a reservas que un viajero haga despu\u00e9s contigo de forma independiente.",
+"Nos pagas despu\u00e9s de cada reserva, salvo que acordemos otra cosa por escrito.",
+"Reserva reembolsada en su totalidad: no hay comisi\u00f3n y, si ya se pag\u00f3, se devuelve. Reembolsada parcialmente: comisi\u00f3n sobre lo que conservas.",
+"Cuando una plataforma de reservas nos paga la comisi\u00f3n autom\u00e1ticamente, eso la cubre."]];
+var AG_B_ES=["Nosotros vendemos el viaje: margen del 15%",[
+"Prestas el viaje al precio publicado en nuestro sitio menos el 15%, IVA incluido.",
+"Nosotros cobramos el pago del viajero y te pagamos tu parte seg\u00fan lo acordado.",
+"Confirmamos contigo antes de confirmar al viajero, salvo que hayamos acordado la disponibilidad por adelantado.",
+"Se aplican los t\u00e9rminos de cancelaci\u00f3n publicados para el viaje, y te entregamos lo que te corresponda conforme a ellos.",
+"Nos facturas cada viaje."]];
+var AG_PRICE_ES=["Precios",["El precio en vamosalapaz.com no ser\u00e1 m\u00e1s alto que el precio que anuncies para la misma experiencia, en los mismos t\u00e9rminos, en cualquier otro lugar. Si bajas un precio en otro lugar, av\u00edsanos para igualarlo."]];
 function schedules(){
+ var es=LANG=="es";
  var a=D(AG&&AG.arrangement),out=[];
- if(a.indexOf("Referral")>-1)out.push(AG_A);
- if(a.indexOf("Reseller")>-1)out.push(AG_B);
+ if(a.indexOf("Referral")>-1)out.push(es?AG_A_ES:AG_A);
+ if(a.indexOf("Reseller")>-1)out.push(es?AG_B_ES:AG_B);
  if(a=="Custom"||!out.length){
   var x=D(AG&&AG.customTerms);
-  out.push(["Your arrangement",x?x.split("\n").filter(Boolean):["Your commercial terms are agreed with us separately and will be confirmed in writing before anything goes live."]]);
+  out.push([es?"Tu esquema":"Your arrangement",x?x.split("\n").filter(Boolean):[es?"Tus t\u00e9rminos comerciales se acuerdan con nosotros por separado y se confirmar\u00e1n por escrito antes de que se publique algo.":"Your commercial terms are agreed with us separately and will be confirmed in writing before anything goes live."]]);
  }
  if(a.indexOf("Referral")>-1&&a.indexOf("Reseller")>-1)
-  out.push(["Which applies",["Where both apply, the first covers the experiences that are bookable online through your own booking platform, and the second covers the rest."]]);
- out.push(AG_PRICE);
+  out.push(es?["Cu\u00e1l aplica",["Cuando ambos aplican, el primero cubre las experiencias que se pueden reservar en l\u00ednea a trav\u00e9s de tu propia plataforma de reservas, y el segundo cubre las dem\u00e1s."]]:["Which applies",["Where both apply, the first covers the experiences that are bookable online through your own booking platform, and the second covers the rest."]]);
+ out.push(es?AG_PRICE_ES:AG_PRICE);
  return out;
 }
 function agreementBody(){
  var wrap=el("div");
- var note=el("p","ml-ed-note",t("agNote"));note.style.margin="0 0 12px";wrap.appendChild(note);
+ if(t("agNote")){var note=el("p","ml-ed-note",t("agNote"));note.style.margin="0 0 12px";wrap.appendChild(note);}
  if(t("agEnNote")){var en=el("p","ml-ed-note",t("agEnNote"));en.style.margin="0 0 16px";wrap.appendChild(en);}
  var intro=el("p","ml-ed-help",t("agIntro"));intro.style.margin="0 0 18px";wrap.appendChild(intro);
- var body=el("div");body.lang="en";
- AG_CORE.concat(schedules()).forEach(function(sec){
+ var body=el("div");body.lang=LANG;
+ (LANG=="es"?AG_CORE_ES:AG_CORE).concat(schedules()).forEach(function(sec){
   body.appendChild(el("h3","ml-ed-sec",sec[0]));
   sec[1].forEach(function(p){
    var e=el("p",null,p);
