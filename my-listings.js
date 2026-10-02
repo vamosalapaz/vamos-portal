@@ -1,5 +1,5 @@
 (function(){
-// Vamos a La Paz partner portal — v15 (Oct 2026): hide/show, remove and cancel-remove go to the standalone "Vamos Portal — visibility & removal" Make scenario, and failures are now reported instead of silently treated as success. v14: creates, edits, Spanish text and photo copies go to the standalone "Vamos Portal — partner edits" Make scenario. v13: listings (incl. Spanish + cancellation fields) come from the standalone "Vamos Portal — listings" Make scenario in one call; the v10–v12 feed workarounds are gone because the feed is fixed at source. v9: Duplicate an offering from the ••• menu (photos copied server-side). v8: language from the invite link (?lang=es|en), language switch on the agreement screen. v7: final partner agreement, Spanish-first (Spanish prevails)
+// Vamos a La Paz partner portal — v16 (Oct 2026): clicking Show/Hide (or Edit) no longer also opens the editor via the card click. v15: hide/show, remove and cancel-remove go to the standalone "Vamos Portal — visibility & removal" Make scenario, and failures are now reported instead of silently treated as success. v14: creates, edits, Spanish text and photo copies go to the standalone "Vamos Portal — partner edits" Make scenario. v13: listings (incl. Spanish + cancellation fields) come from the standalone "Vamos Portal — listings" Make scenario in one call; the v10–v12 feed workarounds are gone because the feed is fixed at source. v9: Duplicate an offering from the ••• menu (photos copied server-side). v8: language from the invite link (?lang=es|en), language switch on the agreement screen. v7: final partner agreement, Spanish-first (Spanish prevails)
 // Spanish-first interface with an English switch; bilingual listing text (ES/EN tabs,
 // AI translation via the "Vamos Portal — translate" Make scenario); cancellation policy.
 // Spanish + cancellation fields are read/saved through "Vamos Portal — bilingual fields".
@@ -278,7 +278,7 @@ function card(it,kind){
  n.setAttribute("role","button");n.setAttribute("tabindex","0");
  n.setAttribute("aria-label",t("edit")+" "+dispName(it,kind));
  n.onclick=function(e){
-  if(e.target.closest&&e.target.closest("button, .ml-more, .ml-menu"))return;
+  if(e.target.closest&&e.target.closest(".ml-actions, a, button, .ml-more, .ml-menu"))return;
   e.preventDefault();openEditor(kind,it);
  };
  n.onkeydown=function(e){
