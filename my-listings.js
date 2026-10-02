@@ -1,5 +1,5 @@
 (function(){
-// Vamos a La Paz partner portal — v14 (Oct 2026): creates, edits, Spanish text and photo copies go to the standalone "Vamos Portal — partner edits" Make scenario. v13: listings (incl. Spanish + cancellation fields) come from the standalone "Vamos Portal — listings" Make scenario in one call; the v10–v12 feed workarounds are gone because the feed is fixed at source. v9: Duplicate an offering from the ••• menu (photos copied server-side). v8: language from the invite link (?lang=es|en), language switch on the agreement screen. v7: final partner agreement, Spanish-first (Spanish prevails)
+// Vamos a La Paz partner portal — v15 (Oct 2026): hide/show, remove and cancel-remove go to the standalone "Vamos Portal — visibility & removal" Make scenario, and failures are now reported instead of silently treated as success. v14: creates, edits, Spanish text and photo copies go to the standalone "Vamos Portal — partner edits" Make scenario. v13: listings (incl. Spanish + cancellation fields) come from the standalone "Vamos Portal — listings" Make scenario in one call; the v10–v12 feed workarounds are gone because the feed is fixed at source. v9: Duplicate an offering from the ••• menu (photos copied server-side). v8: language from the invite link (?lang=es|en), language switch on the agreement screen. v7: final partner agreement, Spanish-first (Spanish prevails)
 // Spanish-first interface with an English switch; bilingual listing text (ES/EN tabs,
 // AI translation via the "Vamos Portal — translate" Make scenario); cancellation policy.
 // Spanish + cancellation fields are read/saved through "Vamos Portal — bilingual fields".
@@ -8,6 +8,7 @@ var LHOOK="https://hook.us2.make.com/ya7lhckys8969y52v6hbpd7715gebdev"; // Vamos
 var AGHOOK="https://hook.us2.make.com/q1khmq1vvcc3usokx3370l9xvhh14yeh";
 var THOOK="https://hook.us2.make.com/y36pjclzg086op6y9vkg3dmwvvgjtnw3";
 var EHOOK="https://hook.us2.make.com/bp3es6qs5gufdg2nnbs6k4gtx84aew5c"; // Vamos Portal — partner edits
+var VHOOK="https://hook.us2.make.com/y85x9uzm4ifvddavh1n8wpv1yk5dptqs"; // Vamos Portal — visibility & removal
 var AGV="2026-10";
 var K=new URLSearchParams(location.search).get("k")||"";
 var $=function(i){return document.getElementById(i)};
@@ -353,7 +354,7 @@ function confirmRemove(it,kind){
 }
 function post(type,params,done){
  var q=new URLSearchParams(Object.assign({formType:type,k:K},params));
- fetch(HOOK+"?"+q.toString()).then(function(){done&&done()}).catch(function(){
+ fetch(VHOOK+"?"+q.toString()).then(function(r){return r.json()}).then(function(d){if(!d||!d.ok)throw 0;done&&done()}).catch(function(){
   modal(t("failTitle"),t("failBody"),[{label:t("ok")}])});
 }
 function sync(){post("set_visibility",{changes:""},load)}
