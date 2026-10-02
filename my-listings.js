@@ -1,9 +1,10 @@
 (function(){
-// Vamos a La Paz partner portal — v12 (Oct 2026): restore the "r" the listings feed turns into a carriage return in 2nd+ linked IDs. v11: clean activity/destination ID lists (junk Reference Data records). v10: ignore the empty placeholder row Make returns when a partner has no offerings or boats. v9: Duplicate an offering from the ••• menu (photos copied server-side). v8: language from the invite link (?lang=es|en), language switch on the agreement screen. v7: final partner agreement, Spanish-first (Spanish prevails)
+// Vamos a La Paz partner portal — v13 (Oct 2026): listings (incl. Spanish + cancellation fields) come from the standalone "Vamos Portal — listings" Make scenario in one call; the v10–v12 feed workarounds are gone because the feed is fixed at source. v9: Duplicate an offering from the ••• menu (photos copied server-side). v8: language from the invite link (?lang=es|en), language switch on the agreement screen. v7: final partner agreement, Spanish-first (Spanish prevails)
 // Spanish-first interface with an English switch; bilingual listing text (ES/EN tabs,
 // AI translation via the "Vamos Portal — translate" Make scenario); cancellation policy.
 // Spanish + cancellation fields are read/saved through "Vamos Portal — bilingual fields".
 var HOOK="https://hook.us2.make.com/esw01fv9bnkd8azj4squvtynr5s7t8xs";
+var LHOOK="https://hook.us2.make.com/ya7lhckys8969y52v6hbpd7715gebdev"; // Vamos Portal — listings (read)
 var AGHOOK="https://hook.us2.make.com/q1khmq1vvcc3usokx3370l9xvhh14yeh";
 var THOOK="https://hook.us2.make.com/y36pjclzg086op6y9vkg3dmwvvgjtnw3";
 var XHOOK="https://hook.us2.make.com/juhnqhttwvi3gphci16587r1t736xbfq";
@@ -12,7 +13,7 @@ var K=new URLSearchParams(location.search).get("k")||"";
 var $=function(i){return document.getElementById(i)};
 var D=function(v){if(v==null||v==="")return "";try{return decodeURIComponent(String(v))}catch(e){return String(v)}};
 var TPL=$("ml-card-tpl");
-var pending={},DATA=null,AG=null,EXTRAS_OK=false;
+var pending={},DATA=null,AG=null;
 
 // ---------- Language ----------
 var LANG="es";
@@ -57,7 +58,6 @@ es:{
 tAddB:"Agregar un barco",tEditB:"Editar barco",tEditP:"Editar tu perfil",
  introNew:"Las publicaciones nuevas se revisan antes de aparecer en el sitio.",introEdit:"Los cambios se revisan antes de aparecer en el sitio. Tu publicaci\u00f3n actual sigue visible mientras los revisamos.",
  howto:"Escribe en espa\u00f1ol o en ingl\u00e9s. Traducimos autom\u00e1ticamente al otro idioma y puedes ajustar la traducci\u00f3n si quieres.",
- noExtras:"No pudimos cargar las versiones en espa\u00f1ol de tus textos. Cierra esta ventana y recarga la p\u00e1gina antes de editar.",
  secBasics:"Datos b\u00e1sicos",secWhere:"D\u00f3nde aparece en el sitio",secPrice:"Precio y reservas en l\u00ednea",secDetails:"Detalles",secCancel:"Pol\u00edtica de cancelaci\u00f3n",
  secCap:"Capacidad y especificaciones",secLoc:"Ubicaci\u00f3n y descripci\u00f3n",secBiz:"Sobre tu negocio",secPhotos:"Fotos",
  f:{name:"Nombre",tourType:"Tipo de tour",duration:"Duraci\u00f3n",capacity:"M\u00e1ximo de personas",priceUnit:"Unidad de precio",boatId:"Barco",
@@ -134,7 +134,6 @@ en:{
 tAddB:"Add a boat",tEditB:"Edit boat",tEditP:"Edit your profile",
  introNew:"New listings are reviewed before they appear on the site.",introEdit:"Changes are reviewed before they appear on the site. Your current listing stays live while we review them.",
  howto:"Write in Spanish or English. We translate it into the other language automatically, and you can adjust the translation if you like.",
- noExtras:"We couldn't load the Spanish versions of your text. Close this panel and reload the page before editing.",
  secBasics:"Basics",secWhere:"Where it shows on the site",secPrice:"Price and online booking",secDetails:"Details",secCancel:"Cancellation policy",
  secCap:"Capacity and specifications",secLoc:"Location and description",secBiz:"About your business",secPhotos:"Photos",
  f:{name:"Name",tourType:"Tour type",duration:"Duration",capacity:"Max guests",priceUnit:"Price unit",boatId:"Boat",
@@ -742,7 +741,6 @@ function openEditor(kind,it,restore,dup){
  var scroll=el("div","ml-ed-body");pan.appendChild(scroll);
  scroll.appendChild(el("p","ml-ed-intro",DUP?t("introDup"):isNew?t("introNew"):t("introEdit")));
  var how=el("p","ml-ed-note",t("howto"));how.style.marginTop="10px";scroll.appendChild(how);
- if((!isNew||DUP)&&!EXTRAS_OK){var ne=el("p","ml-ed-note",t("noExtras"));ne.style.background="#FBE9E9";ne.style.color="#98302F";scroll.appendChild(ne);}
  var grid=el("div","ml-ed-grid");scroll.appendChild(grid);
  var inputs={},wraps={},BI={},OPTS=(DATA&&DATA.options)||[];
 
@@ -857,7 +855,7 @@ function openEditor(kind,it,restore,dup){
   if(biSig()!==initialBi)return true;
   return Object.keys(initial).some(function(k){return inputs[k].value!==initial[k]});
  }
- function upd(){if(!send||isNew||textSent)return;send.disabled=!dirty()||(!EXTRAS_OK);}
+ function upd(){if(!send||isNew||textSent)return;send.disabled=!dirty();}
  function snapshot(){var o={};Object.keys(inputs).forEach(function(k){if(!BI[k])o[k]=inputs[k].value});return{inputs:o,bi:BI,ph:PH,initial:initial,initialBi:initialBi}}
  grid.addEventListener("input",upd);grid.addEventListener("change",upd);
  grid.addEventListener("change",function(e){if(e.target&&e.target.type=="hidden")err.style.display="none"});
@@ -989,7 +987,6 @@ function openEditor(kind,it,restore,dup){
   return sendForm(p,XHOOK).catch(function(){return sendForm(p,XHOOK)});
  }
  send.onclick=function(){
-  if((!isNew||DUP)&&!EXTRAS_OK)return;
   var nm=BI.name?(BI.name.en.trim()||BI.name.es.trim()):inputs.name.value.trim();
   if(!nm){err.textContent=t("needName");err.style.display="block";return;}
   if(inputs.activityIds&&!inputs.activityIds.value){err.textContent=t("needAct");err.style.display="block";return;}
@@ -1054,25 +1051,11 @@ function loadAgreement(after){
  .then(function(d){if(d&&d.ok){AG=d;if((!D(d.accepted)||D(d.version)!==AGV)&&!after)openAgreementGate();}})
  .catch(function(){});
 }
-function mergeExtras(x){
- function into(list,ex){var m={};(ex||[]).forEach(function(e){m[e.id]=e});(list||[]).forEach(function(it){var e=m[it.id];if(e)Object.keys(e).forEach(function(k){if(k!="id")it[k]=e[k]})})}
- into(DATA.offerings,x.offerings);into(DATA.boats,x.boats);
- if(DATA.operator&&x.operator&&x.operator[0]&&x.operator[0].id==DATA.operator.id)Object.keys(x.operator[0]).forEach(function(k){if(k!="id")DATA.operator[k]=x.operator[0][k]});
-}
 function load(){
  if(!K){bad();return}
- Promise.all([
-  fetch(HOOK+"?formType=listings&k="+encodeURIComponent(K)).then(function(r){return r.json()}),
-  fetch(XHOOK+"?formType=extras&k="+encodeURIComponent(K)).then(function(r){return r.json()}).catch(function(){return null})
- ]).then(function(rs){
-  var d=rs[0];if(!d||!d.ok){bad();return}
-  // Make's aggregators return one empty row when a search finds nothing; drop rows with no id.
-  d.offerings=(d.offerings||[]).filter(function(x){return x&&x.id});d.boats=(d.boats||[]).filter(function(x){return x&&x.id});
-  // The listings feed joins linked IDs with ",\" so JSON turns "\rec" into a carriage return + "ec";
-  // put the "r" back, then keep only well-formed record IDs.
-  var ids=function(v){return (D(v).replace(/\r/g,"r").match(/rec[A-Za-z0-9]{14}/g)||[]).join(",")};
-  d.offerings.forEach(function(o){o.activityIds=ids(o.activityIds);o.destinationIds=ids(o.destinationIds);o.boatId=ids(o.boatId).split(",")[0]||"";});
-  DATA=d;EXTRAS_OK=!!(rs[1]&&rs[1].ok);if(EXTRAS_OK)mergeExtras(rs[1]);
+ fetch(LHOOK+"?formType=listings&k="+encodeURIComponent(K)).then(function(r){return r.json()}).then(function(d){
+  if(!d||!d.ok){bad();return}
+  DATA=d;
   $("ml-who").textContent=D(d.operator&&d.operator.name)||D(d.partnerName);render();
  }).catch(bad);
 }
