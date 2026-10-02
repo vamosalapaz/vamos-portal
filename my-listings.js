@@ -1,5 +1,5 @@
 (function(){
-// Vamos a La Paz partner portal — v8 (Oct 2026): language from the invite link (?lang=es|en), language switch on the agreement screen. v7: final partner agreement, Spanish-first (Spanish prevails)
+// Vamos a La Paz partner portal — v9 (Oct 2026): Duplicate an offering from the ••• menu (photos copied server-side). v8: language from the invite link (?lang=es|en), language switch on the agreement screen. v7: final partner agreement, Spanish-first (Spanish prevails)
 // Spanish-first interface with an English switch; bilingual listing text (ES/EN tabs,
 // AI translation via the "Vamos Portal — translate" Make scenario); cancellation policy.
 // Spanish + cancellation fields are read/saved through "Vamos Portal — bilingual fields".
@@ -24,7 +24,7 @@ var S={
 es:{
  live:"\u25CF Publicado",removal:"Eliminaci\u00f3n solicitada",review:"En revisi\u00f3n",hidden:"Oculto",hiddenProfile:"Oculto porque tu perfil est\u00e1 oculto",
  changesReview:"Cambios en revisi\u00f3n",willLive:"Se publicar\u00e1 al guardar",willHide:"Se ocultar\u00e1 al guardar",willShow:"Se mostrar\u00e1 al guardar",
- cancelRemoval:"Cancelar solicitud de eliminaci\u00f3n",hide:"Ocultar",show:"Mostrar",edit:"Editar",more:"M\u00e1s acciones",requestRemoval:"Solicitar eliminaci\u00f3n",
+ cancelRemoval:"Cancelar solicitud de eliminaci\u00f3n",hide:"Ocultar",show:"Mostrar",edit:"Editar",more:"M\u00e1s acciones",requestRemoval:"Solicitar eliminaci\u00f3n",dup:"Duplicar",
  upTo:function(n){return "Hasta "+n+" personas"},
  nOff:function(n){return n+(n==1?" experiencia":" experiencias")},nBoat:function(n){return n+(n==1?" barco":" barcos")},
  profLive:"Perfil publicado",profHidden:"Perfil oculto",nWaiting:function(n){return n+(n==1?" cambio en revisi\u00f3n":" cambios en revisi\u00f3n")},
@@ -50,7 +50,11 @@ es:{
  close:"Cerrar",partnerAg:"Acuerdo de socios",accepted:function(d,b,v){return "Aceptado "+d+" por "+b+" \u00b7 versi\u00f3n "+v},notAccepted:"A\u00fan no aceptado",
  readAg:"Leer el acuerdo",hideAg:"Ocultar el acuerdo",filesShared:"Archivos que compartimos contigo",linksExpire:"Los enlaces abren el archivo directamente y vencen despu\u00e9s de un par de horas; vuelve a abrir esta ventana para obtener uno nuevo.",
  // editor
- tAddO:"Agregar una experiencia",tEditO:"Editar experiencia",tAddB:"Agregar un barco",tEditB:"Editar barco",tEditP:"Editar tu perfil",
+ tAddO:"Agregar una experiencia",tEditO:"Editar experiencia",tDupO:"Duplicar experiencia",copyEs:" (copia)",copyEn:" (copy)",
+ introDup:"Esta es una copia de tu experiencia, con sus fotos. Cambia lo que sea diferente y env\u00edala. La copia se revisa antes de aparecer en el sitio; la original no cambia.",
+ copiedGallery:function(n){return "Fotos copiadas de la original \u00b7 "+n},
+ copyFail:"La copia se envi\u00f3 a revisi\u00f3n, pero las fotos de la original no se copiaron. Agr\u00e9galas desde Editar o escr\u00edbenos por WhatsApp.",
+tAddB:"Agregar un barco",tEditB:"Editar barco",tEditP:"Editar tu perfil",
  introNew:"Las publicaciones nuevas se revisan antes de aparecer en el sitio.",introEdit:"Los cambios se revisan antes de aparecer en el sitio. Tu publicaci\u00f3n actual sigue visible mientras los revisamos.",
  howto:"Escribe en espa\u00f1ol o en ingl\u00e9s. Traducimos autom\u00e1ticamente al otro idioma y puedes ajustar la traducci\u00f3n si quieres.",
  noExtras:"No pudimos cargar las versiones en espa\u00f1ol de tus textos. Cierra esta ventana y recarga la p\u00e1gina antes de editar.",
@@ -100,7 +104,7 @@ es:{
 en:{
  live:"\u25CF Live",removal:"Removal requested",review:"Pending review",hidden:"Hidden",hiddenProfile:"Hidden because your profile is hidden",
  changesReview:"Changes awaiting review",willLive:"Will go live when you save",willHide:"Will be hidden when you save",willShow:"Will show when you save",
- cancelRemoval:"Cancel removal request",hide:"Hide",show:"Show",edit:"Edit",more:"More actions",requestRemoval:"Request removal",
+ cancelRemoval:"Cancel removal request",hide:"Hide",show:"Show",edit:"Edit",more:"More actions",requestRemoval:"Request removal",dup:"Duplicate",
  upTo:function(n){return "Up to "+n+" guests"},
  nOff:function(n){return n+(n==1?" offering":" offerings")},nBoat:function(n){return n+(n==1?" boat":" boats")},
  profLive:"Profile live",profHidden:"Profile hidden",nWaiting:function(n){return n+(n==1?" change":" changes")+" awaiting review"},
@@ -123,7 +127,11 @@ en:{
  agGo:"Accept and continue",saving:"Saving\u2026",agSaved:"Thank you. Your agreement is saved \u2014 you can see it any time under Documents.",agFail:"That didn't save. Try again, or message us on WhatsApp.",
  close:"Close",partnerAg:"Partner agreement",accepted:function(d,b,v){return "Accepted "+d+" by "+b+" \u00b7 version "+v},notAccepted:"Not yet accepted",
  readAg:"Read the agreement",hideAg:"Hide the agreement",filesShared:"Files we've shared with you",linksExpire:"Links open the file directly and expire after a couple of hours \u2014 reopen this page for a fresh one.",
- tAddO:"Add an offering",tEditO:"Edit offering",tAddB:"Add a boat",tEditB:"Edit boat",tEditP:"Edit your profile",
+ tAddO:"Add an offering",tEditO:"Edit offering",tDupO:"Duplicate offering",copyEs:" (copia)",copyEn:" (copy)",
+ introDup:"This is a copy of your offering, photos included. Change whatever is different and send it. The copy is reviewed before it appears on the site; the original stays as it is.",
+ copiedGallery:function(n){return "Photos copied from the original \u00b7 "+n},
+ copyFail:"The copy was sent for review, but the original's photos didn't copy over. Add them from Edit, or message us on WhatsApp.",
+tAddB:"Add a boat",tEditB:"Edit boat",tEditP:"Edit your profile",
  introNew:"New listings are reviewed before they appear on the site.",introEdit:"Changes are reviewed before they appear on the site. Your current listing stays live while we review them.",
  howto:"Write in Spanish or English. We translate it into the other language automatically, and you can adjust the translation if you like.",
  noExtras:"We couldn't load the Spanish versions of your text. Close this panel and reload the page before editing.",
@@ -263,7 +271,9 @@ function card(it,kind){
  btns[1].textContent=(pv(it.id)!==undefined?pv(it.id):live)?t("hide"):t("show");
  btns[1].onclick=function(){toggle(it.id,live,kind)};
  btns[2].parentNode.removeChild(btns[2]);
- acts.appendChild(moreMenu([{label:t("requestRemoval"),go:function(){confirmRemove(it,kind)}}]));
+ var mi=[{label:t("requestRemoval"),go:function(){confirmRemove(it,kind)}}];
+ if(kind=="o")mi.unshift({label:t("dup"),go:function(){openEditor("o",null,null,it)}});
+ acts.appendChild(moreMenu(mi));
  n.style.cursor="pointer";
  n.setAttribute("role","button");n.setAttribute("tabindex","0");
  n.setAttribute("aria-label",t("edit")+" "+dispName(it,kind));
@@ -715,10 +725,11 @@ function biSource(st){
  return st.es.trim()?"es":"en";
 }
 
-function openEditor(kind,it,restore){
+function openEditor(kind,it,restore,dup){
  closeEditor();
- var isNew=!it,send=null,textSent=false;
- var titles={o:isNew?t("tAddO"):t("tEditO"),b:isNew?t("tAddB"):t("tEditB"),p:t("tEditP")};
+ var DUP=kind=="o"&&!it&&dup?dup:null,it0=it||DUP;
+ var isNew=!it,send=null,textSent=false,copyWarn=false;
+ var titles={o:DUP?t("tDupO"):isNew?t("tAddO"):t("tEditO"),b:isNew?t("tAddB"):t("tEditB"),p:t("tEditP")};
  var scrim=el("div","ml-ed-scrim");
  scrim.onclick=function(e){if(e.target===scrim)closeEditor()};
  var pan=el("div","ml-ed");pan.setAttribute("role","dialog");pan.setAttribute("aria-modal","true");
@@ -726,17 +737,18 @@ function openEditor(kind,it,restore){
  var h=el("h2","ml-ed-title",titles[kind]);
  var x=el("button","ml-ed-x","\u00d7");x.setAttribute("aria-label",t("close"));x.onclick=closeEditor;
  head.appendChild(h);head.appendChild(x);pan.appendChild(head);
- var langRow=langSwitch(function(){var snap=snapshot();BUSY=false;closeEditor();openEditor(kind,it,snap)});
+ var langRow=langSwitch(function(){var snap=snapshot();BUSY=false;closeEditor();openEditor(kind,it,snap,DUP)});
  langRow.style.margin="2px 0 10px";pan.appendChild(langRow);
  var scroll=el("div","ml-ed-body");pan.appendChild(scroll);
- scroll.appendChild(el("p","ml-ed-intro",isNew?t("introNew"):t("introEdit")));
+ scroll.appendChild(el("p","ml-ed-intro",DUP?t("introDup"):isNew?t("introNew"):t("introEdit")));
  var how=el("p","ml-ed-note",t("howto"));how.style.marginTop="10px";scroll.appendChild(how);
- if(!isNew&&!EXTRAS_OK){var ne=el("p","ml-ed-note",t("noExtras"));ne.style.background="#FBE9E9";ne.style.color="#98302F";scroll.appendChild(ne);}
+ if((!isNew||DUP)&&!EXTRAS_OK){var ne=el("p","ml-ed-note",t("noExtras"));ne.style.background="#FBE9E9";ne.style.color="#98302F";scroll.appendChild(ne);}
  var grid=el("div","ml-ed-grid");scroll.appendChild(grid);
  var inputs={},wraps={},BI={},OPTS=(DATA&&DATA.options)||[];
 
  function biField(f0,w,lab){
-  var st=restore&&restore.bi&&restore.bi[f0]?restore.bi[f0]:biInit(kind,f0,it);BI[f0]=st;
+  var st=restore&&restore.bi&&restore.bi[f0]?restore.bi[f0]:biInit(kind,f0,it0);BI[f0]=st;
+  if(DUP&&f0=="name"&&!(restore&&restore.bi&&restore.bi[f0])){if(st.es.trim())st.es=st.es.trim()+t("copyEs");if(st.en.trim())st.en=st.en.trim()+t("copyEn");}
   var top=el("div","ml-bi-top");top.appendChild(lab);
   var tabs=el("div","ml-tabs");tabs.setAttribute("role","tablist");top.appendChild(tabs);w.appendChild(top);
   var multi=f0!="name"&&f0!="duration";
@@ -782,7 +794,7 @@ function openEditor(kind,it,restore){
   var w=el("div","ml-ed-f"+(fd[3]?" half":""));
   var id="ml-ed-"+fd[0];
   var l=el("label",null,f(fd[1]));l.setAttribute("for",id);
-  var v=it?D(it[fd[0]]):"";var inp;
+  var v=it0?D(it0[fd[0]]):"";var inp;
   if(restore&&restore.inputs&&restore.inputs[fd[0]]!==undefined)v=restore.inputs[fd[0]];
   if(fd[6]){inp=biField(fd[0],w,l);}
   else{
@@ -894,10 +906,10 @@ function openEditor(kind,it,restore){
   single("logo",t("logo"),it&&D(it.logo),t("logoHelp"),true);
   single("cover",t("cover"),it&&D(it.coverPhoto),t("coverProfHelp"));
  }else{
-  single("cover",t("cover"),it&&D(it.coverPhoto),t("coverHelp"));
-  var cur=it?D(it.photos).split(" ").filter(Boolean):[];
+  single("cover",t("cover"),it0&&D(it0.coverPhoto),t("coverHelp"));
+  var cur=it0?D(it0.photos).split(" ").filter(Boolean):[];
   if(cur.length){
-   var gb=el("div","ml-ph-blk");gb.appendChild(el("span","ml-ed-lab",t("galleryNow")(cur.length)));
+   var gb=el("div","ml-ph-blk");gb.appendChild(el("span","ml-ed-lab",(DUP?t("copiedGallery"):t("galleryNow"))(cur.length)));
    var gr=el("div","ml-ph-row");cur.forEach(function(u){gr.appendChild(thumb(u))});gb.appendChild(gr);ph.appendChild(gb);
   }
   var nb=el("div","ml-ph-blk");var nl=el("span","ml-ed-lab");nb.appendChild(nl);
@@ -955,6 +967,7 @@ function openEditor(kind,it,restore){
  }
  function done(){
   if(extrasWarn){showBanner(t("extrasFail"));load();return;}
+  if(copyWarn){showBanner(t("copyFail"));load();return;}
   showBanner(isNew?t("doneNew"):t("doneEdit"));load();
  }
  function aiTags(){
@@ -976,7 +989,7 @@ function openEditor(kind,it,restore){
   return sendForm(p,XHOOK).catch(function(){return sendForm(p,XHOOK)});
  }
  send.onclick=function(){
-  if(!isNew&&!EXTRAS_OK)return;
+  if((!isNew||DUP)&&!EXTRAS_OK)return;
   var nm=BI.name?(BI.name.en.trim()||BI.name.es.trim()):inputs.name.value.trim();
   if(!nm){err.textContent=t("needName");err.style.display="block";return;}
   if(inputs.activityIds&&!inputs.activityIds.value){err.textContent=t("needAct");err.style.display="block";return;}
@@ -1002,6 +1015,12 @@ function openEditor(kind,it,restore){
     textSent=true;rowId=d.id;target=isNew?kind:kind+"u";
     if(!rowId){BUSY=false;closeEditor();done();return;}
     return saveExtras().catch(function(){extrasWarn=true}).then(function(){
+     // Duplicate: copy the original's photos onto the new offering before any new uploads,
+     // so a replacement cover or extra gallery photos land on top of the copied ones.
+     if(!DUP||!(D(DUP.coverPhoto)||D(DUP.photos)))return;
+     return sendForm({formType:"copy_photos",recordId:rowId,sourceId:DUP.id,copyCover:PH.cover?"0":"1"},XHOOK)
+      .catch(function(){copyWarn=true});
+    }).then(function(){
      BUSY=false;
      if(!queue.length){closeEditor();done();return;}
      runUploads();
