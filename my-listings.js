@@ -1,5 +1,5 @@
 (function(){
-// Vamos a La Paz partner portal — v17 (Oct 2026): photo uploads go to the standalone "Vamos Portal — photo uploads" scenario; the old consolidated scenario is no longer called; transparent images (e.g. PNG logos) get a white background instead of black when converted to JPEG. v16: clicking Show/Hide (or Edit) no longer also opens the editor via the card click. v15: hide/show, remove and cancel-remove go to the standalone "Vamos Portal — visibility & removal" Make scenario, and failures are now reported instead of silently treated as success. v14: creates, edits, Spanish text and photo copies go to the standalone "Vamos Portal — partner edits" Make scenario. v13: listings (incl. Spanish + cancellation fields) come from the standalone "Vamos Portal — listings" Make scenario in one call; the v10–v12 feed workarounds are gone because the feed is fixed at source. v9: Duplicate an offering from the ••• menu (photos copied server-side). v8: language from the invite link (?lang=es|en), language switch on the agreement screen. v7: final partner agreement, Spanish-first (Spanish prevails)
+// Vamos a La Paz partner portal — v18 (Oct 2026): formatting hint (bullets with "- ", bold with **…**) under the text boxes that support it. v17: photo uploads go to the standalone "Vamos Portal — photo uploads" scenario; the old consolidated scenario is no longer called; transparent images (e.g. PNG logos) get a white background instead of black when converted to JPEG. v16: clicking Show/Hide (or Edit) no longer also opens the editor via the card click. v15: hide/show, remove and cancel-remove go to the standalone "Vamos Portal — visibility & removal" Make scenario, and failures are now reported instead of silently treated as success. v14: creates, edits, Spanish text and photo copies go to the standalone "Vamos Portal — partner edits" Make scenario. v13: listings (incl. Spanish + cancellation fields) come from the standalone "Vamos Portal — listings" Make scenario in one call; the v10–v12 feed workarounds are gone because the feed is fixed at source. v9: Duplicate an offering from the ••• menu (photos copied server-side). v8: language from the invite link (?lang=es|en), language switch on the agreement screen. v7: final partner agreement, Spanish-first (Spanish prevails)
 // Spanish-first interface with an English switch; bilingual listing text (ES/EN tabs,
 // AI translation via the "Vamos Portal — translate" Make scenario); cancellation policy.
 // Spanish + cancellation fields are read/saved through "Vamos Portal — bilingual fields".
@@ -89,7 +89,7 @@ tAddB:"Agregar un barco",tEditB:"Editar barco",tEditP:"Editar tu perfil",
  addPhotos:"+ Agregar fotos",addToGallery:"Agregarlas a mi galer\u00eda",replaceGallery:"Reemplazar toda mi galer\u00eda con estas",
  uploading:function(i,n){return "Subiendo foto "+i+" de "+n+"\u2026"},keepOpen:"Mant\u00e9n esta p\u00e1gina abierta hasta que termine.",
  upFail:function(n,l){return (n==1?"1 foto no se subi\u00f3":n+" fotos no se subieron")+" ("+l+"). Tus dem\u00e1s cambios s\u00ed se enviaron. Presiona Intentar de nuevo para reintentar solo esas."},
- tryAgain:"Intentar de nuevo",photoLabel:function(i){return "foto "+i},coverLabel:"foto de portada",logoLabel:"logo",
+ tryAgain:"Intentar de nuevo",photoLabel:function(i){return "foto "+i},coverLabel:"foto de portada",logoLabel:"logo",mdHint:"Para una lista, empieza cada línea con \"- \". Para negritas, escribe **así**.",
  cancel:"Cancelar",sendNew:"Enviar a revisi\u00f3n",sendEdit:"Enviar cambios a revisi\u00f3n",sending:"Enviando\u2026",
  needName:"Escribe primero un nombre.",needAct:"Elige al menos una actividad para que tu viaje aparezca en las p\u00e1ginas correctas.",
  sendFail:"No se pudo enviar. Int\u00e9ntalo de nuevo o escr\u00edbenos por WhatsApp.",
@@ -165,7 +165,7 @@ tAddB:"Add a boat",tEditB:"Edit boat",tEditP:"Edit your profile",
  addPhotos:"+ Add photos",addToGallery:"Add these to my gallery",replaceGallery:"Replace my whole gallery with these",
  uploading:function(i,n){return "Uploading photo "+i+" of "+n+"\u2026"},keepOpen:"Keep this page open until it finishes.",
  upFail:function(n,l){return n+(n==1?" photo":" photos")+" didn't upload ("+l+"). Your other changes were sent. Press Try again to retry just those."},
- tryAgain:"Try again",photoLabel:function(i){return "photo "+i},coverLabel:"cover photo",logoLabel:"logo",
+ tryAgain:"Try again",photoLabel:function(i){return "photo "+i},coverLabel:"cover photo",logoLabel:"logo",mdHint:"For a bulleted list, start each line with \"- \". For bold, write **like this**.",
  cancel:"Cancel",sendNew:"Send for review",sendEdit:"Send changes for review",sending:"Sending\u2026",
  needName:"Enter a name first.",needAct:"Choose at least one activity, so your trip shows on the right pages.",
  sendFail:"That didn't go through. Try again, or message us on WhatsApp.",
@@ -753,6 +753,7 @@ function openEditor(kind,it,restore,dup){
   var multi=f0!="name"&&f0!="duration";
   var inp=el(multi?"textarea":"input");if(!multi)inp.type="text";inp.id="ml-ed-"+f0;w.appendChild(inp);
   var badge=el("div","ml-bi-badge");w.appendChild(badge);
+  if(({o:["description","whatsIncluded"],b:["description"],p:["description","trustNotes"]}[kind]||[]).indexOf(f0)>=0)w.appendChild(el("p","ml-ed-help",t("mdHint")));
   function draw(){
    tabs.innerHTML="";
    ["es","en"].forEach(function(L){
