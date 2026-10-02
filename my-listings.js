@@ -1,5 +1,5 @@
 (function(){
-// Vamos a La Paz partner portal — v18 (Oct 2026): formatting hint (bullets with "- ", bold with **…**) under the text boxes that support it. v17: photo uploads go to the standalone "Vamos Portal — photo uploads" scenario; the old consolidated scenario is no longer called; transparent images (e.g. PNG logos) get a white background instead of black when converted to JPEG. v16: clicking Show/Hide (or Edit) no longer also opens the editor via the card click. v15: hide/show, remove and cancel-remove go to the standalone "Vamos Portal — visibility & removal" Make scenario, and failures are now reported instead of silently treated as success. v14: creates, edits, Spanish text and photo copies go to the standalone "Vamos Portal — partner edits" Make scenario. v13: listings (incl. Spanish + cancellation fields) come from the standalone "Vamos Portal — listings" Make scenario in one call; the v10–v12 feed workarounds are gone because the feed is fixed at source. v9: Duplicate an offering from the ••• menu (photos copied server-side). v8: language from the invite link (?lang=es|en), language switch on the agreement screen. v7: final partner agreement, Spanish-first (Spanish prevails)
+// Vamos a La Paz partner portal — v19 (Oct 2026): success messages promise an email when changes go live (partner notice automations); "View vamosalapaz.com" link next to the language switch and a "View on site" entry in each published listing's ••• menu (and the profile), all opening in one shared second tab in the portal's language. v18: formatting hint (bullets with "- ", bold with **…**) under the text boxes that support it. v17: photo uploads go to the standalone "Vamos Portal — photo uploads" scenario; the old consolidated scenario is no longer called; transparent images (e.g. PNG logos) get a white background instead of black when converted to JPEG. v16: clicking Show/Hide (or Edit) no longer also opens the editor via the card click. v15: hide/show, remove and cancel-remove go to the standalone "Vamos Portal — visibility & removal" Make scenario, and failures are now reported instead of silently treated as success. v14: creates, edits, Spanish text and photo copies go to the standalone "Vamos Portal — partner edits" Make scenario. v13: listings (incl. Spanish + cancellation fields) come from the standalone "Vamos Portal — listings" Make scenario in one call; the v10–v12 feed workarounds are gone because the feed is fixed at source. v9: Duplicate an offering from the ••• menu (photos copied server-side). v8: language from the invite link (?lang=es|en), language switch on the agreement screen. v7: final partner agreement, Spanish-first (Spanish prevails)
 // Spanish-first interface with an English switch; bilingual listing text (ES/EN tabs,
 // AI translation via the "Vamos Portal — translate" Make scenario); cancellation policy.
 // Spanish + cancellation fields are read/saved through "Vamos Portal — bilingual fields".
@@ -26,7 +26,7 @@ var S={
 es:{
  live:"\u25CF Publicado",removal:"Eliminaci\u00f3n solicitada",review:"En revisi\u00f3n",hidden:"Oculto",hiddenProfile:"Oculto porque tu perfil est\u00e1 oculto",
  changesReview:"Cambios en revisi\u00f3n",willLive:"Se publicar\u00e1 al guardar",willHide:"Se ocultar\u00e1 al guardar",willShow:"Se mostrar\u00e1 al guardar",
- cancelRemoval:"Cancelar solicitud de eliminaci\u00f3n",hide:"Ocultar",show:"Mostrar",edit:"Editar",more:"M\u00e1s acciones",requestRemoval:"Solicitar eliminaci\u00f3n",dup:"Duplicar",
+ cancelRemoval:"Cancelar solicitud de eliminaci\u00f3n",hide:"Ocultar",show:"Mostrar",edit:"Editar",more:"M\u00e1s acciones",requestRemoval:"Solicitar eliminaci\u00f3n",dup:"Duplicar",siteLink:"Ver vamosalapaz.com",viewSite:"Ver en el sitio",previewSite:"Vista previa en el sitio",viewProfile:"Ver mi perfil en el sitio",previewProfile:"Vista previa de mi perfil",
  upTo:function(n){return "Hasta "+n+" personas"},
  nOff:function(n){return n+(n==1?" experiencia":" experiencias")},nBoat:function(n){return n+(n==1?" barco":" barcos")},
  profLive:"Perfil publicado",profHidden:"Perfil oculto",nWaiting:function(n){return n+(n==1?" cambio en revisi\u00f3n":" cambios en revisi\u00f3n")},
@@ -94,7 +94,7 @@ tAddB:"Agregar un barco",tEditB:"Editar barco",tEditP:"Editar tu perfil",
  needName:"Escribe primero un nombre.",needAct:"Elige al menos una actividad para que tu viaje aparezca en las p\u00e1ginas correctas.",
  sendFail:"No se pudo enviar. Int\u00e9ntalo de nuevo o escr\u00edbenos por WhatsApp.",
  extrasFail:"Tus cambios se enviaron, pero las versiones en espa\u00f1ol/ingl\u00e9s y la pol\u00edtica de cancelaci\u00f3n no se guardaron. Escr\u00edbenos por WhatsApp y lo resolvemos.",
- doneNew:"Enviado a revisi\u00f3n. Aparecer\u00e1 como Publicado aqu\u00ed cuando est\u00e9 en el sitio.",doneEdit:"Tus cambios se enviaron a revisi\u00f3n. Aparecer\u00e1n en el sitio cuando se aprueben.",
+ doneNew:"Enviado a revisi\u00f3n. Te enviaremos un correo cuando est\u00e9 publicado en el sitio.",doneEdit:"Tus cambios se enviaron a revisi\u00f3n. Te enviaremos un correo cuando est\u00e9n publicados en el sitio.",
  opt:{"Private Tour":"Tour privado","Shared Tour":"Tour compartido","per tour":"por tour","per person":"por persona","Other":"Otra",
   "Powerboat":"Lancha","Panga":"Panga","Sportfishing Boat":"Barco de pesca deportiva","Sailboat":"Velero","Sailing Catamaran":"Catamar\u00e1n de vela",
   "Power Catamaran":"Catamar\u00e1n de motor","Motor Yacht":"Yate de motor","Luxury Yacht":"Yate de lujo",
@@ -105,7 +105,7 @@ tAddB:"Agregar un barco",tEditB:"Editar barco",tEditP:"Editar tu perfil",
 en:{
  live:"\u25CF Live",removal:"Removal requested",review:"Pending review",hidden:"Hidden",hiddenProfile:"Hidden because your profile is hidden",
  changesReview:"Changes awaiting review",willLive:"Will go live when you save",willHide:"Will be hidden when you save",willShow:"Will show when you save",
- cancelRemoval:"Cancel removal request",hide:"Hide",show:"Show",edit:"Edit",more:"More actions",requestRemoval:"Request removal",dup:"Duplicate",
+ cancelRemoval:"Cancel removal request",hide:"Hide",show:"Show",edit:"Edit",more:"More actions",requestRemoval:"Request removal",dup:"Duplicate",siteLink:"View vamosalapaz.com",viewSite:"View on site",previewSite:"Preview on site",viewProfile:"View my profile on site",previewProfile:"Preview my profile",
  upTo:function(n){return "Up to "+n+" guests"},
  nOff:function(n){return n+(n==1?" offering":" offerings")},nBoat:function(n){return n+(n==1?" boat":" boats")},
  profLive:"Profile live",profHidden:"Profile hidden",nWaiting:function(n){return n+(n==1?" change":" changes")+" awaiting review"},
@@ -170,7 +170,7 @@ tAddB:"Add a boat",tEditB:"Edit boat",tEditP:"Edit your profile",
  needName:"Enter a name first.",needAct:"Choose at least one activity, so your trip shows on the right pages.",
  sendFail:"That didn't go through. Try again, or message us on WhatsApp.",
  extrasFail:"Your changes were sent, but the Spanish/English versions and cancellation policy didn't save. Message us on WhatsApp and we'll sort it out.",
- doneNew:"Sent for review. It will show as Live here once it's on the site.",doneEdit:"Your changes were sent for review. They'll appear on the site once approved.",
+ doneNew:"Sent for review. We'll email you when it's live on the site.",doneEdit:"Your changes were sent for review. We'll email you when they're live on the site.",
  opt:{}
 }};
 function t(k){return S[LANG][k]}
@@ -188,6 +188,7 @@ document.addEventListener("click",function(e){if(!e.target.closest||!e.target.cl
 // ---------- Static page text + language switch ----------
 function setLead(node,txt){if(!node)return;for(var i=0;i<node.childNodes.length;i++){if(node.childNodes[i].nodeType==3){node.childNodes[i].nodeValue=txt;return}}node.insertBefore(document.createTextNode(txt),node.firstChild)}
 function applyStatic(){
+ var slk=$("ml-sitelink");if(slk){slk.textContent=siteLabel("siteLink");slk.href=siteUrl("/");}
  document.documentElement.lang=LANG;
  var h1=document.querySelector(".ml-h1");if(h1)h1.textContent=t("h1");
  var n=document.querySelector(".ml-notice");if(n)n.textContent=t("notice");
@@ -215,7 +216,17 @@ function langSwitch(onChange){
   w.appendChild(b)});
  return w;
 }
-(function(){var h1=document.querySelector(".ml-h1");if(h1&&h1.parentNode){var w=langSwitch();w.style.margin="0 0 12px";h1.parentNode.insertBefore(w,h1.nextSibling)}})();
+var SITE="https://vamosalapaz.com",SITE_TAB="vamosalapaz";
+function siteUrl(path){return SITE+(LANG=="es"?"/es":"")+path}
+function openSite(path){var w=window.open(siteUrl(path),SITE_TAB);if(w){try{w.focus()}catch(e){}}}
+function siteLabel(key){return t(key)+" \u2197"}
+(function(){var h1=document.querySelector(".ml-h1");if(h1&&h1.parentNode){
+ var row=el("div");row.style.cssText="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 12px";
+ var w=langSwitch();row.appendChild(w);
+ var a=el("a");a.id="ml-sitelink";a.target=SITE_TAB;a.href=siteUrl("/");a.textContent=siteLabel("siteLink");
+ a.style.cssText="font-size:14px;color:#2B4A8B;text-decoration:underline;text-underline-offset:3px";
+ a.onclick=function(){a.href=siteUrl("/")};
+ row.appendChild(a);h1.parentNode.insertBefore(row,h1.nextSibling)}})();
 
 var LIVE=function(){return t("live")};
 function pillFor(it){
@@ -273,6 +284,8 @@ function card(it,kind){
  btns[2].parentNode.removeChild(btns[2]);
  var mi=[{label:t("requestRemoval"),go:function(){confirmRemove(it,kind)}}];
  if(kind=="o")mi.unshift({label:t("dup"),go:function(){openEditor("o",null,null,it)}});
+ if(D(it.slug)){var vis=String(it.effectiveVisible)=="1";
+  mi.unshift({label:siteLabel(vis?"viewSite":"previewSite"),go:function(){openSite((kind=="b"?"/boats/":"/offerings/")+D(it.slug))}});}
  acts.appendChild(moreMenu(mi));
  n.style.cursor="pointer";
  n.setAttribute("role","button");n.setAttribute("tabindex","0");
@@ -333,6 +346,7 @@ function profile(op){
  var hd=el("button","ml-btn ml-btn-ghost",(pv(op.id)!==undefined?pv(op.id):live)?t("hide"):t("show"));
  hd.onclick=function(){toggle(op.id,live,"p")};
  acts.appendChild(ed);acts.appendChild(hd);
+ if(D(op.slug)&&op.onSite=="true")acts.appendChild(moreMenu([{label:siteLabel(live?"viewProfile":"previewProfile"),go:function(){openSite("/operators/"+D(op.slug))}}]));
  if(pv(op.id)!==undefined){
   box.style.boxShadow="0 0 0 3px rgba(43,74,139,.12)";
   setPill(pl,pv(op.id)?t("willShow"):t("willHide"),"#E8EEFB","#2B4A8B");
