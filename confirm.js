@@ -2,7 +2,7 @@
    Source: github.com/vamosalapaz/vamos-portal (confirm.js), served via jsDelivr tagged releases.
    The owner reviews a managed booking (same trip details the customer gets, plus deposit / balance / commission),
    ticks agree and types their name, or asks for a change. Never linked from anything a customer sees.
-   v22: first release. v23: total trip price, Vamos logo and palette. */
+   v22: first release. v23: total trip price, Vamos logo and palette. v24: commission line without timing; ignore a Last day before the trip date. */
 (function () {
   'use strict';
 
@@ -19,7 +19,7 @@
       title: 'Confirmación de reservación', hi: 'Hola', ask: '¿confirmas este viaje?',
       intro: 'Vamos a La Paz tiene un cliente para tu embarcación. Revisa los detalles: son los mismos que recibe el cliente.',
       guests: 'personas', lead: 'a nombre de', meet: 'Punto de encuentro',
-      total: 'Precio total del viaje', depositYou: 'Te enviamos el anticipo', balanceYou: 'Cobras al cliente el día del viaje', commission: 'Comisión de Vamos (pagas después del viaje)',
+      total: 'Precio total del viaje', depositYou: 'Te enviamos el anticipo', balanceYou: 'Cobras al cliente el día del viaje', commission: 'Comisión de Vamos',
       purchase: 'Vamos te paga', includes: 'Incluye', cancel: 'Cancelación', pay: 'Pago', note: 'Nota de Peter',
       agreeText: 'Acepto prestar este viaje con estos términos, conforme a mi acuerdo de socio con Vamos a La Paz.',
       name: 'Tu nombre completo (tu firma)', confirm: 'Confirmar viaje', change: 'Pedir un cambio',
@@ -38,7 +38,7 @@
       title: 'Booking confirmation', hi: 'Hi', ask: 'can you confirm this trip?',
       intro: 'Vamos a La Paz has a customer for your boat. Please review the details: they are the same ones the customer gets.',
       guests: 'guests', lead: 'booked by', meet: 'Meeting point',
-      total: 'Total trip price', depositYou: 'We send you the deposit', balanceYou: 'You collect from the customer on the day', commission: 'Vamos commission (you pay after the trip)',
+      total: 'Total trip price', depositYou: 'We send you the deposit', balanceYou: 'You collect from the customer on the day', commission: 'Vamos commission',
       purchase: 'Vamos pays you', includes: 'Included', cancel: 'Cancellation', pay: 'Payment', note: 'Note from Peter',
       agreeText: 'I agree to provide this trip on these terms, under my partner agreement with Vamos a La Paz.',
       name: 'Your full name (your signature)', confirm: 'Confirm trip', change: 'Ask for a change',
@@ -148,7 +148,7 @@
 
   function details() {
     var f = conf.fields, wrap = h('div');
-    var dates = day(f['Trip date']) + (f['End date'] ? ' – ' + day(f['End date']) : '');
+    var dates = day(f['Trip date']) + (f['End date'] && f['End date'] > f['Trip date'] ? ' – ' + day(f['End date']) : '');
     wrap.appendChild(h('div', { class: 'card trip-card' }, [
       h('p', { class: 'trip', text: f.Trip || '' }),
       h('p', { class: 'muted', text: [f.Boat, dates, f.Duration].filter(Boolean).join(' · ') }),
