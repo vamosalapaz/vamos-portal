@@ -7,7 +7,8 @@
        owner sign-off status (sent / confirmed / change requested) recorded and shown; links to the owner's /confirmar page.
    v4: Vamos logo + palette; iPhone date fields no longer overlap; Last day defaults to the trip date and can't be earlier.
    v5: an old Last day earlier than the trip date is ignored when editing; owner payment terms no longer say when the commission is paid.
-   Next releases add: customer send (Stripe link + /reserva page), Mark paid, pass deposit, settle at the dock. */
+   v6 (release v26): send to the customer (one-time Stripe card link made automatically, /reserva page, WhatsApp / Copy / Email),
+       Mark paid (transfer or cash), pass the deposit to the owner, settle at the dock (balance + commission), cancel or port closed. */
 (function () {
   'use strict';
 
@@ -459,58 +460,252 @@
   }
 
   /* ---------- invoice tracker ---------- */
+  function n(v) { return Number(v) || 0; }
+  function today() { return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mazatlan' }); }
+  function when(iso) { return iso ? new Date(iso).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) : ''; }
+  function shortDay(iso) { return iso ? new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''; }
+  function mxn(v) { return money(v) + ' MXN'; }
+  function activeConf() { return (state.data.confirmations || []).filter(function (x) { return x.fields.Status !== 'Superseded' && x.fields.Status !== 'Cancelled'; })[0]; }
+  function reload(inv, msg) { root.innerHTML = ''; root.appendChild(h('p', { class: 'sub', text: (msg ? msg + ' ' : '') + 'Loading…' })); return load('', inv.id).catch(showFatal); }
+
   function renderInvoice(inv) {
-    var d = state.data, f = inv.fields, conf = (d.confirmations || []).filter(function (x) { return x.fields.Status !== 'Superseded' && x.fields.Status !== 'Cancelled'; })[0];
+    var d = state.data, f = inv.fields, conf = activeConf();
+    var cf = conf ? conf.fields : {};
+    var price = n(f['Trip price']), dep = n(f.Deposit), got = n(f['Amount paid']), com = n(f.Commission);
+    var depPaid = dep > 0 && got >= dep, cancelled = !!f['Cancelled at'], ownerFlow = f['Balance collected by'] === 'Owner';
+    var ownerName = first(cf['Owner name']) || 'the owner';
     root.innerHTML = '';
-    root.appendChild(h('p', { class: 'sub', text: (f['Invoice number'] || '') + ' · ' + (f['Billed to'] || '') }));
+    root.appendChild(h('p', { class: 'sub', text: (f['Invoice number'] || '') + ' · ' + (f['Billed to'] || '') + ' · ' + (f.Status || '') }));
     root.appendChild(h('h1', { text: (f.Trip || '') + ', ' + fmtDate(f['Trip date'], 'English') + (f.Guests ? ', ' + f.Guests + ' guests' : '') }));
+    if (cancelled) root.appendChild(h('p', { class: 'warn', style: 'margin:0 0 12px', text: 'Cancelled ' + when(f['Cancelled at']) + '.' }));
     var steps = h('div', { class: 'card' });
 
     // 1. owner sign-off
-    var so = f['Owner sign-off'];
+    var so = f['Owner sign-off'], agreed = conf && cf.Status === 'Agreed';
     if (so === 'Required') {
-      var agreed = conf && conf.fields.Status === 'Agreed';
-      var cf = conf ? conf.fields : {};
       var link = cf['Page token'] ? SITE + '/confirmar?k=' + cf['Page token'] : '';
       var oEs = cf.Language !== 'English';
       var msg = oEs
         ? 'Hola ' + first(cf['Owner name']) + ', tengo una reservación para ' + (cf.Trip || '') + ' el ' + fmtDate(cf['Trip date'], 'Español') + ' (' + (cf.Guests || '') + ' personas). Revisa los detalles y confírmala aquí: ' + link
         : 'Hi ' + first(cf['Owner name']) + ', I have a booking for ' + (cf.Trip || '') + ' on ' + fmtDate(cf['Trip date'], 'English') + ' (' + (cf.Guests || '') + ' guests). Please review the details and confirm here: ' + link;
-      var who = first(cf['Owner name']) || 'the owner';
-      var terms = 'Owner gets ' + money(f.Deposit) + ' deposit, collects ' + money((f['Trip price'] || 0) - (f.Deposit || 0)) + ', owes you ' + money(f.Commission);
+      var terms = 'Owner gets ' + money(dep) + ' deposit, collects ' + money(price - dep) + ', owes you ' + money(com);
       var title, small, cls = 'now';
-      if (agreed) { cls = 'done'; title = who + ' confirmed'; small = 'Signed by ' + (cf['Signed by'] || '') + (cf['Responded at'] ? ', ' + new Date(cf['Responded at']).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) : ''); }
-      else if (cf.Status === 'Changes requested') { title = who + ' asked for a change'; small = '“' + (cf['Change request'] || '') + '” Tap Edit to fix it; saving sends a fresh confirmation.'; }
-      else if (cf.Status === 'Sent') { title = 'Waiting for ' + who + ' to confirm'; small = 'Sent ' + (cf['Sent at'] ? new Date(cf['Sent at']).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) : '') + '. ' + terms; }
-      else { title = 'Send to ' + who + ' for sign-off'; small = terms; }
+      if (agreed) { cls = 'done'; title = ownerName + ' confirmed'; small = 'Signed by ' + (cf['Signed by'] || '') + (cf['Responded at'] ? ', ' + when(cf['Responded at']) : ''); }
+      else if (cf.Status === 'Changes requested') { title = ownerName + ' asked for a change'; small = '“' + (cf['Change request'] || '') + '” Tap Edit to fix it; saving sends a fresh confirmation.'; }
+      else if (cf.Status === 'Sent') { title = 'Waiting for ' + ownerName + ' to confirm'; small = 'Sent ' + when(cf['Sent at']) + '. ' + terms; }
+      else { title = 'Send to ' + ownerName + ' for sign-off'; small = terms; }
       var sendBtns = [
         h('button', { class: 'btn sec', type: 'button', onclick: function () { ownerSent(conf, 'WhatsApp'); openWhatsApp(cf['Owner phone'], msg); } }, [cf.Status === 'Sent' ? 'WhatsApp again' : 'WhatsApp owner']),
         h('button', { class: 'btn sec', type: 'button', onclick: function () { ownerSent(conf, 'Copied'); copy(msg); } }, ['Copy message']),
         link ? h('a', { class: 'btn sec', href: link, target: '_blank', rel: 'noopener' }, ['Preview']) : null
       ];
-      steps.appendChild(step(cls, title, small, agreed || cf.Status === 'Changes requested' ? (agreed ? null : [h('button', { class: 'btn sec', type: 'button', onclick: function () { renderForm({ inv: inv, conf: conf }); } }, ['Edit'])]) : sendBtns));
+      if (cancelled) cls = agreed ? 'done' : '';
+      steps.appendChild(step(cls, title, small, cancelled ? null : agreed ? (link ? [h('a', { class: 'btn sec', href: link, target: '_blank', rel: 'noopener' }, ['Owner page'])] : null)
+        : cf.Status === 'Changes requested' ? [h('button', { class: 'btn sec', type: 'button', onclick: function () { renderForm({ inv: inv, conf: conf }); } }, ['Edit'])] : sendBtns));
     } else if (so === 'Skipped') {
       steps.appendChild(step('done', 'Owner sign-off skipped', 'You chose to send without the owner confirming.'));
     }
-    // 2. customer
-    var ready = so !== 'Required' || (conf && conf.fields.Status === 'Agreed');
-    steps.appendChild(step(ready ? 'now' : '', 'Send to ' + first(f['Billed to']), ready ? 'Customer page and card payment link arrive in the next release.' : 'Unlocks when the owner confirms.'));
-    steps.appendChild(step('', 'Deposit ' + money(f.Deposit), 'Card payments will update by themselves; Mark paid for transfer or cash.'));
-    if (f['Balance collected by'] === 'Owner') {
-      steps.appendChild(step('', 'Pass the deposit to the owner', ''));
-      steps.appendChild(step('', 'Settle at the dock', 'Customer pays the owner ' + money((f['Trip price'] || 0) - (f.Deposit || 0)) + '; owner pays you ' + money(f.Commission) + '.'));
+
+    // 2. send to the customer
+    var ready = so !== 'Required' || agreed;
+    steps.appendChild(customerStep(inv, ready, depPaid, cancelled));
+
+    // 3. deposit (and, when Vamos collects, the balance)
+    var payList = (d.payments || []).map(function (p) { var x = p.fields; return shortDay(x['Received on']) + ' · ' + (x.Method || '') + ' · ' + money(x.Amount); }).join('\n');
+    var depBox = h('div');
+    steps.appendChild(step(depPaid ? 'done' : (ready && !cancelled ? 'now' : ''), depPaid ? 'Deposit ' + money(dep) + ' paid' : 'Deposit ' + money(dep),
+      (payList ? payList + '\n' : '') + (depPaid ? '' : 'Card payments appear here by themselves (tap Refresh). Transfer or cash: Mark paid.'),
+      cancelled || depPaid ? null : [h('button', { class: 'btn sec', type: 'button', onclick: function () { payForm(inv, depBox, Math.max(0, dep - got), 'Deposit'); } }, ['Mark paid'])], depBox));
+    if (!ownerFlow) {
+      var balBox = h('div'), full = price > 0 && got >= price;
+      steps.appendChild(step(full ? 'done' : (depPaid && !cancelled ? 'now' : ''), full ? 'Balance paid' : 'Balance ' + money(Math.max(0, price - got)) + ' on the day', '',
+        cancelled || full || !depPaid ? null : [h('button', { class: 'btn sec', type: 'button', onclick: function () { payForm(inv, balBox, Math.max(0, price - got), 'Balance'); } }, ['Mark paid'])], balBox));
+    }
+
+    // 4–5. managed booking: pass the deposit on, settle at the dock
+    if (ownerFlow) {
+      var toOwner = n(f['Paid to owner']), owed = n(f['Owner deposit owed']), comGot = n(f['Commission received']);
+      var passed = depPaid && toOwner > 0 && owed <= 0;
+      var trList = (d.transfers || []).map(function (t) { var x = t.fields; return shortDay(x['Paid on']) + ' · ' + (x.Type || '') + ' · ' + money(x.Amount) + (x.Method ? ' · ' + x.Method : ''); }).join('\n');
+      var passBox = h('div');
+      var oPhone = cf['Owner phone'], cLink = cf['Page token'] ? SITE + '/confirmar?k=' + cf['Page token'] : '';
+      var oMsg = cf.Language === 'English'
+        ? 'Hi ' + first(cf['Owner name']) + ', ' + first(f['Billed to']) + ' paid the deposit for booking ' + f['Invoice number'] + ' (' + (cf.Trip || f.Trip) + ', ' + fmtDate(f['Trip date'], 'English') + '). I\'m sending you ' + money(owed || dep) + '.' + (cLink ? ' Their name and WhatsApp are now on your confirmation: ' + cLink : '')
+        : 'Hola ' + first(cf['Owner name']) + ', ' + first(f['Billed to']) + ' ya pagó el anticipo de la reservación ' + f['Invoice number'] + ' (' + (cf.Trip || f.Trip) + ', ' + fmtDate(f['Trip date'], 'Español') + '). Te envío ' + money(owed || dep) + '.' + (cLink ? ' Ya puedes ver su nombre y WhatsApp en tu confirmación: ' + cLink : '');
+      steps.appendChild(step(passed ? 'done' : (depPaid && !cancelled ? 'now' : ''), passed ? 'Deposit passed to ' + ownerName : 'Pass the deposit to ' + ownerName,
+        !depPaid ? 'After the customer pays the deposit.' : passed ? '' : 'Send ' + ownerName + ' ' + money(owed) + ', then Mark sent.',
+        cancelled || !depPaid || passed ? null : [
+          oPhone ? h('button', { class: 'btn sec', type: 'button', onclick: function () { openWhatsApp(oPhone, oMsg); } }, ['WhatsApp ' + ownerName]) : null,
+          h('button', { class: 'btn sec', type: 'button', onclick: function () { transferForm(inv, passBox, owed, 'Deposit'); } }, ['Mark sent'])], passBox));
+      var settled = !!f['Balance settled with owner'], comLeft = Math.max(0, com - comGot), done5 = settled && comLeft <= 0;
+      var setBox = h('div');
+      steps.appendChild(step(done5 ? 'done' : (passed && !cancelled ? 'now' : ''), done5 ? 'Settled at the dock' : 'Settle at the dock',
+        'Customer pays ' + ownerName + ' ' + money(price - dep) + (settled ? ' ✓' : '') + '; ' + ownerName + ' pays you ' + money(com) + (comGot ? ' (received ' + money(comGot) + ')' : '') + '.' + (trList ? '\n' + trList : ''),
+        cancelled || done5 || !depPaid ? null : [h('button', { class: 'btn sec', type: 'button', onclick: function () { settleForm(inv, setBox, settled, comLeft); } }, ['Settle'])], setBox));
     }
     root.appendChild(steps);
 
     var sum = h('div', { class: 'card' });
-    [['Trip price', money(f['Trip price'])], ['Deposit', money(f.Deposit)], f.Commission ? ['Your commission', money(f.Commission)] : null,
+    [['Trip price', money(price)], ['Deposit', money(dep)], com ? ['Your commission', money(com)] : null,
      ['Meeting', [f['Meeting point'], f['Meeting time']].filter(Boolean).join(', ') || 'not set'], ['Language', f.Language || ''], ['Status', f.Status || '']]
       .filter(Boolean).forEach(function (kv) { sum.appendChild(h('div', { class: 'kv' }, [h('span', { text: kv[0] }), h('span', { text: kv[1] })])); });
     root.appendChild(sum);
-    root.appendChild(h('button', { class: 'btn sec', type: 'button', onclick: function () { renderForm({ inv: inv, conf: conf }); } }, ['Edit']));
-    root.appendChild(h('button', { class: 'btn sec', type: 'button', onclick: function () { root.innerHTML = ''; root.appendChild(h('p', { class: 'sub', text: 'Refreshing…' })); load('', inv.id).catch(showFatal); } }, ['Refresh']));
+    if (!cancelled) root.appendChild(h('button', { class: 'btn sec', type: 'button', onclick: function () { renderForm({ inv: inv, conf: conf }); } }, ['Edit']));
+    root.appendChild(h('button', { class: 'btn sec', type: 'button', onclick: function () { reload(inv, 'Refreshing…'); } }, ['Refresh']));
     root.appendChild(h('a', { class: 'btn sec', href: location.pathname + '?k=' + encodeURIComponent(KEY) }, ['New invoice']));
+    var cBox = h('div');
+    if (!cancelled) root.appendChild(h('button', { class: 'link', type: 'button', onclick: function () { cancelForm(inv, conf, cBox); } }, ['Cancel this booking…']));
+    else if (conf && cf['Owner phone']) {
+      var cMsg = cf.Language === 'English' ? 'Hi ' + first(cf['Owner name']) + ', booking ' + f['Invoice number'] + ' (' + fmtDate(f['Trip date'], 'English') + ') is cancelled.' : 'Hola ' + first(cf['Owner name']) + ', la reservación ' + f['Invoice number'] + ' (' + fmtDate(f['Trip date'], 'Español') + ') quedó cancelada.';
+      root.appendChild(h('button', { class: 'btn sec', type: 'button', onclick: function () { openWhatsApp(cf['Owner phone'], cMsg); } }, ['Tell ' + ownerName + ' on WhatsApp']));
+    }
+    root.appendChild(cBox);
   }
+
+  /* customer send: makes the card link first when it is missing or the deposit changed */
+  function customerStep(inv, ready, depPaid, cancelled) {
+    var f = inv.fields, who = first(f['Billed to']) || 'the customer', dep = n(f.Deposit);
+    if (!ready) return step('', 'Send to ' + who, 'Unlocks when the owner confirms.');
+    var page = SITE + '/reserva?k=' + (f['Page token'] || '');
+    var linkOk = !!f['Stripe payment link'] && n(f['Payment link amount']) === dep;
+    var needLink = !depPaid && !cancelled && dep > 0 && !linkOk;
+    if (needLink && !state.linking && state.linkFailed !== inv.id) makeLink(inv);
+    var sent = f['Sent at'];
+    var title = sent ? 'Sent to ' + who : 'Send to ' + who;
+    var small = sent ? 'Sent ' + when(sent) + (f['Sent via'] && f['Sent via'].length ? ' by ' + [].concat(f['Sent via']).join(', ') : '') + '.' : 'Their page has the trip, card payment and transfer details.';
+    if (state.linking) small += ' Making the card payment link…';
+    else if (state.linkFailed === inv.id) small += ' The card link could not be made; the page still shows transfer details. Tap Refresh to try again.';
+    if (depPaid || cancelled) return step(sent || depPaid ? 'done' : '', title, small, [h('a', { class: 'btn sec', href: page, target: '_blank', rel: 'noopener' }, ['Customer page'])]);
+    var msg = customerMessage(f, page);
+    var wait = !!state.linking;
+    var btns = [
+      f.Phone ? h('button', { class: 'btn sec', type: 'button', disabled: wait, onclick: function () { customerSent(inv, 'WhatsApp', msg); openWhatsApp(f.Phone, msg); } }, [sent ? 'WhatsApp again' : 'WhatsApp ' + who]) : null,
+      h('button', { class: 'btn sec', type: 'button', disabled: wait, onclick: function () { customerSent(inv, 'Copied', msg); copy(msg); } }, ['Copy message']),
+      f.Email ? h('button', { class: 'btn sec', type: 'button', disabled: wait, onclick: function () {
+        customerSent(inv, 'Email', msg);
+        location.href = 'mailto:' + f.Email + '?subject=' + encodeURIComponent((f.Language === 'English' ? 'Your booking ' : 'Tu reservación ') + f['Invoice number']) + '&body=' + encodeURIComponent(msg);
+      } }, ['Email']) : null,
+      h('a', { class: 'btn sec', href: page, target: '_blank', rel: 'noopener' }, ['Preview'])
+    ];
+    return step(sent ? 'done' : 'now', title, small, btns);
+  }
+  function customerMessage(f, page) {
+    var en = f.Language === 'English', dep = n(f.Deposit);
+    return en
+      ? 'Hi ' + first(f['Billed to']) + ', here is your booking ' + f['Invoice number'] + ': ' + f.Trip + ', ' + fmtDate(f['Trip date'], 'English') + (f.Guests ? ', ' + f.Guests + ' guests' : '') + '.\n\nTotal ' + mxn(f['Trip price']) + ' (IVA included). To secure your spot, pay the ' + mxn(dep) + ' deposit by card or bank transfer here:\n' + page + '\n\nAny questions, just message me!'
+      : 'Hola ' + first(f['Billed to']) + ', aquí está tu reservación ' + f['Invoice number'] + ': ' + f.Trip + ', ' + fmtDate(f['Trip date'], 'Español') + (f.Guests ? ', ' + f.Guests + ' personas' : '') + '.\n\nPrecio total ' + mxn(f['Trip price']) + ' (IVA incluido). Para asegurar tu lugar, paga el anticipo de ' + mxn(dep) + ' con tarjeta o por transferencia aquí:\n' + page + '\n\n¡Cualquier duda, me escribes!';
+  }
+  function makeLink(inv) {
+    var f = inv.fields;
+    state.linking = true;
+    post(HOOK_ACTIONS, { k: KEY, action: 'paylink', id: inv.id, number: f['Invoice number'], trip: f.Trip, deposit: n(f.Deposit), token: f['Page token'], oldLinkId: f['Stripe payment link ID'] || '' })
+      .then(function (r) {
+        state.linking = false;
+        if (!r.url) throw new Error('no url');
+        f['Stripe payment link'] = r.url; f['Stripe payment link ID'] = r.id; f['Payment link amount'] = n(f.Deposit);
+        state.linkFailed = '';
+      })
+      .catch(function () { state.linking = false; state.linkFailed = inv.id; })
+      .then(function () { if (state.data.invoice && state.data.invoice[0] && state.data.invoice[0].id === inv.id) renderInvoice(inv); });
+  }
+  // Records the customer send (fire-and-forget; survives the jump to WhatsApp or Mail).
+  function customerSent(inv, via, msg) {
+    var f = inv.fields, list = [].concat(f['Sent via'] || []);
+    if (list.indexOf(via) < 0) list.push(via);
+    f['Sent at'] = f['Sent at'] || new Date().toISOString(); f['Sent via'] = list;
+    var body = new URLSearchParams({ k: KEY, action: 'sent', id: inv.id, sentAt: f['Sent at'], via: list.join(','), message: msg });
+    if (navigator.sendBeacon) navigator.sendBeacon(HOOK_ACTIONS, body); else fetch(HOOK_ACTIONS, { method: 'POST', body: body, keepalive: true });
+    setTimeout(function () { renderInvoice(inv); }, 400);
+  }
+
+  /* ---------- small inline forms ---------- */
+  function sel(id, options, value) {
+    var s = h('select', { id: id });
+    options.forEach(function (o) { s.appendChild(h('option', { value: o, text: o, selected: o === value ? 'selected' : null })); });
+    return s;
+  }
+  function formShell(box, title, rows, saveText, onSave) {
+    box.innerHTML = '';
+    var err = h('div'), btn = h('button', { class: 'btn pri', type: 'button', style: 'margin-top:12px' }, [saveText]);
+    var wrap = h('div', { style: 'margin-top:10px;padding:12px;border-radius:12px;background:#f8f6f2' }, [h('b', { text: title })].concat(rows).concat([err, btn,
+      h('button', { class: 'link', type: 'button', onclick: function () { box.innerHTML = ''; } }, ['Close'])]));
+    btn.addEventListener('click', function () {
+      err.innerHTML = '';
+      btn.disabled = true; btn.textContent = 'Saving…';
+      Promise.resolve().then(onSave).catch(function (e) { btn.disabled = false; btn.textContent = saveText; err.appendChild(h('p', { class: 'err', text: e.message })); });
+    });
+    box.appendChild(wrap);
+  }
+  function field(label, input) { return h('div', null, [h('label', { text: label }), input]); }
+  function payForm(inv, box, amount, what) {
+    var a = h('input', { type: 'number', inputmode: 'numeric', value: amount || '' }), m = sel('vi-pm', ['Bank transfer', 'Cash', 'Other'], 'Bank transfer');
+    var dt = h('input', { type: 'date', value: today() }), nt = h('input', { placeholder: 'Reference or note (optional)' });
+    formShell(box, what + ' received', [h('div', { class: 'row' }, [field('Amount', a), field('How', m)]), field('Date', dt), field('Note', nt)], 'Save payment', function () {
+      if (!(Number(a.value) > 0)) throw new Error('Enter the amount.');
+      return post(HOOK_ACTIONS, { k: KEY, action: 'pay', id: inv.id, number: inv.fields['Invoice number'], amount: a.value, method: m.value, date: dt.value, notes: what + (nt.value ? ' · ' + nt.value : '') })
+        .then(function () { return reload(inv, 'Saved.'); });
+    });
+  }
+  function transferForm(inv, box, amount, type) {
+    var a = h('input', { type: 'number', inputmode: 'numeric', value: amount || '' }), m = sel('vi-tm', ['Bank transfer', 'Cash', 'Other'], 'Bank transfer');
+    var dt = h('input', { type: 'date', value: today() }), nt = h('input', { placeholder: 'Note (optional)' });
+    formShell(box, 'Deposit sent to the owner', [h('div', { class: 'row' }, [field('Amount', a), field('How', m)]), field('Date', dt), field('Note', nt)], 'Save', function () {
+      if (!(Number(a.value) > 0)) throw new Error('Enter the amount.');
+      return post(HOOK_ACTIONS, { k: KEY, action: 'transfer', id: inv.id, number: inv.fields['Invoice number'], amount: a.value, type: type, method: m.value, date: dt.value, notes: nt.value })
+        .then(function () { return reload(inv, 'Saved.'); });
+    });
+  }
+  function settleForm(inv, box, settled, comLeft) {
+    var cb = h('input', { type: 'checkbox', id: 'vi-bal', style: 'width:auto;margin-right:8px' }); cb.checked = true;
+    var a = h('input', { type: 'number', inputmode: 'numeric', value: comLeft || '' }), m = sel('vi-cm', ['Cash', 'Bank transfer', 'Other'], 'Cash');
+    var dt = h('input', { type: 'date', value: today() });
+    formShell(box, 'At the dock', [
+      h('label', { for: 'vi-bal', style: 'display:flex;align-items:center;color:#1d2731;font-size:15px' }, [cb, 'Customer paid the owner the balance']),
+      h('div', { class: 'row' }, [field('Commission received', a), field('How', m)]), field('Date', dt)], 'Save', function () {
+      var chain = Promise.resolve();
+      if (Number(a.value) > 0) chain = chain.then(function () {
+        return post(HOOK_ACTIONS, { k: KEY, action: 'transfer', id: inv.id, number: inv.fields['Invoice number'], amount: a.value, type: 'Commission paid by owner', method: m.value, date: dt.value, notes: '' });
+      });
+      if (cb.checked !== settled) chain = chain.then(function () { return post(HOOK_ACTIONS, { k: KEY, action: 'settle', id: inv.id, settled: cb.checked ? 'true' : 'false' }); });
+      return chain.then(function () { return reload(inv, 'Saved.'); });
+    });
+  }
+  function cancelForm(inv, conf, box) {
+    var f = inv.fields, toOwner = n(f['Paid to owner']), got = n(f['Amount paid']);
+    var why = 'customer';
+    var seg = h('div', { class: 'seg', style: 'margin-top:8px' });
+    var detail = h('div');
+    function pick(w) {
+      why = w;
+      Array.prototype.forEach.call(seg.children, function (b) { b.className = b.dataset.w === w ? 'on' : ''; });
+      detail.innerHTML = '';
+      if (w === 'customer') detail.appendChild(h('p', { class: 'hint', text: 'The owner keeps any deposit already passed on and no commission is due. The card link is switched off and the owner\'s confirmation is cancelled.' }));
+      else {
+        if (toOwner > 0) { var c1 = h('input', { type: 'checkbox', id: 'vi-ret', style: 'width:auto;margin-right:8px' }); c1.checked = true; detail.appendChild(h('label', { for: 'vi-ret', style: 'display:flex;align-items:center;color:#1d2731;font-size:15px' }, [c1, 'Owner returned the deposit (' + money(toOwner) + ')'])); }
+        if (got > 0) {
+          var c2 = h('input', { type: 'checkbox', id: 'vi-ref', style: 'width:auto;margin-right:8px' }); c2.checked = true;
+          detail.appendChild(h('label', { for: 'vi-ref', style: 'display:flex;align-items:center;color:#1d2731;font-size:15px' }, [c2, 'Refunded the customer (' + money(got) + ')']));
+          detail.appendChild(field('Refund method', sel('vi-refm', ['Card (Stripe)', 'Bank transfer', 'Cash', 'Other'], (state.data.payments || []).some(function (p) { return p.fields.Method === 'Card (Stripe)'; }) ? 'Card (Stripe)' : 'Bank transfer')));
+          detail.appendChild(h('p', { class: 'hint', text: 'Card refunds: refund the payment in the Stripe app first; this only records it.' }));
+        }
+        if (!toOwner && !got) detail.appendChild(h('p', { class: 'hint', text: 'Nothing was paid yet, so there is nothing to return.' }));
+      }
+    }
+    [['customer', 'Customer cancelled'], ['weather', 'Port closed (weather)']].forEach(function (o) { var b = h('button', { type: 'button', text: o[1], onclick: function () { pick(o[0]); } }); b.dataset.w = o[0]; seg.appendChild(b); });
+    formShell(box, 'Cancel ' + f['Invoice number'], [seg, detail], 'Cancel booking', function () {
+      var chain = Promise.resolve(), d0 = today();
+      if (why === 'weather') {
+        var ret = $('#vi-ret'), ref = $('#vi-ref');
+        if (ret && ret.checked) chain = chain.then(function () { return post(HOOK_ACTIONS, { k: KEY, action: 'transfer', id: inv.id, number: f['Invoice number'], amount: -toOwner, type: 'Deposit returned (weather)', method: 'Bank transfer', date: d0, notes: 'Port closed' }); });
+        if (ref && ref.checked) chain = chain.then(function () { return post(HOOK_ACTIONS, { k: KEY, action: 'pay', id: inv.id, number: f['Invoice number'], amount: -got, method: $('#vi-refm').value, date: d0, notes: 'Refund · port closed' }); });
+      }
+      return chain.then(function () {
+        return post(HOOK_ACTIONS, { k: KEY, action: 'cancel', id: inv.id, confId: conf ? conf.id : '', linkId: f['Stripe payment link ID'] || '' });
+      }).then(function () { return reload(inv, 'Cancelled.'); });
+    });
+    pick('customer');
+  }
+
   // Records that the owner message went out (fire-and-forget; survives the jump to WhatsApp).
   function ownerSent(conf, via) {
     if (!conf) return;
@@ -521,9 +716,11 @@
     cf.Status = cf.Status === 'Draft' || !cf.Status ? 'Sent' : cf.Status; cf['Sent via'] = list; cf['Sent at'] = cf['Sent at'] || new Date().toISOString();
     if (navigator.sendBeacon) navigator.sendBeacon(HOOK_ACTIONS, body); else fetch(HOOK_ACTIONS, { method: 'POST', body: body, keepalive: true });
   }
-  function step(cls, title, small, buttons) {
-    return h('div', { class: 'step' }, [h('div', { class: 'dot ' + (cls || '') }), h('div', { style: 'flex:1' }, [
-      h('b', { text: title }), small ? h('div', { class: 'small', text: small }) : null, buttons ? h('div', { class: 'btns' }, buttons) : null])]);
+  function step(cls, title, small, buttons, extra) {
+    buttons = (buttons || []).filter(Boolean);
+    return h('div', { class: 'step' }, [h('div', { class: 'dot ' + (cls || '') }), h('div', { style: 'flex:1;min-width:0' }, [
+      h('b', { text: title }), small ? h('div', { class: 'small', style: 'white-space:pre-line', text: small }) : null,
+      buttons.length ? h('div', { class: 'btns' }, buttons) : null, extra || null])]);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount();
