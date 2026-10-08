@@ -8,7 +8,9 @@
    v4: Vamos logo + palette; iPhone date fields no longer overlap; Last day defaults to the trip date and can't be earlier.
    v5: an old Last day earlier than the trip date is ignored when editing; owner payment terms no longer say when the commission is paid.
    v6 (release v26): send to the customer (one-time Stripe card link made automatically, /reserva page, WhatsApp / Copy / Email),
-       Mark paid (transfer or cash), pass the deposit to the owner, settle at the dock (balance + commission), cancel or port closed. */
+       Mark paid (transfer or cash), pass the deposit to the owner, settle at the dock (balance + commission), cancel or port closed.
+   v7 (release v27): boat/operator first, then its experiences; "Other (type it)" for unlisted trips; quick payments (a description
+       and an amount, standalone or attached to a booking as an extra); phone hint for non-Mexican numbers. */
 (function () {
   'use strict';
 
@@ -18,6 +20,8 @@
   var SITE = 'https://vamosalapaz.com';
   var PINK = '#B51E66';           // Bugambilia
   var C = { navy: '#061A2E', foam: '#F3EFE6', aqua: '#00C6C0', pacific: '#156AB3', gulf: '#0B4F6C', lima: '#B5C62E', orange: '#E65A37', gold: '#F3B53F' };
+  var CUSTOM = '__custom';
+  var PHONE_HINT = 'Mexican numbers: 10 digits. Others: start with + and the country code (+1 for US and Canada).';
   var LOGO = 'https://s3.amazonaws.com/webflow-prod-assets/6a94d97df3061a3b48890971/6ab313cdb43ef771290ceace_download.png';
 
   var qs = new URLSearchParams(location.search);
@@ -195,6 +199,7 @@
 
     var lang = f.Language || 'Español';
     var form = h('div');
+    if (!edit && !inq) form.appendChild(modeSwitch('booking'));
     // customer
     var cust = h('div', { class: 'card' });
     cust.appendChild(h('label', { for: 'vi-name', text: 'Customer name' }));
@@ -203,6 +208,7 @@
       h('div', null, [h('label', { for: 'vi-phone', text: 'WhatsApp number' }), h('input', { id: 'vi-phone', type: 'tel', value: f.Phone || qs.get('phone') || '', onblur: lookupPhone })]),
       h('div', null, [h('label', { for: 'vi-email', text: 'Email (optional)' }), h('input', { id: 'vi-email', type: 'email', value: f.Email || '' })])
     ]));
+    cust.appendChild(h('div', { class: 'hint', text: PHONE_HINT }));
     cust.appendChild(h('div', { id: 'vi-known' }));
     cust.appendChild(h('label', { text: 'Customer language' }));
     var seg = h('div', { class: 'seg', id: 'vi-lang' });
@@ -216,15 +222,18 @@
 
     // trip
     var trip = h('div', { class: 'card' });
-    trip.appendChild(h('label', { for: 'vi-off', text: 'Experience' }));
-    var sel = h('select', { id: 'vi-off', onchange: function () { applyOffering(true); } });
-    sel.appendChild(h('option', { value: '', text: 'Choose an experience' }));
-    (d.offerings || []).slice().sort(function (a, b) { return String(a.fields.Name).localeCompare(String(b.fields.Name)); }).forEach(function (o) {
-      var c = ctxSafe(o.id);
-      var tag = c ? [c.boat && c.boat.fields.Name, c.op && !c.placeholder ? c.op.fields.Name : (c.owner ? 'owner ' + first(c.owner.fields['Contact Name']) : '')].filter(Boolean).join(', ') : '';
-      sel.appendChild(h('option', { value: o.id, text: o.fields.Name + (tag ? ' (' + tag + ')' : ''), selected: f['Offering record ID'] === o.id ? 'selected' : null }));
-    });
-    trip.appendChild(sel);
+    trip.appendChild(h('label', { for: 'vi-grp', text: 'Boat or operator' }));
+    var grp = h('select', { id: 'vi-grp', onchange: function () { fillExperiences(''); } });
+    grp.appendChild(h('option', { value: '', text: 'Choose a boat or operator' }));
+    groups().forEach(function (g) { grp.appendChild(h('option', { value: g.key, text: g.label + ' (' + g.items.length + ')' })); });
+    grp.appendChild(h('option', { value: CUSTOM, text: 'Other (type it)' }));
+    trip.appendChild(grp);
+    trip.appendChild(h('div', { id: 'vi-offwrap', style: 'display:none' }, [h('label', { for: 'vi-off', text: 'Experience' }), h('select', { id: 'vi-off', onchange: function () { applyOffering(true); } })]));
+    trip.appendChild(h('div', { id: 'vi-customwrap', style: 'display:none' }, [
+      h('label', { for: 'vi-ctrip', text: 'What is the trip? (the customer sees this)' }), h('input', { id: 'vi-ctrip', placeholder: 'Private sunset cruise' }),
+      h('label', { for: 'vi-cdur', text: 'Duration (optional)' }), h('input', { id: 'vi-cdur', placeholder: '3 hours' }),
+      h('label', { for: 'vi-ccan', text: 'Cancellation terms (optional, the customer sees this)' }), h('textarea', { id: 'vi-ccan' })
+    ]));
     trip.appendChild(h('div', { class: 'row' }, [
       h('div', null, [h('label', { for: 'vi-date', text: 'Date' }), h('input', { id: 'vi-date', type: 'date', value: f['Requested date'] || '', onchange: syncEnd })]),
       h('div', null, [h('label', { for: 'vi-guests', text: 'Guests' }), h('input', { id: 'vi-guests', type: 'number', inputmode: 'numeric', min: '1', value: f.Guests || '' })])
@@ -293,11 +302,54 @@
       $('#vi-int').value = e2['Internal notes'] || '';
       $('#vi-onote').value = cf['Note to owner'] || '';
       if (!cf['Partner Admin record ID'] && cf['Owner name']) { $('#vi-oname').value = cf['Owner name']; $('#vi-ophone').value = cf['Owner phone'] || ''; }
+      if (!e2['Offering record ID']) { $('#vi-ctrip').value = e2.Trip || ''; $('#vi-cdur').value = e2.Duration || ''; $('#vi-ccan').value = e2['Cancellation policy'] || ''; }
     }
     state.lastStart = $('#vi-date').value;
     $('#vi-end').min = $('#vi-date').value || '';
     if (!inq && !edit && $('#vi-phone').value) lookupPhone();
-    applyOffering(false);
+    selectOffering(f['Offering record ID'] || (edit ? CUSTOM : ''));
+  }
+  /* boat / operator first, then that one's experiences */
+  function byName(a, b) { return String(a.fields.Name).localeCompare(String(b.fields.Name)); }
+  function groupKey(o) { var f = o.fields, b = ids(f.Boat)[0], op = ids(f.Operator)[0]; return b ? 'b:' + b : op ? 'o:' + op : 'x'; }
+  function groups() {
+    var m = {};
+    (state.data.offerings || []).forEach(function (o) { var k = groupKey(o); (m[k] = m[k] || { key: k, items: [] }).items.push(o); });
+    return Object.keys(m).map(function (k) {
+      var g = m[k], c = ctxSafe(g.items[0].id);
+      g.label = c && c.boat ? c.boat.fields.Name + (c.op && !c.placeholder ? ' · ' + c.op.fields.Name : c.owner ? ' · ' + first(c.owner.fields['Contact Name']) : '')
+        : c && c.op ? c.op.fields.Name : 'Other listings';
+      return g;
+    }).sort(function (a, b) { return a.label.localeCompare(b.label); });
+  }
+  function fillExperiences(selectId) {
+    var k = $('#vi-grp').value, sel = $('#vi-off'), custom = k === CUSTOM;
+    $('#vi-offwrap').style.display = custom || !k ? 'none' : '';
+    $('#vi-customwrap').style.display = custom ? '' : 'none';
+    sel.innerHTML = '';
+    if (k && !custom) {
+      var g = groups().filter(function (x) { return x.key === k; })[0], items = g ? g.items.slice().sort(byName) : [];
+      if (items.length > 1) sel.appendChild(h('option', { value: '', text: 'Choose an experience' }));
+      items.forEach(function (o) { sel.appendChild(h('option', { value: o.id, text: o.fields.Name + (o.fields['Price Range'] ? ' · ' + o.fields['Price Range'] : ''), selected: o.id === selectId ? 'selected' : null })); });
+    }
+    applyOffering(!selectId);
+  }
+  function selectOffering(id) {
+    if (id === CUSTOM) { $('#vi-grp').value = CUSTOM; fillExperiences(''); return; }
+    var o = id && state.data.maps.off[id];
+    $('#vi-grp').value = o ? groupKey(o) : '';
+    fillExperiences(o ? id : '');
+  }
+  function customCtx() {
+    return { custom: true, o: { id: '', fields: {} }, f: { Name: ($('#vi-ctrip').value || '').trim(), Duration: ($('#vi-cdur').value || '').trim() },
+      boat: null, op: null, placeholder: false, owner: null, opsId: '', mirror: null, gm: false, comPct: 0 };
+  }
+  function modeSwitch(on) {
+    var seg = h('div', { class: 'seg', style: 'margin:0 0 14px' });
+    [['booking', 'Booking'], ['quick', 'Quick payment']].forEach(function (m) {
+      seg.appendChild(h('button', { type: 'button', class: m[0] === on ? 'on' : '', text: m[1], onclick: function () { if (m[0] === on) return; if (m[0] === 'quick') renderQuick({}); else renderForm(); } }));
+    });
+    return seg;
   }
   // Last day follows the trip date unless it was set to a later day on purpose; never earlier than the trip date.
   function syncEnd() {
@@ -309,9 +361,11 @@
   function ctxSafe(id) { try { return ctx(id); } catch (e) { return null; } }
 
   function applyOffering(userChanged) {
-    var id = $('#vi-off').value, c = id ? ctx(id) : null;
+    var custom = $('#vi-grp') && $('#vi-grp').value === CUSTOM;
+    var id = $('#vi-off').value, c = custom ? customCtx() : id ? ctx(id) : null;
     state.ctx = c;
-    if (!c) { refresh(); return; }
+    if (!c) { $('#vi-owncard').style.display = 'none'; $('#vi-range').textContent = ''; refresh(); return; }
+    if (custom) { $('#vi-owncard').style.display = 'none'; $('#vi-range').textContent = ''; $('#vi-mphint').textContent = ''; refresh(); return; }
     var f = c.f;
     if (userChanged || !$('#vi-price').value) {
       var p = lowPrice(f['Price Range']);
@@ -341,7 +395,7 @@
   }
   function refresh() {
     var c = state.ctx, price = Number($('#vi-price').value) || 0, dep = Number($('#vi-dep').value) || 0, com = Number($('#vi-com').value) || 0;
-    var gm = c && c.gm;
+    var gm = c && (c.gm || c.custom);
     $('#vi-comwrap').style.display = gm ? 'none' : '';
     $('#vi-skip').style.display = gm ? 'none' : '';
     $('#vi-onote').previousSibling.style.display = gm ? 'none' : '';
@@ -350,6 +404,7 @@
     if (price && dep) {
       var pct = Math.round(dep / price * 100);
       split = gm ? 'Deposit ' + pct + '% · balance ' + money(price - dep) + ' on the day'
+        : c && c.custom ? 'Deposit ' + pct + '% · balance ' + money(price - dep) + ' on the day'
         : 'Deposit ' + pct + '% goes to ' + (c && c.owner ? first(c.owner.fields['Contact Name']) : 'the owner') + ' · owner collects ' + money(price - dep) + ' at the dock' + (com ? ' · owes you ' + money(com) : '');
     }
     $('#vi-split').textContent = split;
@@ -370,10 +425,86 @@
       if (!$('#vi-name').value) $('#vi-name').value = name;
       if (!$('#vi-email').value && c.fields.Email) $('#vi-email').value = c.fields.Email;
       var last = (r.inquiries || []).sort(function (a, b) { return String(b.fields['Received at']).localeCompare(String(a.fields['Received at'])); })[0];
-      if (last && !$('#vi-off').value && last.fields['Offering record ID']) { $('#vi-off').value = last.fields['Offering record ID']; applyOffering(true); }
-      if (last && !$('#vi-date').value && last.fields['Requested date']) { $('#vi-date').value = last.fields['Requested date']; syncEnd(); }
+      if (last && $('#vi-grp') && !$('#vi-off').value && $('#vi-grp').value !== CUSTOM && last.fields['Offering record ID']) { selectOffering(last.fields['Offering record ID']); applyOffering(true); }
+      if (last && $('#vi-date') && !$('#vi-date').value && last.fields['Requested date']) { $('#vi-date').value = last.fields['Requested date']; syncEnd(); }
       box.appendChild(h('div', { class: 'known', text: 'Known customer: ' + name + (last ? ' · last asked about ' + (last.fields.Offering || 'a trip') : '') }));
     }).catch(function () { /* lookup is a convenience only */ });
+  }
+
+  /* ---------- quick payment: a description and an amount (standalone, or an extra on a booking) ---------- */
+  function renderQuick(opts) {
+    var parent = opts.parent || null, edit = opts.edit || null, pf = parent ? parent.fields : {}, ef = edit ? edit.fields : {};
+    state.edit = null; state.inquiry = null; state.busy = false;
+    state.customerId = edit ? ids(ef.Customer)[0] || '' : parent ? ids(pf.Customer)[0] || '' : '';
+    var lang = ef.Language || pf.Language || 'Español';
+    state.form.lang = lang;
+    root.innerHTML = '';
+    if (!parent && !edit) root.appendChild(modeSwitch('quick'));
+    root.appendChild(h('h1', { text: edit ? 'Edit ' + (ef['Invoice number'] || 'payment') : parent ? 'Extra payment for ' + pf['Invoice number'] : 'Quick payment' }));
+    root.appendChild(h('p', { class: 'sub', text: parent ? (pf['Billed to'] || '') + ' · ' + (pf.Trip || '') : 'A card link and a payment page for any amount, such as an extra hour or an add-on.' }));
+    var card = h('div', { class: 'card' });
+    card.appendChild(h('label', { for: 'vi-qdesc', text: 'What is it for? (the customer sees this)' }));
+    card.appendChild(h('input', { id: 'vi-qdesc', value: ef.Trip || '', placeholder: lang === 'English' ? 'Extra hour on the boat' : 'Hora extra en el barco' }));
+    card.appendChild(h('label', { for: 'vi-qamt', text: 'Amount (MXN, IVA included)' }));
+    card.appendChild(h('input', { id: 'vi-qamt', type: 'number', inputmode: 'numeric', value: ef['Trip price'] || '' }));
+    root.appendChild(card);
+    var cust = h('div', { class: 'card' });
+    cust.appendChild(h('label', { for: 'vi-name', text: 'Customer name' }));
+    cust.appendChild(h('input', { id: 'vi-name', value: ef['Billed to'] || pf['Billed to'] || '', autocomplete: 'off' }));
+    cust.appendChild(h('div', { class: 'row' }, [
+      h('div', null, [h('label', { for: 'vi-phone', text: 'WhatsApp number' }), h('input', { id: 'vi-phone', type: 'tel', value: ef.Phone || pf.Phone || qs.get('phone') || '', onblur: function () { if (!parent && !edit) lookupPhone(); } })]),
+      h('div', null, [h('label', { for: 'vi-email', text: 'Email (optional)' }), h('input', { id: 'vi-email', type: 'email', value: ef.Email || pf.Email || '' })])
+    ]));
+    cust.appendChild(h('div', { class: 'hint', text: PHONE_HINT }));
+    cust.appendChild(h('div', { id: 'vi-known' }));
+    cust.appendChild(h('label', { text: 'Customer language' }));
+    var seg = h('div', { class: 'seg' });
+    ['Español', 'English'].forEach(function (l) {
+      seg.appendChild(h('button', { type: 'button', class: l === lang ? 'on' : '', text: l, onclick: function () { Array.prototype.forEach.call(seg.children, function (b) { b.className = b.textContent === l ? 'on' : ''; }); state.form.lang = l; } }));
+    });
+    cust.appendChild(seg);
+    cust.appendChild(h('label', { for: 'vi-note', text: 'Note to customer (optional)' }));
+    cust.appendChild(h('textarea', { id: 'vi-note' }, [ef['Note to customer'] || '']));
+    cust.appendChild(h('label', { for: 'vi-int', text: 'Internal notes (only you see these)' }));
+    cust.appendChild(h('textarea', { id: 'vi-int' }, [ef['Internal notes'] || '']));
+    root.appendChild(cust);
+    var err = h('div');
+    root.appendChild(err);
+    var btn = h('button', { class: 'btn pri', type: 'button', onclick: function () {
+      if (state.busy) return;
+      err.innerHTML = '';
+      var v = { desc: $('#vi-qdesc').value.trim(), amt: Number($('#vi-qamt').value) || 0, name: $('#vi-name').value.trim(), phone: $('#vi-phone').value.trim(), email: $('#vi-email').value.trim(),
+        note: $('#vi-note').value.trim(), internal: $('#vi-int').value.trim(), lang: state.form.lang };
+      var missing = [];
+      if (!v.desc) missing.push('what it is for');
+      if (!(v.amt >= 10)) missing.push('the amount (at least $10)');
+      if (!v.name) missing.push('customer name');
+      if (!v.phone && !v.email) missing.push('a WhatsApp number or email');
+      if (missing.length) { err.appendChild(h('p', { class: 'err', text: 'Add ' + missing.join(', ') + '.' })); return; }
+      state.busy = true; btn.disabled = true; btn.textContent = 'Saving…';
+      var base = edit ? ef : parent ? pf : {};
+      var payload = {
+        k: KEY, action: edit ? 'edit' : 'create', id: edit ? edit.id : '', number: ef['Invoice number'] || '', kind: 'Quick payment',
+        parentId: parent ? parent.id : '', parentNumber: parent ? pf['Invoice number'] : '',
+        customerId: state.customerId, inquiryId: '', mirrorId: ids(base.Operator).join(','), offeringId: base['Offering record ID'] || '',
+        source: 'WhatsApp', lang: v.lang, billedTo: v.name, phone: v.phone, email: v.email, trip: v.desc, duration: '',
+        businessLine: base['Business line'] || 'Vamos marketplace', balanceBy: 'Vamos', tripDate: base['Trip date'] || today(), endDate: '', guests: '',
+        price: v.amt, deposit: v.amt, commission: '', ownerPayout: '', meetingPoint: '', meetingTime: '', mapLink: '', provider: '', note: v.note, internalNotes: v.internal,
+        cancellation: '', signoff: 'Not needed', oldConfId: ''
+      };
+      var chain = Promise.resolve();
+      if (!state.customerId) chain = chain.then(function () {
+        return post(HOOK_CREATE, { k: KEY, action: 'customer', name: v.name, phone: v.phone, email: v.email, lang: v.lang }).then(function (r) { state.customerId = payload.customerId = r.id; });
+      });
+      chain.then(function () { return post(edit ? HOOK_ACTIONS : HOOK_CREATE, payload); }).then(function (r) {
+        var id = edit ? edit.id : r.id;
+        history.replaceState(null, '', location.pathname + '?k=' + encodeURIComponent(KEY) + '&invoice=' + id);
+        root.innerHTML = ''; root.appendChild(h('p', { class: 'sub', text: (edit ? 'Saved. ' : 'Created ' + r.number + '. ') + 'Loading…' }));
+        return load('', id);
+      }).catch(function (e) { state.busy = false; btn.disabled = false; btn.textContent = edit ? 'Save' : 'Create payment'; err.appendChild(h('p', { class: 'err', text: e.message })); });
+    } }, [edit ? 'Save' : 'Create payment']);
+    root.appendChild(btn);
+    if (parent || edit) root.appendChild(h('button', { class: 'link', type: 'button', onclick: function () { reload(edit || parent); } }, ['Cancel']));
   }
 
   /* ---------- submit ---------- */
@@ -381,7 +512,9 @@
     if (state.busy) return;
     var c = state.ctx, err = $('#vi-err');
     err.innerHTML = '';
-    if (!c) { err.appendChild(h('p', { class: 'err', text: 'Choose the experience.' })); return; }
+    if (c && c.custom) c = state.ctx = customCtx();
+    if (!c) { err.appendChild(h('p', { class: 'err', text: 'Choose the boat or operator and the experience, or Other (type it).' })); return; }
+    if (c.custom && !c.f.Name) { err.appendChild(h('p', { class: 'err', text: 'Type what the trip is.' })); return; }
     var v = {
       name: $('#vi-name').value.trim(), phone: $('#vi-phone').value.trim(), email: $('#vi-email').value.trim(), lang: state.form.lang,
       date: $('#vi-date').value, end: $('#vi-end').value, guests: $('#vi-guests').value,
@@ -396,13 +529,13 @@
     if (!v.date) missing.push('the date');
     if (!v.price) missing.push('the trip price');
     if (!v.dep) missing.push('the deposit');
-    if (!v.mp) missing.push('the meeting point');
+    if (!v.mp && !c.custom) missing.push('the meeting point');
     if (missing.length) { err.appendChild(h('p', { class: 'err', text: 'Add ' + missing.join(', ') + '.' })); return; }
     if (v.end && v.date && v.end < v.date) { err.appendChild(h('p', { class: 'err', text: 'The last day is before the trip date.' })); return; }
     if (v.end === v.date) v.end = '';
     if (v.dep > v.price) { err.appendChild(h('p', { class: 'err', text: 'The deposit is more than the trip price.' })); return; }
     var owner = c.owner;
-    if (!c.gm && !owner) {
+    if (!c.gm && !c.custom && !owner) {
       var on = $('#vi-oname').value.trim(), op = $('#vi-ophone').value.trim();
       if (on && op) owner = { id: '', typed: true, fields: { 'Contact Name': on, 'Contact Number': op, Language: $('#vi-olang').value } };
       else if (!skipOwner) { err.appendChild(h('p', { class: 'err', text: 'Add the owner\'s name and WhatsApp number, or tap Skip owner sign-off.' })); return; }
@@ -414,10 +547,10 @@
     var oLang = owner && owner.fields.Language === 'English' ? 'English' : 'Español', oEs = oLang !== 'English';
     var ownerShort = owner ? shortName(owner.fields['Contact Name']) : '';
     var boatName = c.boat ? c.boat.fields.Name : '';
-    var provider = c.gm ? '' : (c.placeholder
+    var provider = c.gm || c.custom ? '' : (c.placeholder
       ? (es ? 'Embarcación ' + boatName + ', operada por su propietario' + (ownerShort ? ' ' + ownerShort : '') : boatName + ', run by its owner' + (ownerShort ? ' ' + ownerShort : ''))
       : (boatName ? (es ? boatName + ', operada por ' : boatName + ', run by ') : '') + (c.op ? c.op.fields.Name : ''));
-    var signoff = c.gm ? 'Not needed' : (skipOwner || !owner ? 'Skipped' : 'Required');
+    var signoff = c.gm || c.custom ? 'Not needed' : (skipOwner || !owner ? 'Skipped' : 'Required');
 
     var chain = Promise.resolve();
     if (!state.customerId && !state.edit) chain = chain.then(function () {
@@ -437,14 +570,14 @@
         offeringId: c.o.id, source: state.inquiry ? 'Website inquiry' : 'WhatsApp', lang: lang,
         billedTo: v.name, phone: v.phone, email: v.email,
         trip: es ? (f['Name (ES)'] || f.Name) : f.Name, duration: es ? (f['Duration (ES)'] || f.Duration || '') : (f.Duration || ''),
-        businessLine: c.gm ? 'Good Medicine direct' : 'Vamos marketplace', balanceBy: c.gm ? 'Vamos' : 'Owner',
-        tripDate: v.date, endDate: v.end, guests: v.guests, price: v.price, deposit: v.dep, commission: c.gm ? '' : v.com, ownerPayout: '',
+        businessLine: c.gm ? 'Good Medicine direct' : 'Vamos marketplace', balanceBy: c.gm || c.custom ? 'Vamos' : 'Owner', kind: 'Booking',
+        tripDate: v.date, endDate: v.end, guests: v.guests, price: v.price, deposit: v.dep, commission: c.gm || c.custom ? '' : v.com, ownerPayout: '',
         meetingPoint: v.mp, meetingTime: v.mt, mapLink: v.map, provider: provider, note: v.note, internalNotes: v.internal,
-        cancellation: cancellationText(c.o, lang), signoff: signoff,
+        cancellation: c.custom ? $('#vi-ccan').value.trim() : cancellationText(c.o, lang), signoff: signoff,
         partnerId: owner && !owner.typed ? owner.id : '', ownerName: owner ? owner.fields['Contact Name'] : '', ownerPhone: owner ? owner.fields['Contact Number'] || '' : '', ownerLang: oLang,
         oTrip: oEs ? (f['Name (ES)'] || f.Name) : f.Name, oDuration: oEs ? (f['Duration (ES)'] || f.Duration || '') : (f.Duration || ''),
         oIncluded: plain(oEs ? (f["What's included (ES)"] || f["What's included"]) : (f["What's included"] || f["What's included (ES)"])),
-        oCancellation: cancellationText(c.o, oLang), oPaymentTerms: paymentTerms(oLang, v.dep, v.price - v.dep, v.com),
+        oCancellation: c.custom ? '' : cancellationText(c.o, oLang), oPaymentTerms: paymentTerms(oLang, v.dep, v.price - v.dep, v.com),
         ownerBalance: v.price - v.dep, boat: boatName, leadGuest: first(v.name), noteToOwner: v.onote
       });
     }).then(function (r) {
@@ -469,6 +602,7 @@
   function reload(inv, msg) { root.innerHTML = ''; root.appendChild(h('p', { class: 'sub', text: (msg ? msg + ' ' : '') + 'Loading…' })); return load('', inv.id).catch(showFatal); }
 
   function renderInvoice(inv) {
+    if (inv.fields.Kind === 'Quick payment') return renderQuickInvoice(inv);
     var d = state.data, f = inv.fields, conf = activeConf();
     var cf = conf ? conf.fields : {};
     var price = n(f['Trip price']), dep = n(f.Deposit), got = n(f['Amount paid']), com = n(f.Commission);
@@ -544,6 +678,7 @@
         cancelled || done5 || !depPaid ? null : [h('button', { class: 'btn sec', type: 'button', onclick: function () { settleForm(inv, setBox, settled, comLeft); } }, ['Settle'])], setBox));
     }
     root.appendChild(steps);
+    root.appendChild(extrasCard(inv, cancelled));
 
     var sum = h('div', { class: 'card' });
     [['Trip price', money(price)], ['Deposit', money(dep)], com ? ['Your commission', money(com)] : null,
@@ -562,6 +697,44 @@
     root.appendChild(cBox);
   }
 
+  function extrasCard(inv, cancelled) {
+    var list = state.data.extras || [], card = h('div', { class: 'card' });
+    card.appendChild(h('b', { text: 'Extra payments' }));
+    if (!list.length) card.appendChild(h('div', { class: 'hint', text: 'None yet. Use this for an extra hour, drinks, an add-on.' }));
+    var paidSum = 0;
+    list.forEach(function (x) {
+      var f = x.fields, amt = n(f['Trip price']), paid = n(f['Amount paid']) >= amt && amt > 0;
+      if (paid && !f['Cancelled at']) paidSum += amt;
+      card.appendChild(h('a', { class: 'kv', style: 'text-decoration:none;color:inherit', href: location.pathname + '?k=' + encodeURIComponent(KEY) + '&invoice=' + x.id }, [
+        h('span', { text: (f['Invoice number'] || '') + ' · ' + (f.Trip || '') }), h('span', { text: money(amt) + ' · ' + (f.Status || '') })]));
+    });
+    if (paidSum && inv.fields['Balance collected by'] === 'Owner') card.appendChild(h('div', { class: 'hint', text: 'Extras paid to you: ' + money(paidSum) + '. Settle the owner\'s share with them.' }));
+    if (!cancelled) card.appendChild(h('button', { class: 'btn sec', type: 'button', onclick: function () { renderQuick({ parent: inv }); } }, ['Ask for extra payment']));
+    return card;
+  }
+  function renderQuickInvoice(inv) {
+    var f = inv.fields, amt = n(f['Trip price']), got = n(f['Amount paid']), paid = amt > 0 && got >= amt, cancelled = !!f['Cancelled at'];
+    root.innerHTML = '';
+    root.appendChild(h('p', { class: 'sub', text: (f['Invoice number'] || '') + ' · Quick payment · ' + (f['Billed to'] || '') + ' · ' + (f.Status || '') }));
+    root.appendChild(h('h1', { text: (f.Trip || '') + ', ' + money(amt) }));
+    if (f['Extra for (record ID)']) root.appendChild(h('a', { class: 'btn sec', style: 'margin:0 0 12px', href: location.pathname + '?k=' + encodeURIComponent(KEY) + '&invoice=' + f['Extra for (record ID)'] }, ['Extra for ' + (f['Extra for booking'] || 'booking') + ' →']));
+    if (cancelled) root.appendChild(h('p', { class: 'warn', style: 'margin:0 0 12px', text: 'Cancelled ' + when(f['Cancelled at']) + '.' }));
+    var steps = h('div', { class: 'card' });
+    steps.appendChild(customerStep(inv, true, paid, cancelled));
+    var payList = (state.data.payments || []).map(function (p) { var x = p.fields; return shortDay(x['Received on']) + ' · ' + (x.Method || '') + ' · ' + money(x.Amount); }).join('\n');
+    var box = h('div');
+    steps.appendChild(step(paid ? 'done' : (!cancelled ? 'now' : ''), paid ? 'Paid' : 'Payment ' + money(amt),
+      (payList ? payList + '\n' : '') + (paid ? '' : 'Card payments appear here by themselves (tap Refresh). Transfer or cash: Mark paid.'),
+      cancelled || paid ? null : [h('button', { class: 'btn sec', type: 'button', onclick: function () { payForm(inv, box, Math.max(0, amt - got), 'Payment'); } }, ['Mark paid'])], box));
+    root.appendChild(steps);
+    if (!cancelled && !paid) root.appendChild(h('button', { class: 'btn sec', type: 'button', onclick: function () { renderQuick({ edit: inv }); } }, ['Edit']));
+    root.appendChild(h('button', { class: 'btn sec', type: 'button', onclick: function () { reload(inv, 'Refreshing…'); } }, ['Refresh']));
+    root.appendChild(h('a', { class: 'btn sec', href: location.pathname + '?k=' + encodeURIComponent(KEY) }, ['New invoice']));
+    var cBox = h('div');
+    if (!cancelled) root.appendChild(h('button', { class: 'link', type: 'button', onclick: function () { cancelForm(inv, null, cBox); } }, ['Cancel this payment…']));
+    root.appendChild(cBox);
+  }
+
   /* customer send: makes the card link first when it is missing or the deposit changed */
   function customerStep(inv, ready, depPaid, cancelled) {
     var f = inv.fields, who = first(f['Billed to']) || 'the customer', dep = n(f.Deposit);
@@ -572,7 +745,7 @@
     if (needLink && !state.linking && state.linkFailed !== inv.id) makeLink(inv);
     var sent = f['Sent at'];
     var title = sent ? 'Sent to ' + who : 'Send to ' + who;
-    var small = sent ? 'Sent ' + when(sent) + (f['Sent via'] && f['Sent via'].length ? ' by ' + [].concat(f['Sent via']).join(', ') : '') + '.' : 'Their page has the trip, card payment and transfer details.';
+    var small = sent ? 'Sent ' + when(sent) + (f['Sent via'] && f['Sent via'].length ? ' by ' + [].concat(f['Sent via']).join(', ') : '') + '.' : f.Kind === 'Quick payment' ? 'Their page has the amount, card payment and transfer details.' : 'Their page has the trip, card payment and transfer details.';
     if (state.linking) small += ' Making the card payment link…';
     else if (state.linkFailed === inv.id) small += ' The card link could not be made; the page still shows transfer details. Tap Refresh to try again.';
     if (depPaid || cancelled) return step(sent || depPaid ? 'done' : '', title, small, [h('a', { class: 'btn sec', href: page, target: '_blank', rel: 'noopener' }, ['Customer page'])]);
@@ -583,7 +756,7 @@
       h('button', { class: 'btn sec', type: 'button', disabled: wait, onclick: function () { customerSent(inv, 'Copied', msg); copy(msg); } }, ['Copy message']),
       f.Email ? h('button', { class: 'btn sec', type: 'button', disabled: wait, onclick: function () {
         customerSent(inv, 'Email', msg);
-        location.href = 'mailto:' + f.Email + '?subject=' + encodeURIComponent((f.Language === 'English' ? 'Your booking ' : 'Tu reservación ') + f['Invoice number']) + '&body=' + encodeURIComponent(msg);
+        location.href = 'mailto:' + f.Email + '?subject=' + encodeURIComponent((f.Kind === 'Quick payment' ? (f.Language === 'English' ? 'Payment ' : 'Pago ') : (f.Language === 'English' ? 'Your booking ' : 'Tu reservación ')) + f['Invoice number']) + '&body=' + encodeURIComponent(msg);
       } }, ['Email']) : null,
       h('a', { class: 'btn sec', href: page, target: '_blank', rel: 'noopener' }, ['Preview'])
     ];
@@ -591,6 +764,9 @@
   }
   function customerMessage(f, page) {
     var en = f.Language === 'English', dep = n(f.Deposit);
+    if (f.Kind === 'Quick payment') return en
+      ? 'Hi ' + first(f['Billed to']) + ', here is the link to pay for ' + f.Trip + ' (' + mxn(dep) + ')' + (f['Extra for booking'] ? ', booking ' + f['Extra for booking'] : '') + '. You can pay by card or bank transfer:\n' + page + '\n\nThank you!'
+      : 'Hola ' + first(f['Billed to']) + ', aquí está el enlace para pagar ' + f.Trip + ' (' + mxn(dep) + ')' + (f['Extra for booking'] ? ', reservación ' + f['Extra for booking'] : '') + '. Puedes pagar con tarjeta o por transferencia:\n' + page + '\n\n¡Gracias!';
     return en
       ? 'Hi ' + first(f['Billed to']) + ', here is your booking ' + f['Invoice number'] + ': ' + f.Trip + ', ' + fmtDate(f['Trip date'], 'English') + (f.Guests ? ', ' + f.Guests + ' guests' : '') + '.\n\nTotal ' + mxn(f['Trip price']) + ' (IVA included). To secure your spot, pay the ' + mxn(dep) + ' deposit by card or bank transfer here:\n' + page + '\n\nAny questions, just message me!'
       : 'Hola ' + first(f['Billed to']) + ', aquí está tu reservación ' + f['Invoice number'] + ': ' + f.Trip + ', ' + fmtDate(f['Trip date'], 'Español') + (f.Guests ? ', ' + f.Guests + ' personas' : '') + '.\n\nPrecio total ' + mxn(f['Trip price']) + ' (IVA incluido). Para asegurar tu lugar, paga el anticipo de ' + mxn(dep) + ' con tarjeta o por transferencia aquí:\n' + page + '\n\n¡Cualquier duda, me escribes!';
@@ -598,7 +774,8 @@
   function makeLink(inv) {
     var f = inv.fields;
     state.linking = true;
-    post(HOOK_ACTIONS, { k: KEY, action: 'paylink', id: inv.id, number: f['Invoice number'], trip: f.Trip, deposit: n(f.Deposit), token: f['Page token'], oldLinkId: f['Stripe payment link ID'] || '' })
+    post(HOOK_ACTIONS, { k: KEY, action: 'paylink', id: inv.id, number: f['Invoice number'], trip: f.Trip, deposit: n(f.Deposit), token: f['Page token'], oldLinkId: f['Stripe payment link ID'] || '',
+      label: f.Kind === 'Quick payment' ? 'Pago / Payment' : '', submitType: f.Kind === 'Quick payment' ? 'pay' : '' })
       .then(function (r) {
         state.linking = false;
         if (!r.url) throw new Error('no url');
@@ -679,7 +856,7 @@
       why = w;
       Array.prototype.forEach.call(seg.children, function (b) { b.className = b.dataset.w === w ? 'on' : ''; });
       detail.innerHTML = '';
-      if (w === 'customer') detail.appendChild(h('p', { class: 'hint', text: 'The owner keeps any deposit already passed on and no commission is due. The card link is switched off and the owner\'s confirmation is cancelled.' }));
+      if (w === 'customer') detail.appendChild(h('p', { class: 'hint', text: f.Kind === 'Quick payment' ? 'The card link is switched off and the page shows the payment as cancelled.' : 'The owner keeps any deposit already passed on and no commission is due. The card link is switched off and the owner\'s confirmation is cancelled.' }));
       else {
         if (toOwner > 0) { var c1 = h('input', { type: 'checkbox', id: 'vi-ret', style: 'width:auto;margin-right:8px' }); c1.checked = true; detail.appendChild(h('label', { for: 'vi-ret', style: 'display:flex;align-items:center;color:#1d2731;font-size:15px' }, [c1, 'Owner returned the deposit (' + money(toOwner) + ')'])); }
         if (got > 0) {
@@ -691,8 +868,9 @@
         if (!toOwner && !got) detail.appendChild(h('p', { class: 'hint', text: 'Nothing was paid yet, so there is nothing to return.' }));
       }
     }
-    [['customer', 'Customer cancelled'], ['weather', 'Port closed (weather)']].forEach(function (o) { var b = h('button', { type: 'button', text: o[1], onclick: function () { pick(o[0]); } }); b.dataset.w = o[0]; seg.appendChild(b); });
-    formShell(box, 'Cancel ' + f['Invoice number'], [seg, detail], 'Cancel booking', function () {
+    var quick = f.Kind === 'Quick payment';
+    (quick ? [['customer', 'Cancel payment']] : [['customer', 'Customer cancelled'], ['weather', 'Port closed (weather)']]).forEach(function (o) { var b = h('button', { type: 'button', text: o[1], onclick: function () { pick(o[0]); } }); b.dataset.w = o[0]; seg.appendChild(b); });
+    formShell(box, 'Cancel ' + f['Invoice number'], [seg, detail], quick ? 'Cancel payment' : 'Cancel booking', function () {
       var chain = Promise.resolve(), d0 = today();
       if (why === 'weather') {
         var ret = $('#vi-ret'), ref = $('#vi-ref');
