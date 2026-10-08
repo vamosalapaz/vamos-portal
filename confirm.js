@@ -1,7 +1,8 @@
 /* Vamos a La Paz — owner booking confirmation (/confirmar?k=<confirmation token>)
    Source: github.com/vamosalapaz/vamos-portal (confirm.js), served via jsDelivr tagged releases.
    The owner reviews a managed booking (same trip details the customer gets, plus deposit / balance / commission),
-   ticks agree and types their name, or asks for a change. Never linked from anything a customer sees. */
+   ticks agree and types their name, or asks for a change. Never linked from anything a customer sees.
+   v22: first release. v23: total trip price, Vamos logo and palette. */
 (function () {
   'use strict';
 
@@ -9,6 +10,8 @@
   var PETER_WA = '526122194779';
   var TERMS = 'conf-2026-10';
   var BRAND = '#B51E66', INK = '#061A2E';
+  var C = { foam: '#F3EFE6', aqua: '#00C6C0', pacific: '#156AB3', gulf: '#0B4F6C', lima: '#B5C62E', orange: '#E65A37', gold: '#F3B53F' };
+  var LOGO = 'https://s3.amazonaws.com/webflow-prod-assets/6a94d97df3061a3b48890971/6ab313cdb43ef771290ceace_download.png';
   var TOKEN = new URLSearchParams(location.search).get('k') || '';
 
   var T = {
@@ -16,7 +19,7 @@
       title: 'Confirmación de reservación', hi: 'Hola', ask: '¿confirmas este viaje?',
       intro: 'Vamos a La Paz tiene un cliente para tu embarcación. Revisa los detalles: son los mismos que recibe el cliente.',
       guests: 'personas', lead: 'a nombre de', meet: 'Punto de encuentro',
-      depositYou: 'Te enviamos el anticipo', balanceYou: 'Cobras al cliente el día del viaje', commission: 'Comisión de Vamos (pagas después del viaje)',
+      total: 'Precio total del viaje', depositYou: 'Te enviamos el anticipo', balanceYou: 'Cobras al cliente el día del viaje', commission: 'Comisión de Vamos (pagas después del viaje)',
       purchase: 'Vamos te paga', includes: 'Incluye', cancel: 'Cancelación', pay: 'Pago', note: 'Nota de Peter',
       agreeText: 'Acepto prestar este viaje con estos términos, conforme a mi acuerdo de socio con Vamos a La Paz.',
       name: 'Tu nombre completo (tu firma)', confirm: 'Confirmar viaje', change: 'Pedir un cambio',
@@ -35,7 +38,7 @@
       title: 'Booking confirmation', hi: 'Hi', ask: 'can you confirm this trip?',
       intro: 'Vamos a La Paz has a customer for your boat. Please review the details: they are the same ones the customer gets.',
       guests: 'guests', lead: 'booked by', meet: 'Meeting point',
-      depositYou: 'We send you the deposit', balanceYou: 'You collect from the customer on the day', commission: 'Vamos commission (you pay after the trip)',
+      total: 'Total trip price', depositYou: 'We send you the deposit', balanceYou: 'You collect from the customer on the day', commission: 'Vamos commission (you pay after the trip)',
       purchase: 'Vamos pays you', includes: 'Included', cancel: 'Cancellation', pay: 'Payment', note: 'Note from Peter',
       agreeText: 'I agree to provide this trip on these terms, under my partner agreement with Vamos a La Paz.',
       name: 'Your full name (your signature)', confirm: 'Confirm trip', change: 'Ask for a change',
@@ -86,7 +89,14 @@
   function css() {
     var s = document.createElement('style');
     s.textContent = [
-      '.vc{max-width:520px;margin:0 auto;padding:20px 16px 72px;font-family:"DM Sans",system-ui,sans-serif;color:' + INK + ';font-size:17px;line-height:1.5}',
+      '.vc{max-width:520px;margin:0 auto;padding:0 16px 72px;font-family:"DM Sans",system-ui,sans-serif;color:' + INK + ';font-size:17px;line-height:1.5}',
+      '.vc-top{display:flex;justify-content:center;padding:18px 0 12px}.vc-top img{height:46px;width:auto;display:block}',
+      '.vc-stripe{display:flex;height:5px;border-radius:3px;overflow:hidden;margin:0 0 20px}.vc-stripe i{flex:1}',
+      '.vc .card.trip-card{border-left:5px solid ' + C.aqua + '}',
+      '.vc .card.money-card{border-left:5px solid ' + C.gold + '}',
+      '.vc .money.total{font-size:19px;color:' + C.gulf + ';padding-bottom:10px}.vc .money.total b{font-size:21px}',
+      '.vc h1{color:' + C.gulf + '}',
+      '.vc h2{color:' + C.pacific + '}',
       '.vc .eyebrow{font-size:13px;letter-spacing:.02em;color:#5b6772;margin:0 0 6px}',
       '.vc h1{font-size:26px;line-height:1.2;margin:0 0 8px;font-weight:600}',
       '.vc .intro{color:#3c4954;margin:0 0 18px}',
@@ -107,7 +117,7 @@
       '.vc .wa{background:#1f9d55;color:#fff}',
       '.vc .link{background:none;border:0;color:#3c4954;text-decoration:underline;font:inherit;font-size:16px;cursor:pointer;display:block;margin:16px auto 0}',
       '.vc .msg{border-radius:12px;padding:12px 14px;margin:0 0 12px}',
-      '.vc .ok{background:#e7f4ec;color:#1d5a35}.vc .warn{background:#fdf1e1;color:#7a4b00}.vc .err{background:#fde8ec;color:#8a1c33}'
+      '.vc .ok{background:#dcf6f5;color:' + C.gulf + '}.vc .warn{background:#fdf1e1;color:#7a4b00}.vc .err{background:#fde8ec;color:#8a1c33}'
     ].join('');
     document.head.appendChild(s);
   }
@@ -115,8 +125,15 @@
   function mount() {
     css();
     root = h('div', { class: 'vc' });
+    document.body.style.background = C.foam;
     var nav = document.querySelector('.w-nav, header, nav'), anchor = document.querySelector('main') || document.body;
     if (nav && nav.parentNode === anchor) nav.insertAdjacentElement('afterend', root); else anchor.appendChild(root);
+    var shell = root; root = h('div');
+    var stripe = h('div', { class: 'vc-stripe' });
+    [C.aqua, C.pacific, C.lima, C.gold, C.orange, BRAND].forEach(function (c) { stripe.appendChild(h('i', { style: 'background:' + c })); });
+    shell.appendChild(h('div', { class: 'vc-top' }, [h('img', { src: LOGO, alt: 'Vamos a La Paz' })]));
+    shell.appendChild(stripe);
+    shell.appendChild(root);
     root.appendChild(h('p', { class: 'muted', text: L.loading }));
     if (!TOKEN) return fail();
     post({ action: 'get', t: TOKEN }).then(function (r) {
@@ -132,13 +149,14 @@
   function details() {
     var f = conf.fields, wrap = h('div');
     var dates = day(f['Trip date']) + (f['End date'] ? ' – ' + day(f['End date']) : '');
-    wrap.appendChild(h('div', { class: 'card' }, [
+    wrap.appendChild(h('div', { class: 'card trip-card' }, [
       h('p', { class: 'trip', text: f.Trip || '' }),
       h('p', { class: 'muted', text: [f.Boat, dates, f.Duration].filter(Boolean).join(' · ') }),
       h('p', { class: 'muted', text: (f.Guests ? f.Guests + ' ' + L.guests : '') + (f['Lead guest'] ? ' · ' + L.lead + ' ' + f['Lead guest'] : '') }),
       (f['Meeting point'] || f['Meeting time']) ? h('p', { class: 'muted', text: L.meet + ': ' + [f['Meeting point'], f['Meeting time']].filter(Boolean).join(', ') }) : null
     ]));
-    var m = h('div', { class: 'card' });
+    var m = h('div', { class: 'card money-card' });
+    if (f['Trip price']) m.appendChild(h('div', { class: 'money total' }, [h('span', { text: L.total }), h('b', { text: money(f['Trip price']) })]));
     if (f['Balance owner collects'] || f['Commission to Vamos']) {
       if (f['Deposit to owner']) m.appendChild(h('div', { class: 'money' }, [h('span', { text: L.depositYou }), h('b', { text: money(f['Deposit to owner']) })]));
       if (f['Balance owner collects']) m.appendChild(h('div', { class: 'money' }, [h('span', { text: L.balanceYou }), h('b', { text: money(f['Balance owner collects']) })]));
