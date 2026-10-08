@@ -14,7 +14,10 @@
    v8 (release v28): the send step is only green when a message was actually sent from this screen; customer fields
        support iPhone AutoFill Contact (and a Choose from contacts button where the browser has a contact picker).
    v9 (release v29): the phone field says how the number will be read; a 10-digit number gets a one-tap +1 (US/Canada) switch.
-   v10 (release v30): meeting time uses the phone's time picker (15-minute steps), saved as "8:30 am". */
+   v10 (release v30): meeting time uses the phone's time picker (15-minute steps), saved as "8:30 am".
+   v11 (release v31): the blank link opens a home dashboard: Bookings (search, Needs you, upcoming/past/cancelled),
+       Calendar (Vamos trips Google calendar, tap for contacts) and Numbers (this month / 3 / 6 / 12 months, chart).
+       New booking: ?new=1, new quick payment: ?new=quick. The header links back to All bookings. */
 (function () {
   'use strict';
 
@@ -155,6 +158,21 @@
       '.vi .step b{display:block}.vi .step .small{font-size:14px;color:#5a6670}',
       '.vi .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.vi .btns .btn{width:auto;padding:9px 14px;margin:0;font-size:15px}',
       '.vi .kv{display:flex;justify-content:space-between;gap:12px;padding:3px 0;font-size:15px}.vi .kv span:first-child{color:#5a6670}',
+      '.vi-top a.vi-home{font-size:14px;color:' + C.gulf + ';text-decoration:none;font-weight:600}',
+      '.vi .seg.tight button{font-size:14px;padding:9px 4px;white-space:nowrap}.vi .dash-tabs{margin:0 0 6px}.vi .dash-tabs button{font-weight:600}',
+      '.vi .dash-meta{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#7a858c;margin:0 0 12px}',
+      '.vi .dash-h{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:' + C.gulf + ';margin:18px 0 8px;font-weight:700}',
+      '.vi input[type=search]{margin:0 0 4px}',
+      '.vi a.brow{display:block;text-decoration:none;color:inherit;margin:0 0 8px}',
+      '.vi .brow-top{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px;color:#5a6670;margin:0 0 2px}',
+      '.vi .brow-need{font-size:14px;color:#5a6670;margin-top:4px}.vi .brow-need.act{color:' + PINK + ';font-weight:600}',
+      '.vi .pill{font-size:12px;border-radius:99px;padding:2px 9px;white-space:nowrap;font-weight:600}',
+      '.vi .ev{padding:0;overflow:hidden;margin:0 0 8px}.vi .ev-head{display:block;width:100%;background:none;border:0;font:inherit;color:inherit;text-align:left;padding:12px 14px;cursor:pointer}',
+      '.vi .ev-row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:0 0 2px}.vi .ev-time{font-size:13px;color:#5a6670}.vi .ev-title{display:block;font-weight:600}',
+      '.vi .ev-detail{padding:0 14px 14px;border-top:1px solid #eee9e2}.vi .ev-detail .kv{font-size:14px}.vi .ev-detail .kv span:last-child{text-align:right;overflow-wrap:anywhere}',
+      '.vi .tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 8px}.vi .tile{background:#fff;border:1px solid #e4e1dc;border-radius:12px;padding:10px 12px}',
+      '.vi .tile span{display:block;font-size:12px;color:#5a6670}.vi .tile b{display:block;font-size:22px;color:' + C.navy + ';margin:2px 0}.vi .tile small{font-size:12px;color:#7a858c}',
+      '.vi .kv.mth{font-size:14px}.vi .kv.mth span{flex:1;text-align:right}.vi .kv.mth span:first-child{text-align:left;color:#1d2731}.vi .kv.mth.dim{opacity:.5}',
       '.vi .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1d2731;color:#fff;padding:10px 16px;border-radius:10px;font-size:15px;z-index:99}'
     ].join('');
     document.head.appendChild(s);
@@ -178,11 +196,13 @@
     var shell = root; root = h('div');
     var stripe = h('div', { class: 'vi-stripe' });
     [C.aqua, C.pacific, C.lima, C.gold, C.orange, PINK].forEach(function (c) { stripe.appendChild(h('i', { style: 'background:' + c })); });
-    shell.appendChild(h('div', { class: 'vi-top' }, [h('img', { src: LOGO, alt: 'Vamos a La Paz' }), h('span', { text: 'Invoicing' })]));
+    var home = !qs.get('inquiry') && !qs.get('invoice') && !qs.get('phone') && !qs.get('new');
+    shell.appendChild(h('div', { class: 'vi-top' }, [h('a', { href: KEY ? homeUrl() : '#', 'aria-label': 'All bookings' }, [h('img', { src: LOGO, alt: 'Vamos a La Paz' })]), home ? h('span', { text: 'Invoicing' }) : h('a', { class: 'vi-home', href: homeUrl(), text: '← All bookings' })]));
     shell.appendChild(stripe);
     shell.appendChild(root);
     if (!KEY) { root.appendChild(h('p', { class: 'warn', text: 'This page needs your private invoicing link. Open it from an inquiry email.' })); return; }
     root.appendChild(h('p', { class: 'sub', text: 'Loading…' }));
+    if (home) { renderHome(); return; }
     load(qs.get('inquiry'), qs.get('invoice')).catch(showFatal);
   }
   function showFatal(e) { root.innerHTML = ''; root.appendChild(h('p', { class: 'err', text: e.message || String(e) })); }
@@ -193,6 +213,7 @@
       state.data = d;
       if (d.invoice && d.invoice.length) return renderInvoice(d.invoice[0]);
       state.inquiry = d.inquiry && d.inquiry[0] || null;
+      if (!state.inquiry && qs.get('new') === 'quick') return renderQuick({});
       renderForm();
     });
   }
@@ -754,7 +775,7 @@
     root.appendChild(sum);
     if (!cancelled) root.appendChild(h('button', { class: 'btn sec', type: 'button', onclick: function () { renderForm({ inv: inv, conf: conf }); } }, ['Edit']));
     root.appendChild(h('button', { class: 'btn sec', type: 'button', onclick: function () { reload(inv, 'Refreshing…'); } }, ['Refresh']));
-    root.appendChild(h('a', { class: 'btn sec', href: location.pathname + '?k=' + encodeURIComponent(KEY) }, ['New invoice']));
+    root.appendChild(h('a', { class: 'btn sec', href: homeUrl('&new=1') }, ['New invoice']));
     var cBox = h('div');
     if (!cancelled) root.appendChild(h('button', { class: 'link', type: 'button', onclick: function () { cancelForm(inv, conf, cBox); } }, ['Cancel this booking…']));
     else if (conf && cf['Owner phone']) {
@@ -796,7 +817,7 @@
     root.appendChild(steps);
     if (!cancelled && !paid) root.appendChild(h('button', { class: 'btn sec', type: 'button', onclick: function () { renderQuick({ edit: inv }); } }, ['Edit']));
     root.appendChild(h('button', { class: 'btn sec', type: 'button', onclick: function () { reload(inv, 'Refreshing…'); } }, ['Refresh']));
-    root.appendChild(h('a', { class: 'btn sec', href: location.pathname + '?k=' + encodeURIComponent(KEY) }, ['New invoice']));
+    root.appendChild(h('a', { class: 'btn sec', href: homeUrl('&new=1') }, ['New invoice']));
     var cBox = h('div');
     if (!cancelled) root.appendChild(h('button', { class: 'link', type: 'button', onclick: function () { cancelForm(inv, null, cBox); } }, ['Cancel this payment…']));
     root.appendChild(cBox);
@@ -970,6 +991,328 @@
     return h('div', { class: 'step' }, [h('div', { class: 'dot ' + (cls || '') }), h('div', { style: 'flex:1;min-width:0' }, [
       h('b', { text: title }), small ? h('div', { class: 'small', style: 'white-space:pre-line', text: small }) : null,
       buttons.length ? h('div', { class: 'btns' }, buttons) : null, extra || null])]);
+  }
+
+  /* ---------- home dashboard (blank link): Bookings · Calendar · Numbers ----------
+     Data: one call to HOOK_DASH (invoices of the last 4 months plus anything still open, the Vamos trips calendar for
+     the next 4 months, and the Bookings ledger for the last 13 months). New tabs: add an entry to TABS. */
+  var HOOK_DASH = 'https://hook.us2.make.com/urr4hijh6rfamxs0ylh29ctb1w8fs8cr';
+  var TZ = 'America/Mazatlan';
+  var DASH_CACHE = 'vi-dash-v1';
+  var dash = { d: null, tab: 'bookings', list: 'upcoming', q: '', range: 3, line: 'all', open: '' };
+  var TABS = [
+    { id: 'bookings', label: 'Bookings', render: dashBookings },
+    { id: 'calendar', label: 'Calendar', render: dashCalendar },
+    { id: 'numbers', label: 'Numbers', render: dashNumbers }
+    // Later: { id: 'documents', label: 'Documents', render: … }, { id: 'partners', label: 'Partners', render: … }
+  ];
+
+  function homeUrl(extra) { return location.pathname + '?k=' + encodeURIComponent(KEY) + (extra || ''); }
+  function invUrl(id) { return homeUrl('&invoice=' + id); }
+  function todayIso() { return new Date().toLocaleDateString('en-CA', { timeZone: TZ }); }
+  function addDaysIso(iso, days) { var d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); }
+  function dayLabel(iso) {
+    var t = todayIso();
+    if (iso === t) return 'Today';
+    if (iso === addDaysIso(t, 1)) return 'Tomorrow';
+    if (iso === addDaysIso(t, -1)) return 'Yesterday';
+    return new Date(iso + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+  }
+  function flat(pages) {
+    var seen = {}, out = [];
+    (pages || []).forEach(function (p) { (Array.isArray(p) ? p : []).forEach(function (r) { if (r && r.id && !seen[r.id]) { seen[r.id] = 1; out.push(r); } }); });
+    return out;
+  }
+  function cacheGet() { try { var c = JSON.parse(sessionStorage.getItem(DASH_CACHE) || 'null'); return c && Date.now() - c.at < 30 * 60000 ? c : null; } catch (e) { return null; } }
+  function cacheSet(raw) { try { sessionStorage.setItem(DASH_CACHE, JSON.stringify({ at: Date.now(), raw: raw })); } catch (e) {} }
+  function prepDash(raw, at) {
+    var invoices = flat(raw.invoices), bookings = flat(raw.bookings);
+    return { at: at || Date.now(), invoices: invoices, events: (raw.events || []).filter(function (e) { return e && e.status !== 'cancelled'; }), bookings: bookings };
+  }
+
+  function renderHome() {
+    try { var t = (location.hash || '').slice(1); if (TABS.some(function (x) { return x.id === t; })) dash.tab = t; } catch (e) {}
+    var c = cacheGet();
+    if (c) { dash.d = prepDash(c.raw, c.at); drawHome(true); }
+    else { root.innerHTML = ''; root.appendChild(h('p', { class: 'sub', text: 'Loading your bookings…' })); }
+    return fetchDash();
+  }
+  function fetchDash() {
+    dash.loading = true;
+    return post(HOOK_DASH, { k: KEY, action: 'dash' }).then(function (raw) {
+      cacheSet(raw); dash.d = prepDash(raw); dash.loading = false; drawHome();
+    }, function (e) {
+      dash.loading = false;
+      if (dash.d) { drawHome(); toast('Could not refresh. Showing the last copy.'); } else showFatal(e);
+    });
+  }
+
+  function drawHome(stale) {
+    var y = window.scrollY;
+    root.innerHTML = '';
+    var tabs = h('div', { class: 'seg dash-tabs' });
+    TABS.forEach(function (t) {
+      tabs.appendChild(h('button', { type: 'button', class: t.id === dash.tab ? 'on' : '', text: t.label, onclick: function () {
+        dash.tab = t.id; dash.open = '';
+        try { history.replaceState(null, '', location.pathname + location.search + '#' + t.id); } catch (e) {}
+        drawHome(); window.scrollTo(0, 0);
+      } }));
+    });
+    root.appendChild(tabs);
+    var meta = h('div', { class: 'dash-meta' }, [
+      h('span', { text: stale || dash.loading ? 'Updating…' : 'Updated ' + new Date(dash.d.at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) }),
+      h('button', { type: 'button', class: 'link', style: 'margin:0', text: 'Refresh', onclick: function () { dash.loading = true; drawHome(); fetchDash(); } })
+    ]);
+    root.appendChild(meta);
+    var tab = TABS.filter(function (t) { return t.id === dash.tab; })[0] || TABS[0];
+    tab.render(root);
+    window.scrollTo(0, y);
+  }
+
+  /* --- what a booking needs from you --- */
+  function needs(r) {
+    var f = r.fields, st = f.Status || '', price = n(f['Trip price']), dep = n(f.Deposit), got = n(f['Amount paid']);
+    if (f['Cancelled at']) return null;
+    var today = todayIso(), trip = f['Trip date'] || '', ownerFlow = f['Balance collected by'] === 'Owner', quick = f.Kind === 'Quick payment';
+    var depPaid = dep > 0 && got >= dep;
+    if (st === 'Awaiting owner') {
+      if (f['Owner status'] === 'Changes requested') return { label: 'Owner asked for a change', act: 1 };
+      if (f['Owner status'] === 'Sent') return { label: 'Waiting for the owner to confirm', act: 0 };
+      return { label: 'Send to the owner for sign-off', act: 1 };
+    }
+    if (st === 'Not sent') return { label: quick ? 'Send the payment link' : 'Send to the customer', act: 1 };
+    if (!depPaid && (st === 'Sent' || st === 'Part paid')) return { label: (quick ? 'Payment ' : 'Deposit ') + money(Math.max(0, (quick ? price : dep) - got)) + ' not paid yet', act: 0 };
+    if (n(f['Owner deposit owed']) > 0) return { label: 'Pass ' + money(f['Owner deposit owed']) + ' to the owner', act: 1 };
+    if (n(f['Commission owed']) > 0) return { label: 'Commission ' + money(f['Commission owed']) + ' owed to you', act: 1 };
+    if (ownerFlow && depPaid && trip && trip < today && !f['Balance settled with owner']) return { label: 'Settle at the dock', act: 1 };
+    if (!ownerFlow && !quick && depPaid && price > got && trip && trip <= addDaysIso(today, 2)) return { label: 'Balance ' + money(price - got) + ' due', act: 1 };
+    return null;
+  }
+  var PILL = { 'Not sent': '#e9e6e1|#4a5560', 'Awaiting owner': '#fdf3e2|#7a4b00', 'Sent': '#fdf3e2|#7a4b00', 'Part paid': '#fdf3e2|#7a4b00', 'Deposit paid': '#d9f4f2|#0b5e5a', 'Paid in full': '#e3f1df|#2c6a1f', 'Cancelled': '#fde8ec|#8a1c33' };
+  function pill(st) { var c = (PILL[st] || '#e9e6e1|#4a5560').split('|'); return h('span', { class: 'pill', style: 'background:' + c[0] + ';color:' + c[1], text: st || '—' }); }
+
+  function bookingRow(r, need) {
+    var f = r.fields, quick = f.Kind === 'Quick payment', price = n(f['Trip price']), got = n(f['Amount paid']);
+    var line1 = (f['Trip date'] ? dayLabel(f['Trip date']) : 'No date') + ' · ' + (f['Invoice number'] || '');
+    var title = (f['Billed to'] || 'No name') + ' — ' + (quick ? (f.Trip || 'Payment') + (f['Extra for booking'] ? ' (extra for ' + f['Extra for booking'] + ')' : '') : (f.Trip || '')) + (f.Guests ? ' (' + f.Guests + ')' : '');
+    var money1 = money(got) + ' of ' + money(price) + ' paid' + (f['Balance collected by'] === 'Owner' && !quick ? ' · owner collects balance' : '');
+    return h('a', { class: 'card brow', href: invUrl(r.id) }, [
+      h('div', { class: 'brow-top' }, [h('span', { class: 'brow-day', text: line1 }), pill(f.Status)]),
+      h('b', { text: title }),
+      need ? h('div', { class: 'brow-need' + (need.act ? ' act' : ''), text: need.label }) : null,
+      h('div', { class: 'hint', style: 'margin:2px 0 0', text: money1 })
+    ]);
+  }
+
+  function dashBookings(el) {
+    var all = dash.d.invoices.slice(), today = todayIso();
+    all.sort(function (a, b) { return (a.fields['Trip date'] || '9999') < (b.fields['Trip date'] || '9999') ? -1 : 1; });
+    el.appendChild(h('div', { class: 'row', style: 'margin:0 0 12px' }, [
+      h('div', null, [h('a', { class: 'btn pri', style: 'margin:0', href: homeUrl('&new=1') }, ['+ Booking'])]),
+      h('div', null, [h('a', { class: 'btn sec', style: 'margin:0;padding:13px', href: homeUrl('&new=quick') }, ['+ Quick payment'])])
+    ]));
+    var list = h('div');
+    var search = h('input', { type: 'search', placeholder: 'Search name, phone, VLP number, trip', value: dash.q, 'aria-label': 'Search bookings', oninput: function () { dash.q = search.value; drawList(); } });
+    el.appendChild(search);
+    el.appendChild(list);
+    function drawList() {
+      list.innerHTML = '';
+      var q = dash.q.trim().toLowerCase(), qd = digits(q);
+      if (q) {
+        var hits = all.filter(function (r) {
+          var f = r.fields, hay = [f['Invoice number'], f['Billed to'], f.Trip, f.Email, f['Extra for booking'], f.Provider].join(' ').toLowerCase();
+          return hay.indexOf(q) >= 0 || (qd.length >= 4 && digits(f.Phone).indexOf(qd) >= 0);
+        });
+        list.appendChild(h('h3', { class: 'dash-h', text: hits.length + (hits.length === 1 ? ' match' : ' matches') }));
+        hits.slice().reverse().forEach(function (r) { list.appendChild(bookingRow(r, needs(r))); });
+        if (!hits.length) list.appendChild(h('p', { class: 'hint', text: 'Nothing found. Search covers the last 4 months plus anything still open.' }));
+        return;
+      }
+      var nd = all.map(function (r) { return { r: r, n: needs(r) }; }).filter(function (x) { return x.n; });
+      nd.sort(function (a, b) { return b.n.act - a.n.act; });
+      list.appendChild(h('h3', { class: 'dash-h', text: 'Needs you' + (nd.length ? ' (' + nd.filter(function (x) { return x.n.act; }).length + ')' : '') }));
+      if (!nd.length) list.appendChild(h('p', { class: 'hint', style: 'margin:0 0 12px', text: 'Nothing waiting on you.' }));
+      nd.forEach(function (x) { list.appendChild(bookingRow(x.r, x.n)); });
+      var groups = {
+        upcoming: all.filter(function (r) { return !r.fields['Cancelled at'] && (!r.fields['Trip date'] || r.fields['Trip date'] >= today); }),
+        past: all.filter(function (r) { return !r.fields['Cancelled at'] && r.fields['Trip date'] && r.fields['Trip date'] < today; }).reverse(),
+        cancelled: all.filter(function (r) { return r.fields['Cancelled at']; }).reverse()
+      };
+      var seg = h('div', { class: 'seg', style: 'margin:18px 0 10px' });
+      [['upcoming', 'Upcoming'], ['past', 'Past'], ['cancelled', 'Cancelled']].forEach(function (g) {
+        seg.appendChild(h('button', { type: 'button', class: dash.list === g[0] ? 'on' : '', text: g[1] + ' ' + groups[g[0]].length, onclick: function () { dash.list = g[0]; drawList(); } }));
+      });
+      list.appendChild(seg);
+      var rows = groups[dash.list];
+      if (!rows.length) list.appendChild(h('p', { class: 'hint', text: dash.list === 'upcoming' ? 'No upcoming bookings.' : 'None in the last 4 months.' }));
+      rows.forEach(function (r) { list.appendChild(bookingRow(r, null)); });
+      if (dash.list !== 'upcoming' && rows.length) list.appendChild(h('p', { class: 'hint', text: 'Shows the last 4 months. Older bookings are in Airtable.' }));
+    }
+    drawList();
+  }
+
+  /* --- calendar --- */
+  function evDay(e) { return e.start && e.start.date ? e.start.date : new Date(e.start.dateTime).toLocaleDateString('en-CA', { timeZone: TZ }); }
+  function evTime(e) {
+    if (!e.start || e.start.date) return 'All day';
+    var o = { hour: 'numeric', minute: '2-digit', timeZone: TZ };
+    return new Date(e.start.dateTime).toLocaleTimeString('en-US', o) + (e.end && e.end.dateTime ? '–' + new Date(e.end.dateTime).toLocaleTimeString('en-US', o) : '');
+  }
+  function invForEvent(e) {
+    var list = dash.d.invoices, m = String(e.summary || '').match(/VLP-[0-9]+/);
+    return list.filter(function (r) { return r.fields['Calendar event ID'] === e.id; })[0]
+      || (m ? list.filter(function (r) { return r.fields['Invoice number'] === m[0]; })[0] : null) || null;
+  }
+  function mapsLink(e, f) {
+    var m = String(e.description || '').match(/https:\/\/(www\.)?google\.[^\s]*maps[^\s]*|https:\/\/maps\.app\.goo\.gl\/[^\s]+/);
+    if (m) return m[0];
+    var p = (f && f['Meeting point']) || e.location;
+    return p ? 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(p + ', La Paz BCS') : '';
+  }
+  function eventDetail(e) {
+    var r = invForEvent(e), box = h('div', { class: 'ev-detail' });
+    function kv(k, v) { if (v) box.appendChild(h('div', { class: 'kv' }, [h('span', { text: k }), h('span', { text: v })])); }
+    var btns = [];
+    if (r) {
+      var f = r.fields, price = n(f['Trip price']), got = n(f['Amount paid']), ownerFlow = f['Balance collected by'] === 'Owner';
+      var cap = String(f['Agreed owner contact'] || '').split('|'), capName = (cap[0] || '').trim(), capPhone = (cap[1] || '').trim();
+      kv('Customer', f['Billed to']);
+      kv('WhatsApp', f.Phone);
+      kv('Email', f.Email);
+      kv('Guests', f.Guests ? String(f.Guests) : '');
+      kv('Boat', f.Provider);
+      kv('Captain', capName ? capName + (capPhone ? ' · ' + capPhone : '') : '');
+      kv('Meeting', [f['Meeting point'], f['Meeting time']].filter(Boolean).join(', '));
+      kv('Paid', money(got) + ' of ' + money(price));
+      if (price > got) kv('Balance', money(price - got) + (ownerFlow ? ' (customer pays the owner)' : ' (to you)'));
+      kv('Status', f.Status);
+      if (f.Phone) btns.push(h('a', { class: 'btn sec', href: 'https://wa.me/' + waNumber(f.Phone) }, ['WhatsApp ' + (first(f['Billed to']) || 'customer')]));
+      if (f.Phone) btns.push(h('a', { class: 'btn sec', href: 'tel:+' + waNumber(f.Phone) }, ['Call']));
+      if (capPhone) btns.push(h('a', { class: 'btn sec', href: 'https://wa.me/' + waNumber(capPhone) }, ['WhatsApp ' + (first(capName) || 'captain')]));
+      var map = mapsLink(e, f);
+      if (map) btns.push(h('a', { class: 'btn sec', href: map, target: '_blank', rel: 'noopener' }, ['Map']));
+      btns.push(h('a', { class: 'btn pri', style: 'margin:0', href: invUrl(r.id) }, ['Open booking']));
+    } else {
+      box.appendChild(h('div', { class: 'hint', style: 'white-space:pre-line;margin:0 0 6px', text: String(e.description || 'No details on this event.').replace(/https?:\/\/\S+/g, '').trim() }));
+      if (/VLP-[0-9]+/.test(e.summary || '')) box.appendChild(h('div', { class: 'warn', style: 'margin:6px 0', text: 'This booking is no longer in invoicing (deleted or older than 4 months). You can delete the event in Google Calendar.' }));
+      var map2 = mapsLink(e, null);
+      if (map2) btns.push(h('a', { class: 'btn sec', href: map2, target: '_blank', rel: 'noopener' }, ['Map']));
+    }
+    if (e.htmlLink) btns.push(h('a', { class: 'btn sec', href: e.htmlLink, target: '_blank', rel: 'noopener' }, ['Google Calendar']));
+    box.appendChild(h('div', { class: 'btns' }, btns));
+    return box;
+  }
+  function dashCalendar(el) {
+    var evs = dash.d.events.slice().sort(function (a, b) { return evDay(a) + evTime(a) < evDay(b) + evTime(b) ? -1 : 1; });
+    var today = todayIso();
+    evs = evs.filter(function (e) { return evDay(e) >= today; });
+    if (!evs.length) { el.appendChild(h('p', { class: 'hint', text: 'Nothing on the Vamos trips calendar in the next 4 months. Bookings appear here once the deposit is paid.' })); return; }
+    var lastDay = '';
+    evs.forEach(function (e) {
+      var day = evDay(e);
+      if (day !== lastDay) { el.appendChild(h('h3', { class: 'dash-h', text: dayLabel(day) + (dayLabel(day).length < 10 ? ' · ' + new Date(day + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }) : '') })); lastDay = day; }
+      var r = invForEvent(e), isOpen = dash.open === e.id;
+      var title = String(e.summary || '(no title)').replace(/\s·\sVLP-[0-9]+$/, '');
+      var card = h('div', { class: 'card ev' + (isOpen ? ' open' : '') });
+      var head = h('button', { type: 'button', class: 'ev-head', 'aria-expanded': isOpen ? 'true' : 'false', onclick: function () { dash.open = isOpen ? '' : e.id; drawHome(); } }, [
+        h('span', { class: 'ev-row' }, [h('span', { class: 'ev-time', text: evTime(e) }), r ? pill(r.fields.Status) : null]),
+        h('span', { class: 'ev-title', text: title })
+      ]);
+      card.appendChild(head);
+      if (isOpen) card.appendChild(eventDetail(e));
+      el.appendChild(card);
+    });
+    el.appendChild(h('p', { class: 'hint', text: 'From the Vamos trips Google calendar, next 4 months. Tap a trip for contacts.' }));
+  }
+
+  /* --- numbers --- */
+  function monthKey(iso) { return String(iso || '').slice(0, 7); }
+  function monthsBack(count) {
+    var t = todayIso(), y = Number(t.slice(0, 4)), m = Number(t.slice(5, 7)), out = [];
+    for (var i = count - 1; i >= 0; i--) { var mm = m - i, yy = y; while (mm < 1) { mm += 12; yy--; } out.push(yy + '-' + (mm < 10 ? '0' : '') + mm); }
+    return out;
+  }
+  function monthName(k, long) { return new Date(k + '-15T12:00:00Z').toLocaleDateString('en-US', { month: long ? 'long' : 'short', year: long ? 'numeric' : undefined, timeZone: 'UTC' }); }
+  function revenueOf(f) { return f['Business line'] === 'Vamos marketplace' ? n(f['Commission earned']) : n(f['Net revenue']); }
+  function lineOk(f) { return dash.line === 'all' || (dash.line === 'gm' ? f['Business line'] === 'Good Medicine direct' : f['Business line'] === 'Vamos marketplace'); }
+  function dashNumbers(el) {
+    var rs = h('div', { class: 'seg tight', style: 'margin:0 0 8px' });
+    [[1, 'This month'], [3, '3 mo'], [6, '6 mo'], [12, '12 mo']].forEach(function (o) {
+      rs.appendChild(h('button', { type: 'button', class: dash.range === o[0] ? 'on' : '', text: o[1], onclick: function () { dash.range = o[0]; drawHome(); } }));
+    });
+    var ls = h('div', { class: 'seg tight', style: 'margin:0 0 14px' });
+    [['all', 'All'], ['gm', 'Good Medicine'], ['vamos', 'Vamos']].forEach(function (o) {
+      ls.appendChild(h('button', { type: 'button', class: dash.line === o[0] ? 'on' : '', text: o[1], onclick: function () { dash.line = o[0]; drawHome(); } }));
+    });
+    el.appendChild(rs); el.appendChild(ls);
+
+    var months = monthsBack(dash.range), inWin = {}, today = todayIso();
+    months.forEach(function (k) { inWin[k] = 1; });
+    var rows = dash.d.bookings.filter(function (r) { return lineOk(r.fields) && inWin[monthKey(r.fields['Activity date'])]; });
+    var live = rows.filter(function (r) { return r.fields.Status !== 'Cancelled'; });
+    var cancelled = rows.length - live.length;
+    var sum = function (list, fn) { return list.reduce(function (a, r) { return a + fn(r.fields); }, 0); };
+    var gross = sum(live, function (f) { return n(f['Gross total']); }), rev = sum(live, revenueOf), guests = sum(live, function (f) { return n(f['Total guests']); });
+    var ahead = dash.d.bookings.filter(function (r) { return lineOk(r.fields) && r.fields.Status !== 'Cancelled' && (r.fields['Activity date'] || '') > today; });
+    var m0 = months[0], m1 = months[months.length - 1];
+    var label = dash.range === 1 ? monthName(m0, true) : monthName(m0) + (m0.slice(0, 4) !== m1.slice(0, 4) ? ' ' + m0.slice(0, 4) : '') + ' – ' + monthName(m1) + ' ' + m1.slice(0, 4);
+    el.appendChild(h('h3', { class: 'dash-h', style: 'margin-top:0', text: label }));
+    var tiles = h('div', { class: 'tiles' });
+    function tile(k, v, s) { tiles.appendChild(h('div', { class: 'tile' }, [h('span', { text: k }), h('b', { text: v }), s ? h('small', { text: s }) : null])); }
+    tile('Bookings', String(live.length), cancelled ? cancelled + ' cancelled' : (guests ? guests + ' guests' : ''));
+    tile('Sales', money(gross), 'what customers paid');
+    tile('Your revenue', money(rev), dash.line === 'vamos' ? 'commission' : dash.line === 'gm' ? 'Good Medicine net' : 'net + commission');
+    tile('Coming up', String(ahead.length), money(sum(ahead, function (f) { return n(f['Gross total']); })) + ' booked ahead');
+    el.appendChild(tiles);
+
+    // money still moving (invoicing, any date)
+    var inv = dash.d.invoices.filter(function (r) { return !r.fields['Cancelled at'] && lineOk(r.fields); });
+    var owedYou = sum(inv, function (f) { var dep = n(f.Deposit), got = n(f['Amount paid']), price = n(f['Trip price']); return n(f['Commission owed']) + (f['Balance collected by'] !== 'Owner' && dep > 0 && got >= dep && f['Trip date'] && f['Trip date'] < today ? Math.max(0, price - got) : 0); });
+    var owedOwners = sum(inv, function (f) { return n(f['Owner deposit owed']); });
+    var t2 = h('div', { class: 'tiles' });
+    [['Owed to you', money(owedYou), 'commission and balances after the trip'], ['Owed to owners', money(owedOwners), 'deposits to pass on']].forEach(function (x) {
+      t2.appendChild(h('div', { class: 'tile' }, [h('span', { text: x[0] }), h('b', { text: x[1] }), h('small', { text: x[2] })]));
+    });
+    el.appendChild(t2);
+
+    // chart: at least 6 months so "This month" still has context; the selected window is highlighted
+    var cm = monthsBack(Math.max(6, dash.range)), per = cm.map(function (k) {
+      var l = dash.d.bookings.filter(function (r) { return lineOk(r.fields) && r.fields.Status !== 'Cancelled' && monthKey(r.fields['Activity date']) === k; });
+      return { k: k, count: l.length, rev: sum(l, revenueOf), gross: sum(l, function (f) { return n(f['Gross total']); }) };
+    });
+    el.appendChild(chart(per, inWin));
+    var tbl = h('div', { class: 'card', style: 'padding:8px 14px' });
+    tbl.appendChild(h('div', { class: 'kv mth' }, [h('span', { text: 'Month' }), h('span', { text: 'Bookings' }), h('span', { text: 'Sales' }), h('span', { text: 'Revenue' })]));
+    per.slice().reverse().forEach(function (p) {
+      tbl.appendChild(h('div', { class: 'kv mth' + (inWin[p.k] ? '' : ' dim') }, [h('span', { text: monthName(p.k) + ' ' + p.k.slice(2, 4) }), h('span', { text: String(p.count) }), h('span', { text: money(p.gross) }), h('span', { text: money(p.rev) })]));
+    });
+    el.appendChild(tbl);
+    el.appendChild(h('p', { class: 'hint', text: 'From the Bookings table in Vamos Sales (Bókun, the historical log and paid Vamos invoices), by trip date. Cancelled trips are left out. Good Medicine bookings made in invoicing count once they are entered in Bókun.' }));
+  }
+  function chart(per, inWin) {
+    var W = 340, H = 190, padL = 8, padR = 8, top = 22, base = 150, n0 = per.length, bw = (W - padL - padR) / n0;
+    var maxC = Math.max(1, Math.max.apply(null, per.map(function (p) { return p.count; })));
+    var maxR = Math.max(1, Math.max.apply(null, per.map(function (p) { return p.rev; })));
+    var ns = 'http://www.w3.org/2000/svg';
+    function s(tag, a, txt) { var e = document.createElementNS(ns, tag); Object.keys(a).forEach(function (k) { e.setAttribute(k, a[k]); }); if (txt != null) e.textContent = txt; return e; }
+    var svg = s('svg', { viewBox: '0 0 ' + W + ' ' + H, width: '100%', role: 'img', 'aria-label': 'Bookings and revenue by month' });
+    svg.appendChild(s('line', { x1: padL, x2: W - padR, y1: base, y2: base, stroke: '#d9d4cc' }));
+    var pts = [];
+    per.forEach(function (p, i) {
+      var x = padL + i * bw, bh = (p.count / maxC) * (base - top - 18), on = inWin[p.k];
+      svg.appendChild(s('rect', { x: x + bw * 0.2, y: base - bh, width: bw * 0.6, height: Math.max(bh, p.count ? 2 : 0), rx: 3, fill: on ? C.aqua : '#bfe9e6' }));
+      if (p.count) svg.appendChild(s('text', { x: x + bw / 2, y: base - bh - 4, 'text-anchor': 'middle', 'font-size': 11, fill: C.navy }, String(p.count)));
+      svg.appendChild(s('text', { x: x + bw / 2, y: base + 15, 'text-anchor': 'middle', 'font-size': 10.5, fill: on ? C.navy : '#8a949b' }, monthName(p.k)));
+      pts.push([x + bw / 2, base - (p.rev / maxR) * (base - top - 18)]);
+    });
+    svg.appendChild(s('polyline', { points: pts.map(function (p) { return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' '), fill: 'none', stroke: PINK, 'stroke-width': 2.5, 'stroke-linejoin': 'round' }));
+    pts.forEach(function (p) { svg.appendChild(s('circle', { cx: p[0], cy: p[1], r: 3.5, fill: PINK })); });
+    var lg = H - 10;
+    svg.appendChild(s('rect', { x: padL, y: lg - 9, width: 10, height: 10, rx: 2, fill: C.aqua }));
+    svg.appendChild(s('text', { x: padL + 15, y: lg, 'font-size': 11, fill: C.navy }, 'Bookings'));
+    svg.appendChild(s('line', { x1: padL + 90, x2: padL + 106, y1: lg - 4, y2: lg - 4, stroke: PINK, 'stroke-width': 2.5 }));
+    svg.appendChild(s('text', { x: padL + 111, y: lg, 'font-size': 11, fill: C.navy }, 'Your revenue (peak ' + money(maxR) + ')'));
+    return h('div', { class: 'card', style: 'padding:10px 8px 4px' }, [svg]);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount();
