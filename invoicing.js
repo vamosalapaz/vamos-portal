@@ -12,7 +12,8 @@
    v7 (release v27): boat/operator first, then its experiences; "Other (type it)" for unlisted trips; quick payments (a description
        and an amount, standalone or attached to a booking as an extra); phone hint for non-Mexican numbers.
    v8 (release v28): the send step is only green when a message was actually sent from this screen; customer fields
-       support iPhone AutoFill Contact (and a Choose from contacts button where the browser has a contact picker). */
+       support iPhone AutoFill Contact (and a Choose from contacts button where the browser has a contact picker).
+   v9 (release v29): the phone field says how the number will be read; a 10-digit number gets a one-tap +1 (US/Canada) switch. */
 (function () {
   'use strict';
 
@@ -207,11 +208,12 @@
     cust.appendChild(h('label', { for: 'vi-name', text: 'Customer name' }));
     cust.appendChild(h('input', { id: 'vi-name', name: 'name', value: f.Name || '', autocomplete: 'name' }));
     cust.appendChild(h('div', { class: 'row' }, [
-      h('div', null, [h('label', { for: 'vi-phone', text: 'WhatsApp number' }), h('input', { id: 'vi-phone', name: 'tel', type: 'tel', autocomplete: 'tel', value: f.Phone || qs.get('phone') || '', onblur: lookupPhone, onchange: lookupPhone })]),
+      h('div', null, [h('label', { for: 'vi-phone', text: 'WhatsApp number' }), h('input', { id: 'vi-phone', name: 'tel', type: 'tel', autocomplete: 'tel', value: f.Phone || qs.get('phone') || '', onblur: lookupPhone, onchange: function () { phoneHint(); lookupPhone(); }, oninput: phoneHint })]),
       h('div', null, [h('label', { for: 'vi-email', text: 'Email (optional)' }), h('input', { id: 'vi-email', name: 'email', type: 'email', autocomplete: 'email', value: f.Email || '' })])
     ]));
-    cust.appendChild(h('div', { class: 'hint', text: PHONE_HINT }));
+    cust.appendChild(h('div', { class: 'hint', id: 'vi-phonehint' }));
     if (!edit) cust.appendChild(contactsHelp());
+    setTimeout(phoneHint, 0);
     cust.appendChild(h('div', { id: 'vi-known' }));
     cust.appendChild(h('label', { text: 'Customer language' }));
     var seg = h('div', { class: 'seg', id: 'vi-lang' });
@@ -316,6 +318,23 @@
     if (!inq && !edit && $('#vi-phone').value) lookupPhone();
     selectOffering(f['Offering record ID'] || (edit ? CUSTOM : ''));
     langHint();
+  }
+  // Shows how the WhatsApp number will be read. iPhone AutoFill drops +1 from US contacts on a US-region phone,
+  // and a bare 10-digit number is read as Mexican, so a 10-digit number gets a one-tap "+1" switch.
+  function phoneHint() {
+    var el = $('#vi-phonehint'), inp = $('#vi-phone'); if (!el || !inp) return;
+    var v = inp.value.trim(), d = digits(v);
+    if (el.dataset.for === v) return;   // unchanged: keep the +1 button in place so a tap on it still lands
+    el.dataset.for = v;
+    el.innerHTML = '';
+    if (!d) { el.textContent = PHONE_HINT; return; }
+    if (v.charAt(0) === '+') { el.textContent = 'WhatsApp: +' + d + (d.indexOf('52') === 0 ? ' (Mexico)' : d.charAt(0) === '1' ? ' (US / Canada)' : ''); return; }
+    if (d.length === 10) {
+      el.appendChild(document.createTextNode('Read as a Mexican number (+52 ' + d + '). '));
+      el.appendChild(h('button', { type: 'button', class: 'link', style: 'display:inline;margin:0;font-size:13px', onclick: function () { inp.value = '+1 ' + d; phoneHint(); lookupPhone(); } }, ['US or Canada? Make it +1']));
+      return;
+    }
+    el.textContent = 'Add the country code with + (for example +1 or +52) so WhatsApp finds the right person.';
   }
   // Pick the customer from the phone's contacts. Browsers with the Contact Picker get a button;
   // iPhone Safari offers "AutoFill Contact" above the keyboard when you tap the name or phone field.
@@ -482,11 +501,12 @@
     cust.appendChild(h('label', { for: 'vi-name', text: 'Customer name' }));
     cust.appendChild(h('input', { id: 'vi-name', name: 'name', value: ef['Billed to'] || pf['Billed to'] || '', autocomplete: 'name' }));
     cust.appendChild(h('div', { class: 'row' }, [
-      h('div', null, [h('label', { for: 'vi-phone', text: 'WhatsApp number' }), h('input', { id: 'vi-phone', name: 'tel', type: 'tel', autocomplete: 'tel', value: ef.Phone || pf.Phone || qs.get('phone') || '', onblur: qLookup, onchange: qLookup })]),
+      h('div', null, [h('label', { for: 'vi-phone', text: 'WhatsApp number' }), h('input', { id: 'vi-phone', name: 'tel', type: 'tel', autocomplete: 'tel', value: ef.Phone || pf.Phone || qs.get('phone') || '', onblur: qLookup, onchange: function () { phoneHint(); qLookup(); }, oninput: phoneHint })]),
       h('div', null, [h('label', { for: 'vi-email', text: 'Email (optional)' }), h('input', { id: 'vi-email', name: 'email', type: 'email', autocomplete: 'email', value: ef.Email || pf.Email || '' })])
     ]));
-    cust.appendChild(h('div', { class: 'hint', text: PHONE_HINT }));
+    cust.appendChild(h('div', { class: 'hint', id: 'vi-phonehint' }));
     if (!parent && !edit) cust.appendChild(contactsHelp());
+    setTimeout(phoneHint, 0);
     cust.appendChild(h('div', { id: 'vi-known' }));
     cust.appendChild(h('label', { text: 'Customer language' }));
     var seg = h('div', { class: 'seg' });
