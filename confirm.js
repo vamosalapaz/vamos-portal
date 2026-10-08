@@ -2,7 +2,9 @@
    Source: github.com/vamosalapaz/vamos-portal (confirm.js), served via jsDelivr tagged releases.
    The owner reviews a managed booking (same trip details the customer gets, plus deposit / balance / commission),
    ticks agree and types their name, or asks for a change. Never linked from anything a customer sees.
-   v22: first release. v23: total trip price, Vamos logo and palette. v24: commission line without timing; ignore a Last day before the trip date. */
+   v22: first release. v23: total trip price, Vamos logo and palette. v24: commission line without timing; ignore a Last day before the trip date.
+   v25: once the owner has agreed and the customer's deposit is paid, shows the customer's name and WhatsApp with
+   Save contact (vCard), Copy number and WhatsApp buttons. The number only ever arrives from the server after the deposit. */
 (function () {
   'use strict';
 
@@ -32,7 +34,10 @@
       superseded: 'Esta confirmación fue reemplazada por una más reciente. Revisa el último mensaje de Peter.',
       cancelled: 'Esta reservación fue cancelada.', invalid: 'Este enlace no es válido o ya no está disponible.',
       error: 'No se pudo guardar. Revisa tu conexión e inténtalo de nuevo.', loading: 'Cargando…', saving: 'Guardando…',
-      waAgreed: 'Hola Peter, confirmé la reservación ', waChange: 'Hola Peter, pedí un cambio en la reservación '
+      waAgreed: 'Hola Peter, confirmé la reservación ', waChange: 'Hola Peter, pedí un cambio en la reservación ',
+      yourGuest: 'Tu cliente', save: 'Guardar contacto', copyNum: 'Copiar número', chat: 'WhatsApp', copied: 'Número copiado',
+      notYet: 'Te compartiremos el nombre y WhatsApp de tu cliente en cuanto pague el anticipo.',
+      guestNote: 'Coordínense directamente para el día del viaje. Cambios o cancelaciones, por favor a través de Vamos a La Paz.'
     },
     en: {
       title: 'Booking confirmation', hi: 'Hi', ask: 'can you confirm this trip?',
@@ -51,7 +56,10 @@
       superseded: 'This confirmation was replaced by a newer one. Please check Peter\'s latest message.',
       cancelled: 'This booking was cancelled.', invalid: 'This link is not valid or is no longer available.',
       error: 'Could not save. Check your connection and try again.', loading: 'Loading…', saving: 'Saving…',
-      waAgreed: 'Hi Peter, I confirmed booking ', waChange: 'Hi Peter, I asked for a change to booking '
+      waAgreed: 'Hi Peter, I confirmed booking ', waChange: 'Hi Peter, I asked for a change to booking ',
+      yourGuest: 'Your customer', save: 'Save contact', copyNum: 'Copy number', chat: 'WhatsApp', copied: 'Number copied',
+      notYet: 'We\'ll share your customer\'s name and WhatsApp as soon as they pay the deposit.',
+      guestNote: 'Coordinate the day of the trip directly. Changes or cancellations, please through Vamos a La Paz.'
     }
   };
   var L = T.es, lang = 'es', conf = null, root;
@@ -117,6 +125,9 @@
       '.vc .wa{background:#1f9d55;color:#fff}',
       '.vc .link{background:none;border:0;color:#3c4954;text-decoration:underline;font:inherit;font-size:16px;cursor:pointer;display:block;margin:16px auto 0}',
       '.vc .msg{border-radius:12px;padding:12px 14px;margin:0 0 12px}',
+      '.vc .guest{border-left:5px solid ' + BRAND + '}.vc .guest .nm{font-weight:600;font-size:19px;margin:0}.vc .guest .ph{color:#3c4954;margin:2px 0 10px}',
+      '.vc .row3{display:flex;gap:8px;flex-wrap:wrap}.vc .row3 .btn{flex:1 1 30%;margin-top:0;padding:12px 8px;font-size:15px}',
+      '.vc .sec{background:#fff;color:' + INK + ';border:1px solid #c9c1b4}',
       '.vc .ok{background:#dcf6f5;color:' + C.gulf + '}.vc .warn{background:#fdf1e1;color:#7a4b00}.vc .err{background:#fde8ec;color:#8a1c33}'
     ].join('');
     document.head.appendChild(s);
@@ -177,6 +188,26 @@
     root.appendChild(h('p', { class: 'eyebrow', text: 'Vamos a La Paz · ' + L.title + ' ' + num() }));
     if (title) root.appendChild(h('h1', { text: title }));
   }
+  // Customer contact, only present once the deposit is paid (the server sends nothing before that).
+  function guestCard() {
+    var raw = conf.fields['Shared customer contact'];
+    if (!raw) return h('p', { class: 'msg warn', text: L.notYet });
+    var parts = String(raw).split('|'), nm = (parts[0] || '').trim(), ph = (parts[1] || '').trim();
+    var digits = ph.replace(/\D/g, ''); if (digits.length === 10) digits = '52' + digits;
+    var card = h('div', { class: 'card guest' }, [
+      h('h2', { text: L.yourGuest }), h('p', { class: 'nm', text: nm }), h('p', { class: 'ph', text: ph }),
+      h('div', { class: 'row3' }, [
+        h('a', { class: 'btn pri', href: HOOK + '?action=vcard&t=' + encodeURIComponent(TOKEN) }, [L.save]),
+        h('button', { class: 'btn sec', type: 'button', onclick: function (e) {
+          var b = e.currentTarget;
+          (navigator.clipboard ? navigator.clipboard.writeText(ph) : Promise.reject()).then(function () { b.textContent = L.copied; }, function () { prompt(L.copyNum, ph); });
+        } }, [L.copyNum]),
+        h('a', { class: 'btn wa', href: 'https://wa.me/' + digits }, [L.chat])
+      ]),
+      h('p', { class: 'muted', style: 'font-size:14px;margin-top:10px', text: L.guestNote })
+    ]);
+    return card;
+  }
   function waButton(text) {
     return h('a', { class: 'btn wa', href: 'https://wa.me/' + PETER_WA + '?text=' + encodeURIComponent(text) }, [L.tellPeter]);
   }
@@ -187,6 +218,7 @@
     if (st === 'Agreed') {
       header(L.doneTitle);
       root.appendChild(h('p', { class: 'msg ok', text: L.signedBy + ' ' + (f['Signed by'] || '') + (f['Responded at'] ? ' ' + L.on + ' ' + stamp(f['Responded at']) : '') }));
+      root.appendChild(guestCard());
       root.appendChild(details());
       return;
     }
@@ -228,6 +260,7 @@
     header(L.doneTitle);
     root.appendChild(h('p', { class: 'intro', text: L.doneText }));
     root.appendChild(waButton(L.waAgreed + num() + ' (' + day(conf.fields['Trip date']) + ') ✅'));
+    root.appendChild(guestCard());
     root.appendChild(details());
     window.scrollTo(0, 0);
   }
