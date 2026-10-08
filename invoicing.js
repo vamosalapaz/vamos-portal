@@ -6,6 +6,7 @@
    v3: meeting point required; Edit on the tracking screen (re-sends the owner a fresh confirmation);
        owner sign-off status (sent / confirmed / change requested) recorded and shown; links to the owner's /confirmar page.
    v4: Vamos logo + palette; iPhone date fields no longer overlap; Last day defaults to the trip date and can't be earlier.
+   v5: an old Last day earlier than the trip date is ignored when editing; owner payment terms no longer say when the commission is paid.
    Next releases add: customer send (Stripe link + /reserva page), Mark paid, pass deposit, settle at the dock. */
 (function () {
   'use strict';
@@ -75,8 +76,8 @@
     return [line, notes || ''].filter(Boolean).join('\n');
   }
   function paymentTerms(lang, dep, bal, com) {
-    if (lang === 'English') return 'We send you the full deposit (' + money(dep) + ') as soon as the customer pays it; it secures the booking. On the day you collect the balance (' + money(bal) + ') directly from the customer before departure, and after the trip you pay Vamos its commission (' + money(com) + '). If the customer cancels, you keep the deposit and no commission is due. If the Port Captain closes the port, you return the deposit to Vamos and we refund the customer.';
-    return 'Te enviamos el anticipo completo (' + money(dep) + ') en cuanto el cliente lo paga; asegura la reservación. El día del viaje cobras el saldo (' + money(bal) + ') directamente al cliente, antes de zarpar, y después del viaje nos pagas la comisión de Vamos (' + money(com) + '). Si el cliente cancela, te quedas con el anticipo y no hay comisión. Si Capitanía cierra el puerto, nos devuelves el anticipo y nosotros se lo reembolsamos al cliente.';
+    if (lang === 'English') return 'We send you the full deposit (' + money(dep) + ') as soon as the customer pays it; it secures the booking. On the day you collect the balance (' + money(bal) + ') directly from the customer before departure, and you pay Vamos its commission (' + money(com) + '). If the customer cancels, you keep the deposit and no commission is due. If the Port Captain closes the port, you return the deposit to Vamos and we refund the customer.';
+    return 'Te enviamos el anticipo completo (' + money(dep) + ') en cuanto el cliente lo paga; asegura la reservación. El día del viaje cobras el saldo (' + money(bal) + ') directamente al cliente, antes de zarpar, y nos pagas la comisión de Vamos (' + money(com) + '). Si el cliente cancela, te quedas con el anticipo y no hay comisión. Si Capitanía cierra el puerto, nos devuelves el anticipo y nosotros se lo reembolsamos al cliente.';
   }
 
   /* ---------- offering context (owner, boat, business line) ---------- */
@@ -280,7 +281,7 @@
 
     if (edit) {
       var e2 = edit.inv.fields, cf = edit.conf ? edit.conf.fields : {};
-      $('#vi-end').value = e2['End date'] || e2['Trip date'] || '';
+      $('#vi-end').value = e2['End date'] && e2['End date'] > (e2['Trip date'] || '') ? e2['End date'] : (e2['Trip date'] || '');
       $('#vi-price').value = e2['Trip price'] || '';
       $('#vi-dep').value = e2.Deposit || '';
       $('#vi-com').value = e2.Commission || '';
