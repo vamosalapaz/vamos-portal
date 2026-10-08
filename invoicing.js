@@ -213,10 +213,14 @@
     cust.appendChild(h('label', { text: 'Customer language' }));
     var seg = h('div', { class: 'seg', id: 'vi-lang' });
     ['Español', 'English'].forEach(function (l) {
-      seg.appendChild(h('button', { type: 'button', class: l === lang ? 'on' : '', text: l, onclick: function () { Array.prototype.forEach.call(seg.children, function (b) { b.className = b.textContent === l ? 'on' : ''; }); state.form.lang = l; refresh(); } }));
+      seg.appendChild(h('button', { type: 'button', class: l === lang ? 'on' : '', text: l, onclick: function () {
+        Array.prototype.forEach.call(seg.children, function (b) { b.className = b.textContent === l ? 'on' : ''; });
+        state.form.lang = l; langHint(); if ($('#vi-grp') && $('#vi-grp').value && $('#vi-grp').value !== CUSTOM) fillExperiences($('#vi-off').value); else refresh();
+      } }));
     });
     state.form.lang = lang;
     cust.appendChild(seg);
+    cust.appendChild(h('div', { class: 'hint', id: 'vi-langhint' }));
     if (f.Message) cust.appendChild(h('p', { class: 'hint', text: '“' + f.Message + '”' }));
     form.appendChild(cust);
 
@@ -308,6 +312,12 @@
     $('#vi-end').min = $('#vi-date').value || '';
     if (!inq && !edit && $('#vi-phone').value) lookupPhone();
     selectOffering(f['Offering record ID'] || (edit ? CUSTOM : ''));
+    langHint();
+  }
+  // The language switch sets the customer's language (their page, messages, trip name); this screen stays in English.
+  function langHint() {
+    var el = $('#vi-langhint'); if (!el) return;
+    el.textContent = state.form.lang === 'English' ? 'The customer\'s page and messages will be in English.' : 'The customer\'s page and messages will be in Spanish.';
   }
   /* boat / operator first, then that one's experiences */
   function byName(a, b) { return String(a.fields.Name).localeCompare(String(b.fields.Name)); }
@@ -330,7 +340,7 @@
     if (k && !custom) {
       var g = groups().filter(function (x) { return x.key === k; })[0], items = g ? g.items.slice().sort(byName) : [];
       if (items.length > 1) sel.appendChild(h('option', { value: '', text: 'Choose an experience' }));
-      items.forEach(function (o) { sel.appendChild(h('option', { value: o.id, text: o.fields.Name + (o.fields['Price Range'] ? ' · ' + o.fields['Price Range'] : ''), selected: o.id === selectId ? 'selected' : null })); });
+      items.forEach(function (o) { sel.appendChild(h('option', { value: o.id, text: (state.form.lang === 'English' ? o.fields.Name : (o.fields['Name (ES)'] || o.fields.Name)) + (o.fields['Price Range'] ? ' · ' + o.fields['Price Range'] : ''), selected: o.id === selectId ? 'selected' : null })); });
     }
     applyOffering(!selectId);
   }
@@ -449,6 +459,7 @@
     card.appendChild(h('input', { id: 'vi-qamt', type: 'number', inputmode: 'numeric', value: ef['Trip price'] || '' }));
     root.appendChild(card);
     var cust = h('div', { class: 'card' });
+    setTimeout(langHint, 0);
     cust.appendChild(h('label', { for: 'vi-name', text: 'Customer name' }));
     cust.appendChild(h('input', { id: 'vi-name', value: ef['Billed to'] || pf['Billed to'] || '', autocomplete: 'off' }));
     cust.appendChild(h('div', { class: 'row' }, [
@@ -460,9 +471,10 @@
     cust.appendChild(h('label', { text: 'Customer language' }));
     var seg = h('div', { class: 'seg' });
     ['Español', 'English'].forEach(function (l) {
-      seg.appendChild(h('button', { type: 'button', class: l === lang ? 'on' : '', text: l, onclick: function () { Array.prototype.forEach.call(seg.children, function (b) { b.className = b.textContent === l ? 'on' : ''; }); state.form.lang = l; } }));
+      seg.appendChild(h('button', { type: 'button', class: l === lang ? 'on' : '', text: l, onclick: function () { Array.prototype.forEach.call(seg.children, function (b) { b.className = b.textContent === l ? 'on' : ''; }); state.form.lang = l; langHint(); } }));
     });
     cust.appendChild(seg);
+    cust.appendChild(h('div', { class: 'hint', id: 'vi-langhint' }));
     cust.appendChild(h('label', { for: 'vi-note', text: 'Note to customer (optional)' }));
     cust.appendChild(h('textarea', { id: 'vi-note' }, [ef['Note to customer'] || '']));
     cust.appendChild(h('label', { for: 'vi-int', text: 'Internal notes (only you see these)' }));
