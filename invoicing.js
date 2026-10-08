@@ -5,6 +5,7 @@
        no owner on file let you type the owner's name and number, or skip sign-off.
    v3: meeting point required; Edit on the tracking screen (re-sends the owner a fresh confirmation);
        owner sign-off status (sent / confirmed / change requested) recorded and shown; links to the owner's /confirmar page.
+   v4: Vamos logo + palette; iPhone date fields no longer overlap; Last day defaults to the trip date and can't be earlier.
    Next releases add: customer send (Stripe link + /reserva page), Mark paid, pass deposit, settle at the dock. */
 (function () {
   'use strict';
@@ -13,7 +14,9 @@
   var HOOK_CREATE = 'https://hook.us2.make.com/4vs20d3adxqy8nnc1hftzito01rn933q';
   var HOOK_ACTIONS = 'https://hook.us2.make.com/f4uho6gwh1mu94gu4b4y5kbb86if4prm';
   var SITE = 'https://vamosalapaz.com';
-  var PINK = '#D4537E';
+  var PINK = '#B51E66';           // Bugambilia
+  var C = { navy: '#061A2E', foam: '#F3EFE6', aqua: '#00C6C0', pacific: '#156AB3', gulf: '#0B4F6C', lima: '#B5C62E', orange: '#E65A37', gold: '#F3B53F' };
+  var LOGO = 'https://s3.amazonaws.com/webflow-prod-assets/6a94d97df3061a3b48890971/6ab313cdb43ef771290ceace_download.png';
 
   var qs = new URLSearchParams(location.search);
   var KEY = qs.get('k') || '';
@@ -98,7 +101,11 @@
   function css() {
     var s = document.createElement('style');
     s.textContent = [
-      '.vi{max-width:560px;margin:0 auto;padding:20px 16px 64px;font-family:"DM Sans",system-ui,sans-serif;color:#1d2731;font-size:16px;line-height:1.45}',
+      '.vi{max-width:560px;margin:0 auto;padding:0 16px 64px;font-family:"DM Sans",system-ui,sans-serif;color:' + C.navy + ';font-size:16px;line-height:1.45}',
+      '.vi-top{display:flex;align-items:center;justify-content:space-between;padding:14px 0 10px}.vi-top img{height:38px;width:auto;display:block}.vi-top span{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:' + C.gulf + '}',
+      '.vi-stripe{display:flex;height:5px;border-radius:3px;overflow:hidden;margin:0 0 18px}.vi-stripe i{flex:1}',
+      '.vi .card{border-left:4px solid ' + C.aqua + '}',
+      '.vi input[type=date]{-webkit-appearance:none;appearance:none;min-width:0;display:block;min-height:44px;line-height:1.2}',
       '.vi h1{font-size:24px;margin:0 0 4px;font-weight:600}',
       '.vi .sub{color:#5a6670;font-size:14px;margin:0 0 18px}',
       '.vi .card{background:#fff;border:1px solid #e4e1dc;border-radius:14px;padding:14px;margin:0 0 12px}',
@@ -119,7 +126,8 @@
       '.vi .err{background:#fde8ec;color:#8a1c33;border-radius:10px;padding:10px 12px;font-size:14px;margin-top:12px}',
       '.vi .step{display:flex;gap:12px;padding:12px 0;border-top:1px solid #eee9e2}.vi .step:first-child{border-top:0}',
       '.vi .dot{flex:0 0 22px;height:22px;border-radius:50%;border:2px solid #cfcac2;box-sizing:border-box;margin-top:2px}',
-      '.vi .dot.done{background:#2e7d4f;border-color:#2e7d4f}.vi .dot.now{border-color:' + PINK + ';background:#fbe3ec}',
+      '.vi .dot.done{background:' + C.aqua + ';border-color:' + C.aqua + '}.vi .dot.now{border-color:' + PINK + ';background:#f7dbe8}',
+      '.vi h1{color:' + C.gulf + '}',
       '.vi .step b{display:block}.vi .step .small{font-size:14px;color:#5a6670}',
       '.vi .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.vi .btns .btn{width:auto;padding:9px 14px;margin:0;font-size:15px}',
       '.vi .kv{display:flex;justify-content:space-between;gap:12px;padding:3px 0;font-size:15px}.vi .kv span:first-child{color:#5a6670}',
@@ -139,9 +147,16 @@
   function mount() {
     css();
     root = h('div', { class: 'vi' });
+    document.body.style.background = C.foam;
     var anchor = document.querySelector('main') || document.body;
     var nav = document.querySelector('.w-nav, header, nav');
     if (nav && nav.parentNode === anchor) nav.insertAdjacentElement('afterend', root); else anchor.appendChild(root);
+    var shell = root; root = h('div');
+    var stripe = h('div', { class: 'vi-stripe' });
+    [C.aqua, C.pacific, C.lima, C.gold, C.orange, PINK].forEach(function (c) { stripe.appendChild(h('i', { style: 'background:' + c })); });
+    shell.appendChild(h('div', { class: 'vi-top' }, [h('img', { src: LOGO, alt: 'Vamos a La Paz' }), h('span', { text: 'Invoicing' })]));
+    shell.appendChild(stripe);
+    shell.appendChild(root);
     if (!KEY) { root.appendChild(h('p', { class: 'warn', text: 'This page needs your private invoicing link. Open it from an inquiry email.' })); return; }
     root.appendChild(h('p', { class: 'sub', text: 'Loading…' }));
     load(qs.get('inquiry'), qs.get('invoice')).catch(showFatal);
@@ -209,11 +224,11 @@
     });
     trip.appendChild(sel);
     trip.appendChild(h('div', { class: 'row' }, [
-      h('div', null, [h('label', { for: 'vi-date', text: 'Date' }), h('input', { id: 'vi-date', type: 'date', value: f['Requested date'] || '' })]),
+      h('div', null, [h('label', { for: 'vi-date', text: 'Date' }), h('input', { id: 'vi-date', type: 'date', value: f['Requested date'] || '', onchange: syncEnd })]),
       h('div', null, [h('label', { for: 'vi-guests', text: 'Guests' }), h('input', { id: 'vi-guests', type: 'number', inputmode: 'numeric', min: '1', value: f.Guests || '' })])
     ]));
     trip.appendChild(h('label', { for: 'vi-end', text: 'Last day (multi-day trips only)' }));
-    trip.appendChild(h('input', { id: 'vi-end', type: 'date' }));
+    trip.appendChild(h('input', { id: 'vi-end', type: 'date', value: f['Requested date'] || '' }));
     form.appendChild(trip);
 
     // shown only when the experience's boat has no owner in Partner Admin
@@ -265,7 +280,7 @@
 
     if (edit) {
       var e2 = edit.inv.fields, cf = edit.conf ? edit.conf.fields : {};
-      $('#vi-end').value = e2['End date'] || '';
+      $('#vi-end').value = e2['End date'] || e2['Trip date'] || '';
       $('#vi-price').value = e2['Trip price'] || '';
       $('#vi-dep').value = e2.Deposit || '';
       $('#vi-com').value = e2.Commission || '';
@@ -277,8 +292,17 @@
       $('#vi-onote').value = cf['Note to owner'] || '';
       if (!cf['Partner Admin record ID'] && cf['Owner name']) { $('#vi-oname').value = cf['Owner name']; $('#vi-ophone').value = cf['Owner phone'] || ''; }
     }
+    state.lastStart = $('#vi-date').value;
+    $('#vi-end').min = $('#vi-date').value || '';
     if (!inq && !edit && $('#vi-phone').value) lookupPhone();
     applyOffering(false);
+  }
+  // Last day follows the trip date unless it was set to a later day on purpose; never earlier than the trip date.
+  function syncEnd() {
+    var start = $('#vi-date').value, end = $('#vi-end');
+    if (!end.value || end.value === state.lastStart || end.value < start) end.value = start;
+    end.min = start || '';
+    state.lastStart = start;
   }
   function ctxSafe(id) { try { return ctx(id); } catch (e) { return null; } }
 
@@ -345,7 +369,7 @@
       if (!$('#vi-email').value && c.fields.Email) $('#vi-email').value = c.fields.Email;
       var last = (r.inquiries || []).sort(function (a, b) { return String(b.fields['Received at']).localeCompare(String(a.fields['Received at'])); })[0];
       if (last && !$('#vi-off').value && last.fields['Offering record ID']) { $('#vi-off').value = last.fields['Offering record ID']; applyOffering(true); }
-      if (last && !$('#vi-date').value && last.fields['Requested date']) $('#vi-date').value = last.fields['Requested date'];
+      if (last && !$('#vi-date').value && last.fields['Requested date']) { $('#vi-date').value = last.fields['Requested date']; syncEnd(); }
       box.appendChild(h('div', { class: 'known', text: 'Known customer: ' + name + (last ? ' · last asked about ' + (last.fields.Offering || 'a trip') : '') }));
     }).catch(function () { /* lookup is a convenience only */ });
   }
@@ -372,6 +396,8 @@
     if (!v.dep) missing.push('the deposit');
     if (!v.mp) missing.push('the meeting point');
     if (missing.length) { err.appendChild(h('p', { class: 'err', text: 'Add ' + missing.join(', ') + '.' })); return; }
+    if (v.end && v.date && v.end < v.date) { err.appendChild(h('p', { class: 'err', text: 'The last day is before the trip date.' })); return; }
+    if (v.end === v.date) v.end = '';
     if (v.dep > v.price) { err.appendChild(h('p', { class: 'err', text: 'The deposit is more than the trip price.' })); return; }
     var owner = c.owner;
     if (!c.gm && !owner) {
