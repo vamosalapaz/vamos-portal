@@ -10,7 +10,9 @@
    v6 (release v26): send to the customer (one-time Stripe card link made automatically, /reserva page, WhatsApp / Copy / Email),
        Mark paid (transfer or cash), pass the deposit to the owner, settle at the dock (balance + commission), cancel or port closed.
    v7 (release v27): boat/operator first, then its experiences; "Other (type it)" for unlisted trips; quick payments (a description
-       and an amount, standalone or attached to a booking as an extra); phone hint for non-Mexican numbers. */
+       and an amount, standalone or attached to a booking as an extra); phone hint for non-Mexican numbers.
+   v8 (release v28): the send step is only green when a message was actually sent from this screen; customer fields
+       support iPhone AutoFill Contact (and a Choose from contacts button where the browser has a contact picker). */
 (function () {
   'use strict';
 
@@ -198,17 +200,18 @@
     root.appendChild(h('p', { class: 'sub', text: edit ? (edit.conf && edit.conf.fields.Status === 'Agreed' ? 'The owner already confirmed; saving sends them a fresh confirmation.' : 'Change anything, then save.') : inq ? 'From website inquiry' + (f['Received at'] ? ', ' + new Date(f['Received at']).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) : '') : 'Started from WhatsApp or by hand' }));
 
     var lang = f.Language || 'Español';
-    var form = h('div');
+    var form = h('form', { autocomplete: 'on', onsubmit: function (e) { e.preventDefault(); } });
     if (!edit && !inq) form.appendChild(modeSwitch('booking'));
     // customer
     var cust = h('div', { class: 'card' });
     cust.appendChild(h('label', { for: 'vi-name', text: 'Customer name' }));
-    cust.appendChild(h('input', { id: 'vi-name', value: f.Name || '', autocomplete: 'off' }));
+    cust.appendChild(h('input', { id: 'vi-name', name: 'name', value: f.Name || '', autocomplete: 'name' }));
     cust.appendChild(h('div', { class: 'row' }, [
-      h('div', null, [h('label', { for: 'vi-phone', text: 'WhatsApp number' }), h('input', { id: 'vi-phone', type: 'tel', value: f.Phone || qs.get('phone') || '', onblur: lookupPhone })]),
-      h('div', null, [h('label', { for: 'vi-email', text: 'Email (optional)' }), h('input', { id: 'vi-email', type: 'email', value: f.Email || '' })])
+      h('div', null, [h('label', { for: 'vi-phone', text: 'WhatsApp number' }), h('input', { id: 'vi-phone', name: 'tel', type: 'tel', autocomplete: 'tel', value: f.Phone || qs.get('phone') || '', onblur: lookupPhone, onchange: lookupPhone })]),
+      h('div', null, [h('label', { for: 'vi-email', text: 'Email (optional)' }), h('input', { id: 'vi-email', name: 'email', type: 'email', autocomplete: 'email', value: f.Email || '' })])
     ]));
     cust.appendChild(h('div', { class: 'hint', text: PHONE_HINT }));
+    if (!edit) cust.appendChild(contactsHelp());
     cust.appendChild(h('div', { id: 'vi-known' }));
     cust.appendChild(h('label', { text: 'Customer language' }));
     var seg = h('div', { class: 'seg', id: 'vi-lang' });
@@ -313,6 +316,21 @@
     if (!inq && !edit && $('#vi-phone').value) lookupPhone();
     selectOffering(f['Offering record ID'] || (edit ? CUSTOM : ''));
     langHint();
+  }
+  // Pick the customer from the phone's contacts. Browsers with the Contact Picker get a button;
+  // iPhone Safari offers "AutoFill Contact" above the keyboard when you tap the name or phone field.
+  function contactsHelp() {
+    if (navigator.contacts && navigator.contacts.select) {
+      return h('button', { class: 'btn sec', type: 'button', onclick: function () {
+        navigator.contacts.select(['name', 'tel', 'email'], { multiple: false }).then(function (list) {
+          var c = list && list[0]; if (!c) return;
+          if (c.name && c.name[0]) $('#vi-name').value = c.name[0];
+          if (c.tel && c.tel[0]) { $('#vi-phone').value = c.tel[0]; lookupPhone(); }
+          if (c.email && c.email[0] && !$('#vi-email').value) $('#vi-email').value = c.email[0];
+        }).catch(function () {});
+      } }, ['Choose from contacts']);
+    }
+    return h('div', { class: 'hint', text: 'Tip: tap the name field, then AutoFill Contact above the keyboard to pick someone from your contacts.' });
   }
   // The language switch sets the customer's language (their page, messages, trip name); this screen stays in English.
   function langHint() {
@@ -458,15 +476,17 @@
     card.appendChild(h('label', { for: 'vi-qamt', text: 'Amount (MXN, IVA included)' }));
     card.appendChild(h('input', { id: 'vi-qamt', type: 'number', inputmode: 'numeric', value: ef['Trip price'] || '' }));
     root.appendChild(card);
-    var cust = h('div', { class: 'card' });
+    var cust = h('form', { class: 'card', autocomplete: 'on', onsubmit: function (e) { e.preventDefault(); } });
     setTimeout(langHint, 0);
+    var qLookup = function () { if (!parent && !edit) lookupPhone(); };
     cust.appendChild(h('label', { for: 'vi-name', text: 'Customer name' }));
-    cust.appendChild(h('input', { id: 'vi-name', value: ef['Billed to'] || pf['Billed to'] || '', autocomplete: 'off' }));
+    cust.appendChild(h('input', { id: 'vi-name', name: 'name', value: ef['Billed to'] || pf['Billed to'] || '', autocomplete: 'name' }));
     cust.appendChild(h('div', { class: 'row' }, [
-      h('div', null, [h('label', { for: 'vi-phone', text: 'WhatsApp number' }), h('input', { id: 'vi-phone', type: 'tel', value: ef.Phone || pf.Phone || qs.get('phone') || '', onblur: function () { if (!parent && !edit) lookupPhone(); } })]),
-      h('div', null, [h('label', { for: 'vi-email', text: 'Email (optional)' }), h('input', { id: 'vi-email', type: 'email', value: ef.Email || pf.Email || '' })])
+      h('div', null, [h('label', { for: 'vi-phone', text: 'WhatsApp number' }), h('input', { id: 'vi-phone', name: 'tel', type: 'tel', autocomplete: 'tel', value: ef.Phone || pf.Phone || qs.get('phone') || '', onblur: qLookup, onchange: qLookup })]),
+      h('div', null, [h('label', { for: 'vi-email', text: 'Email (optional)' }), h('input', { id: 'vi-email', name: 'email', type: 'email', autocomplete: 'email', value: ef.Email || pf.Email || '' })])
     ]));
     cust.appendChild(h('div', { class: 'hint', text: PHONE_HINT }));
+    if (!parent && !edit) cust.appendChild(contactsHelp());
     cust.appendChild(h('div', { id: 'vi-known' }));
     cust.appendChild(h('label', { text: 'Customer language' }));
     var seg = h('div', { class: 'seg' });
@@ -760,7 +780,11 @@
     var small = sent ? 'Sent ' + when(sent) + (f['Sent via'] && f['Sent via'].length ? ' by ' + [].concat(f['Sent via']).join(', ') : '') + '.' : f.Kind === 'Quick payment' ? 'Their page has the amount, card payment and transfer details.' : 'Their page has the trip, card payment and transfer details.';
     if (state.linking) small += ' Making the card payment link…';
     else if (state.linkFailed === inv.id) small += ' The card link could not be made; the page still shows transfer details. Tap Refresh to try again.';
-    if (depPaid || cancelled) return step(sent || depPaid ? 'done' : '', title, small, [h('a', { class: 'btn sec', href: page, target: '_blank', rel: 'noopener' }, ['Customer page'])]);
+    if (depPaid || cancelled) {
+      // Only green when a message actually went out from here; paying via a page shared another way doesn't count as sent.
+      if (!sent) { title = 'Not sent from here'; small = depPaid ? 'The customer paid anyway, so there is nothing to send.' : 'Nothing was sent before the cancellation.'; }
+      return step(sent ? 'done' : '', title, small, [h('a', { class: 'btn sec', href: page, target: '_blank', rel: 'noopener' }, ['Customer page'])]);
+    }
     var msg = customerMessage(f, page);
     var wait = !!state.linking;
     var btns = [
