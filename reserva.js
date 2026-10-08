@@ -3,7 +3,8 @@
    Shows the trip, the price (IVA included), how to pay the deposit (card via a one-time Stripe link, or bank transfer
    with the booking number as reference) and the cancellation terms. Once the deposit is paid it shows the captain's
    name and WhatsApp (Save contact, Copy number, WhatsApp); the server only sends those after the deposit.
-   v26: first release. Never calls the booking an invoice ("Reservación VLP-xxxx"). */
+   v26: first release. Never calls the booking an invoice ("Reservación VLP-xxxx").
+   v27: quick payments (Kind = Quick payment): a one-off amount with a description, e.g. an extra hour ("Pago VLP-xxxx"). */
 (function () {
   'use strict';
 
@@ -35,7 +36,9 @@
       cancelled: 'Esta reservación fue cancelada. Si tienes dudas, escríbenos por WhatsApp.',
       invalid: 'Este enlace no es válido o ya no está disponible.', loading: 'Cargando…',
       linkPending: 'El pago con tarjeta estará disponible en unos minutos. Mientras tanto puedes pagar por transferencia.',
-      paidFull: 'Pagado por completo. ¡Nos vemos pronto!', paidDeposit: 'Recibimos tu anticipo.'
+      paidFull: 'Pagado por completo. ¡Nos vemos pronto!', paidDeposit: 'Recibimos tu anticipo.',
+      payment: 'Pago', qHi: 'aquí está tu pago', qPaid: '¡Pago recibido, gracias!', qPay: 'Paga', forBooking: 'Reservación', qTotal: 'Total a pagar',
+      qReceipt: 'Hola, te envío el comprobante de la transferencia del pago '
     },
     en: {
       booking: 'Booking', hi: 'Hi', ready: 'your trip is ready to book',
@@ -55,7 +58,9 @@
       cancelled: 'This booking was cancelled. If you have questions, message us on WhatsApp.',
       invalid: 'This link is not valid or is no longer available.', loading: 'Loading…',
       linkPending: 'Card payment will be available in a few minutes. Meanwhile you can pay by bank transfer.',
-      paidFull: 'Paid in full. See you soon!', paidDeposit: 'We received your deposit.'
+      paidFull: 'Paid in full. See you soon!', paidDeposit: 'We received your deposit.',
+      payment: 'Payment', qHi: 'here is your payment', qPaid: 'Payment received, thank you!', qPay: 'Pay', forBooking: 'Booking', qTotal: 'Amount due',
+      qReceipt: 'Hi, here is the transfer receipt for payment '
     }
   };
   var L = T.es, lang = 'es', inv = null, bank = {}, root, tries = 0;
@@ -153,10 +158,12 @@
   function fail() { root.innerHTML = ''; root.appendChild(h('p', { class: 'msg warn', text: T.es.invalid + ' / ' + T.en.invalid })); }
 
   function f() { return inv.fields; }
+  function isQuick() { return f().Kind === 'Quick payment'; }
   function depositPaid() { var x = f(); return x.Status === 'Deposit paid' || x.Status === 'Paid in full'; }
 
   function render() {
     var x = f(), st = x.Status;
+    if (isQuick()) return renderQuick();
     root.innerHTML = '';
     root.appendChild(h('p', { class: 'eyebrow', text: 'Vamos a La Paz · ' + L.booking + ' ' + (x['Invoice number'] || '') }));
     if (st === 'Cancelled') {
@@ -176,6 +183,49 @@
     if (!paid && !JUST_PAID) root.appendChild(payCard());
     root.appendChild(termsCard());
     root.appendChild(h('a', { class: 'btn sec', href: wa(VAMOS_WA, L.questionsMsg + (x['Invoice number'] || '')) }, [L.questions]));
+  }
+
+  // Quick payment: one amount with a description (an extra hour, an add-on).
+  function renderQuick() {
+    var x = f(), st = x.Status, num = x['Invoice number'] || '', amount = Number(x.Deposit) || Number(x['Trip price']) || 0;
+    root.innerHTML = '';
+    root.appendChild(h('p', { class: 'eyebrow', text: 'Vamos a La Paz · ' + L.payment + ' ' + num }));
+    if (st === 'Cancelled') {
+      root.appendChild(h('p', { class: 'msg warn', text: L.cancelled }));
+      root.appendChild(h('a', { class: 'btn wa', href: wa(VAMOS_WA, L.questionsMsg + num) }, [L.questions]));
+      return;
+    }
+    var paid = depositPaid();
+    if (paid) root.appendChild(h('h1', { text: L.qPaid }));
+    else if (JUST_PAID) { root.appendChild(h('h1', { text: L.thanks })); root.appendChild(h('p', { class: 'muted', style: 'margin:-6px 0 14px', text: L.thanksText })); }
+    else root.appendChild(h('h1', { text: L.hi + ' ' + first(x['Billed to']) + ', ' + L.qHi }));
+    root.appendChild(h('div', { class: 'card trip-card' }, [
+      h('p', { class: 'trip', text: x.Trip || '' }),
+      x['Extra for booking'] ? h('p', { class: 'muted', text: L.forBooking + ' ' + x['Extra for booking'] }) : null,
+      x['Note to customer'] ? h('p', { class: 'pre', style: 'margin-top:8px', text: x['Note to customer'] }) : null
+    ]));
+    var m = h('div', { class: 'card money-card' });
+    m.appendChild(h('div', { class: 'money total' }, [h('span', { text: paid ? L.paid : L.qTotal }), h('b', { text: money(amount) })]));
+    m.appendChild(h('p', { class: 'iva', text: L.iva }));
+    root.appendChild(m);
+    if (!paid && !JUST_PAID) {
+      var card = h('div', { class: 'card pay-card' });
+      card.appendChild(h('h2', { text: L.qPay + ' · ' + money(amount) }));
+      var link = x['Stripe payment link'], linkOk = link && Number(x['Payment link amount']) === amount;
+      if (linkOk) card.appendChild(h('a', { class: 'btn pri', href: link }, [L.payCard + ' · ' + money(amount)]));
+      else card.appendChild(h('p', { class: 'msg warn', text: L.linkPending }));
+      if (bank.CLABE) {
+        card.appendChild(h('p', { class: 'or', text: L.orTransfer }));
+        [[L.bank, bank.Bank], [L.holder, bank['Account holder']], [L.clabe, bank.CLABE, true], [L.ref, num, true], [L.amount, money(amount)]].forEach(function (r) {
+          if (!r[1]) return;
+          card.appendChild(h('div', { class: 'kv' }, [h('div', null, [h('span', { text: r[0] }), h('b', { text: r[1] })]), r[2] ? copyBtn(String(r[1]).replace(/\s/g, '')) : null]));
+        });
+        if (bank['Extra note']) card.appendChild(h('p', { class: 'muted', style: 'font-size:14px', text: bank['Extra note'] }));
+        card.appendChild(h('a', { class: 'btn wa', href: wa(VAMOS_WA, L.qReceipt + num) }, [L.receipt]));
+      }
+      root.appendChild(card);
+    }
+    root.appendChild(h('a', { class: 'btn sec', href: wa(VAMOS_WA, L.questionsMsg + num) }, [L.questions]));
   }
 
   function tripCard() {
