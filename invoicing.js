@@ -1,6 +1,8 @@
 /* Vamos a La Paz — invoicing screen (/invoicing?k=<admin key>[&inquiry=rec…][&invoice=rec…][&phone=…])
    Source: github.com/vamosalapaz/vamos-portal (invoicing.js), served via jsDelivr tagged releases.
    v1 (Oct 2026): create a managed-booking invoice from an inquiry or a WhatsApp number, owner sign-off by WhatsApp.
+   v2: WhatsApp buttons use wa.me (WhatsApp then offers to switch to WhatsApp Business); experiences whose boat has
+       no owner on file let you type the owner's name and number, or skip sign-off.
    Next releases add: customer send (Stripe link + /reserva page), Mark paid, pass deposit, settle at the dock. */
 (function () {
   'use strict';
@@ -125,9 +127,8 @@
   function toast(msg) { var t = h('div', { class: 'toast', text: msg }); document.body.appendChild(t); setTimeout(function () { t.remove(); }, 2200); }
   function copy(text) { (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(function () { toast('Copied'); }, function () { prompt('Copy this:', text); }); }
   function openWhatsApp(phone, text) {
-    // WhatsApp Business first (the Mexican number); wa.me as the fallback link.
-    var n = waNumber(phone), t = encodeURIComponent(text);
-    location.href = 'whatsapp-business://send?phone=' + n + '&text=' + t;
+    // wa.me universal link: iOS opens WhatsApp, which offers a one-tap switch to WhatsApp Business.
+    location.href = 'https://wa.me/' + waNumber(phone) + '?text=' + encodeURIComponent(text);
   }
 
   /* ---------- root ---------- */
@@ -202,6 +203,18 @@
     trip.appendChild(h('input', { id: 'vi-end', type: 'date' }));
     form.appendChild(trip);
 
+    // shown only when the experience's boat has no owner in Partner Admin
+    var own = h('div', { class: 'card', id: 'vi-owncard', style: 'display:none' });
+    own.appendChild(h('p', { class: 'warn', id: 'vi-ownwarn' }));
+    own.appendChild(h('div', { class: 'row' }, [
+      h('div', null, [h('label', { for: 'vi-oname', text: 'Owner name' }), h('input', { id: 'vi-oname' })]),
+      h('div', null, [h('label', { for: 'vi-ophone', text: 'Owner WhatsApp' }), h('input', { id: 'vi-ophone', type: 'tel' })])
+    ]));
+    own.appendChild(h('label', { for: 'vi-olang', text: 'Owner language' }));
+    var ol = h('select', { id: 'vi-olang' }); ['Español', 'English'].forEach(function (l) { ol.appendChild(h('option', { value: l, text: l })); });
+    own.appendChild(ol);
+    form.appendChild(own);
+
     // money
     var mon = h('div', { class: 'card' });
     mon.appendChild(h('label', { for: 'vi-price', text: 'Trip price (MXN, IVA included)' }));
@@ -259,6 +272,9 @@
     }
     if (userChanged || !$('#vi-mt').value) $('#vi-mt').value = f['Meeting time (private)'] || '';
     $('#vi-mphint').textContent = c.boat && !c.boat.fields['Meeting point (private)'] ? 'No meeting point saved for ' + c.boat.fields.Name + ' yet; what you type here is used for this trip only.' : '';
+    var noOwner = !c.gm && !c.owner;
+    $('#vi-owncard').style.display = noOwner ? '' : 'none';
+    if (noOwner) $('#vi-ownwarn').textContent = (c.boat ? c.boat.fields.Name : 'This experience') + ' has no owner on file in Partner Admin. Type their name and WhatsApp to send them the confirmation, or skip owner sign-off.';
     refresh();
   }
   function recalc(which) {
@@ -309,6 +325,7 @@
     if (state.busy) return;
     var c = state.ctx, err = $('#vi-err');
     err.innerHTML = '';
+    if (!c) { err.appendChild(h('p', { class: 'err', text: 'Choose the experience.' })); return; }
     var v = {
       name: $('#vi-name').value.trim(), phone: $('#vi-phone').value.trim(), email: $('#vi-email').value.trim(), lang: state.form.lang,
       date: $('#vi-date').value, end: $('#vi-end').value, guests: $('#vi-guests').value,
@@ -325,17 +342,23 @@
     if (!v.dep) missing.push('the deposit');
     if (missing.length) { err.appendChild(h('p', { class: 'err', text: 'Add ' + missing.join(', ') + '.' })); return; }
     if (v.dep > v.price) { err.appendChild(h('p', { class: 'err', text: 'The deposit is more than the trip price.' })); return; }
-    if (!c.gm && !c.owner) { err.appendChild(h('p', { class: 'err', text: 'This experience has no owner in Partner Admin, so there is no one to confirm it with. Link the boat to its owner first.' })); return; }
+    var owner = c.owner;
+    if (!c.gm && !owner) {
+      var on = $('#vi-oname').value.trim(), op = $('#vi-ophone').value.trim();
+      if (on && op) owner = { id: '', typed: true, fields: { 'Contact Name': on, 'Contact Number': op, Language: $('#vi-olang').value } };
+      else if (!skipOwner) { err.appendChild(h('p', { class: 'err', text: 'Add the owner\'s name and WhatsApp number, or tap Skip owner sign-off.' })); return; }
+    }
 
     state.busy = true;
     var btn = $('#vi-go'); btn.disabled = true; btn.textContent = 'Saving…';
     var f = c.f, lang = v.lang, es = lang !== 'English';
-    var owner = c.owner, oLang = owner && owner.fields.Language === 'English' ? 'English' : 'Español', oEs = oLang !== 'English';
+    var oLang = owner && owner.fields.Language === 'English' ? 'English' : 'Español', oEs = oLang !== 'English';
+    var ownerShort = owner ? shortName(owner.fields['Contact Name']) : '';
     var boatName = c.boat ? c.boat.fields.Name : '';
     var provider = c.gm ? '' : (c.placeholder
-      ? (es ? 'Embarcación ' + boatName + ', operada por su propietario ' + shortName(owner.fields['Contact Name']) : boatName + ', run by its owner ' + shortName(owner.fields['Contact Name']))
+      ? (es ? 'Embarcación ' + boatName + ', operada por su propietario' + (ownerShort ? ' ' + ownerShort : '') : boatName + ', run by its owner' + (ownerShort ? ' ' + ownerShort : ''))
       : (boatName ? (es ? boatName + ', operada por ' : boatName + ', run by ') : '') + (c.op ? c.op.fields.Name : ''));
-    var signoff = c.gm ? 'Not needed' : (skipOwner ? 'Skipped' : 'Required');
+    var signoff = c.gm ? 'Not needed' : (skipOwner || !owner ? 'Skipped' : 'Required');
 
     var chain = Promise.resolve();
     if (!state.customerId) chain = chain.then(function () {
@@ -356,7 +379,7 @@
         tripDate: v.date, endDate: v.end, guests: v.guests, price: v.price, deposit: v.dep, commission: c.gm ? '' : v.com, ownerPayout: '',
         meetingPoint: v.mp, meetingTime: v.mt, mapLink: v.map, provider: provider, note: v.note, internalNotes: v.internal,
         cancellation: cancellationText(c.o, lang), signoff: signoff,
-        partnerId: owner ? owner.id : '', ownerName: owner ? owner.fields['Contact Name'] : '', ownerPhone: owner ? owner.fields['Contact Number'] || '' : '', ownerLang: oLang,
+        partnerId: owner && !owner.typed ? owner.id : '', ownerName: owner ? owner.fields['Contact Name'] : '', ownerPhone: owner ? owner.fields['Contact Number'] || '' : '', ownerLang: oLang,
         oTrip: oEs ? (f['Name (ES)'] || f.Name) : f.Name, oDuration: oEs ? (f['Duration (ES)'] || f.Duration || '') : (f.Duration || ''),
         oIncluded: plain(oEs ? (f["What's included (ES)"] || f["What's included"]) : (f["What's included"] || f["What's included (ES)"])),
         oCancellation: cancellationText(c.o, oLang), oPaymentTerms: paymentTerms(oLang, v.dep, v.price - v.dep, v.com),
