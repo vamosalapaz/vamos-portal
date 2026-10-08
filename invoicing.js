@@ -3,12 +3,15 @@
    v1 (Oct 2026): create a managed-booking invoice from an inquiry or a WhatsApp number, owner sign-off by WhatsApp.
    v2: WhatsApp buttons use wa.me (WhatsApp then offers to switch to WhatsApp Business); experiences whose boat has
        no owner on file let you type the owner's name and number, or skip sign-off.
+   v3: meeting point required; Edit on the tracking screen (re-sends the owner a fresh confirmation);
+       owner sign-off status (sent / confirmed / change requested) recorded and shown; links to the owner's /confirmar page.
    Next releases add: customer send (Stripe link + /reserva page), Mark paid, pass deposit, settle at the dock. */
 (function () {
   'use strict';
 
   var HOOK_DATA = 'https://hook.us2.make.com/sj7umgqbg14kim902rg0ochd4ny6i72f';
   var HOOK_CREATE = 'https://hook.us2.make.com/4vs20d3adxqy8nnc1hftzito01rn933q';
+  var HOOK_ACTIONS = 'https://hook.us2.make.com/f4uho6gwh1mu94gu4b4y5kbb86if4prm';
   var SITE = 'https://vamosalapaz.com';
   var PINK = '#D4537E';
 
@@ -156,12 +159,22 @@
   }
 
   /* ---------- create form ---------- */
-  function renderForm() {
-    var d = state.data, inq = state.inquiry, f = inq ? inq.fields : {};
-    state.customerId = inq && f.Customer ? ids(f.Customer)[0] : '';
+  function renderForm(edit) {
+    var d = state.data, inq = edit ? null : state.inquiry, f;
+    state.edit = edit || null;
+    state.busy = false;
+    if (edit) {
+      var e = edit.inv.fields;
+      f = { Name: e['Billed to'], Phone: e.Phone, Email: e.Email, Language: e.Language, 'Offering record ID': e['Offering record ID'],
+            'Requested date': e['Trip date'], Guests: e.Guests };
+      state.customerId = e.Customer ? ids(e.Customer)[0] : '';
+    } else {
+      f = inq ? inq.fields : {};
+      state.customerId = inq && f.Customer ? ids(f.Customer)[0] : '';
+    }
     root.innerHTML = '';
-    root.appendChild(h('h1', { text: 'New invoice' }));
-    root.appendChild(h('p', { class: 'sub', text: inq ? 'From website inquiry' + (f['Received at'] ? ', ' + new Date(f['Received at']).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) : '') : 'Started from WhatsApp or by hand' }));
+    root.appendChild(h('h1', { text: edit ? 'Edit ' + (edit.inv.fields['Invoice number'] || 'invoice') : 'New invoice' }));
+    root.appendChild(h('p', { class: 'sub', text: edit ? (edit.conf && edit.conf.fields.Status === 'Agreed' ? 'The owner already confirmed; saving sends them a fresh confirmation.' : 'Change anything, then save.') : inq ? 'From website inquiry' + (f['Received at'] ? ', ' + new Date(f['Received at']).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) : '') : 'Started from WhatsApp or by hand' }));
 
     var lang = f.Language || 'Español';
     var form = h('div');
@@ -247,9 +260,24 @@
     form.appendChild(h('div', { id: 'vi-err' }));
     form.appendChild(h('button', { class: 'btn pri', id: 'vi-go', type: 'button', onclick: function () { submit(false); } }, ['Create']));
     form.appendChild(h('button', { class: 'link', id: 'vi-skip', type: 'button', onclick: function () { submit(true); } }, ['Skip owner sign-off']));
+    if (edit) form.appendChild(h('button', { class: 'link', type: 'button', onclick: function () { renderInvoice(edit.inv); } }, ['Cancel']));
     root.appendChild(form);
 
-    if (!inq && $('#vi-phone').value) lookupPhone();
+    if (edit) {
+      var e2 = edit.inv.fields, cf = edit.conf ? edit.conf.fields : {};
+      $('#vi-end').value = e2['End date'] || '';
+      $('#vi-price').value = e2['Trip price'] || '';
+      $('#vi-dep').value = e2.Deposit || '';
+      $('#vi-com').value = e2.Commission || '';
+      $('#vi-mp').value = e2['Meeting point'] || '';
+      $('#vi-mt').value = e2['Meeting time'] || '';
+      $('#vi-map').value = e2['Meeting map link'] || '';
+      $('#vi-note').value = e2['Note to customer'] || '';
+      $('#vi-int').value = e2['Internal notes'] || '';
+      $('#vi-onote').value = cf['Note to owner'] || '';
+      if (!cf['Partner Admin record ID'] && cf['Owner name']) { $('#vi-oname').value = cf['Owner name']; $('#vi-ophone').value = cf['Owner phone'] || ''; }
+    }
+    if (!inq && !edit && $('#vi-phone').value) lookupPhone();
     applyOffering(false);
   }
   function ctxSafe(id) { try { return ctx(id); } catch (e) { return null; } }
@@ -299,12 +327,14 @@
         : 'Deposit ' + pct + '% goes to ' + (c && c.owner ? first(c.owner.fields['Contact Name']) : 'the owner') + ' · owner collects ' + money(price - dep) + ' at the dock' + (com ? ' · owes you ' + money(com) : '');
     }
     $('#vi-split').textContent = split;
-    $('#vi-go').textContent = !c ? 'Create' : gm ? 'Create invoice' : 'Create · send to owner first';
+    var ed = !!state.edit;
+    $('#vi-go').textContent = !c ? (ed ? 'Save' : 'Create') : gm ? (ed ? 'Save' : 'Create invoice') : (ed ? 'Save · send to owner again' : 'Create · send to owner first');
+    $('#vi-skip').textContent = ed ? 'Save without owner sign-off' : 'Skip owner sign-off';
   }
 
   function lookupPhone() {
     var ph = $('#vi-phone').value;
-    if (digits(ph).length < 8 || state.inquiry) return;
+    if (digits(ph).length < 8 || state.inquiry || state.edit) return;
     post(HOOK_DATA, { k: KEY, action: 'lookup', phone: ph }).then(function (r) {
       var c = r.customers && r.customers[0], box = $('#vi-known');
       box.innerHTML = '';
@@ -340,6 +370,7 @@
     if (!v.date) missing.push('the date');
     if (!v.price) missing.push('the trip price');
     if (!v.dep) missing.push('the deposit');
+    if (!v.mp) missing.push('the meeting point');
     if (missing.length) { err.appendChild(h('p', { class: 'err', text: 'Add ' + missing.join(', ') + '.' })); return; }
     if (v.dep > v.price) { err.appendChild(h('p', { class: 'err', text: 'The deposit is more than the trip price.' })); return; }
     var owner = c.owner;
@@ -361,7 +392,7 @@
     var signoff = c.gm ? 'Not needed' : (skipOwner || !owner ? 'Skipped' : 'Required');
 
     var chain = Promise.resolve();
-    if (!state.customerId) chain = chain.then(function () {
+    if (!state.customerId && !state.edit) chain = chain.then(function () {
       return post(HOOK_CREATE, { k: KEY, action: 'customer', name: v.name, phone: v.phone, email: v.email, lang: lang }).then(function (r) { state.customerId = r.id; });
     });
     var mirrorId = c.mirror ? c.mirror.id : '';
@@ -369,9 +400,12 @@
       return post(HOOK_CREATE, { k: KEY, action: 'mirror', name: c.placeholder ? owner.fields['Contact Name'] : c.op.fields.Name, opsId: c.opsId,
         businessLine: c.gm ? 'Good Medicine direct' : 'Vamos marketplace', arrangement: owner ? owner.fields.Arrangement || '' : '', commission: c.comPct }).then(function (r) { mirrorId = r.id; });
     });
+    var ed = state.edit;
+    var oldConf = ed && ed.conf ? ed.conf.id : '';
     chain.then(function () {
-      return post(HOOK_CREATE, {
-        k: KEY, action: 'create', customerId: state.customerId, inquiryId: state.inquiry ? state.inquiry.id : '', mirrorId: mirrorId,
+      return post(ed ? HOOK_ACTIONS : HOOK_CREATE, {
+        k: KEY, action: ed ? 'edit' : 'create', id: ed ? ed.inv.id : '', number: ed ? ed.inv.fields['Invoice number'] : '', oldConfId: oldConf,
+        customerId: state.customerId, inquiryId: state.inquiry ? state.inquiry.id : '', mirrorId: mirrorId,
         offeringId: c.o.id, source: state.inquiry ? 'Website inquiry' : 'WhatsApp', lang: lang,
         billedTo: v.name, phone: v.phone, email: v.email,
         trip: es ? (f['Name (ES)'] || f.Name) : f.Name, duration: es ? (f['Duration (ES)'] || f.Duration || '') : (f.Duration || ''),
@@ -386,9 +420,11 @@
         ownerBalance: v.price - v.dep, boat: boatName, leadGuest: first(v.name), noteToOwner: v.onote
       });
     }).then(function (r) {
-      history.replaceState(null, '', location.pathname + '?k=' + encodeURIComponent(KEY) + '&invoice=' + r.id);
-      root.innerHTML = ''; root.appendChild(h('p', { class: 'sub', text: 'Created ' + r.number + '. Loading…' }));
-      return load('', r.id);
+      var id = ed ? ed.inv.id : r.id;
+      history.replaceState(null, '', location.pathname + '?k=' + encodeURIComponent(KEY) + '&invoice=' + id);
+      root.innerHTML = ''; root.appendChild(h('p', { class: 'sub', text: (ed ? 'Saved. ' : 'Created ' + r.number + '. ') + 'Loading…' }));
+      state.edit = null;
+      return load('', id);
     }).catch(function (e) {
       state.busy = false; btn.disabled = false; refresh();
       err.appendChild(h('p', { class: 'err', text: e.message }));
@@ -413,12 +449,19 @@
       var msg = oEs
         ? 'Hola ' + first(cf['Owner name']) + ', tengo una reservación para ' + (cf.Trip || '') + ' el ' + fmtDate(cf['Trip date'], 'Español') + ' (' + (cf.Guests || '') + ' personas). Revisa los detalles y confírmala aquí: ' + link
         : 'Hi ' + first(cf['Owner name']) + ', I have a booking for ' + (cf.Trip || '') + ' on ' + fmtDate(cf['Trip date'], 'English') + ' (' + (cf.Guests || '') + ' guests). Please review the details and confirm here: ' + link;
-      steps.appendChild(step(agreed ? 'done' : 'now', agreed ? first(cf['Owner name']) + ' confirmed' : 'Waiting for ' + first(cf['Owner name']) + ' to confirm',
-        agreed ? 'Signed by ' + (cf['Signed by'] || '') : (cf.Status === 'Changes requested' ? 'Asked for a change: ' + (cf['Change request'] || '') : 'Owner gets ' + money(f.Deposit) + ' deposit, collects ' + money((f['Trip price'] || 0) - (f.Deposit || 0)) + ', owes you ' + money(f.Commission)),
-        agreed ? null : [
-          h('button', { class: 'btn sec', type: 'button', onclick: function () { openWhatsApp(cf['Owner phone'], msg); } }, ['WhatsApp owner']),
-          h('button', { class: 'btn sec', type: 'button', onclick: function () { copy(msg); } }, ['Copy message'])
-        ]));
+      var who = first(cf['Owner name']) || 'the owner';
+      var terms = 'Owner gets ' + money(f.Deposit) + ' deposit, collects ' + money((f['Trip price'] || 0) - (f.Deposit || 0)) + ', owes you ' + money(f.Commission);
+      var title, small, cls = 'now';
+      if (agreed) { cls = 'done'; title = who + ' confirmed'; small = 'Signed by ' + (cf['Signed by'] || '') + (cf['Responded at'] ? ', ' + new Date(cf['Responded at']).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) : ''); }
+      else if (cf.Status === 'Changes requested') { title = who + ' asked for a change'; small = '“' + (cf['Change request'] || '') + '” Tap Edit to fix it; saving sends a fresh confirmation.'; }
+      else if (cf.Status === 'Sent') { title = 'Waiting for ' + who + ' to confirm'; small = 'Sent ' + (cf['Sent at'] ? new Date(cf['Sent at']).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) : '') + '. ' + terms; }
+      else { title = 'Send to ' + who + ' for sign-off'; small = terms; }
+      var sendBtns = [
+        h('button', { class: 'btn sec', type: 'button', onclick: function () { ownerSent(conf, 'WhatsApp'); openWhatsApp(cf['Owner phone'], msg); } }, [cf.Status === 'Sent' ? 'WhatsApp again' : 'WhatsApp owner']),
+        h('button', { class: 'btn sec', type: 'button', onclick: function () { ownerSent(conf, 'Copied'); copy(msg); } }, ['Copy message']),
+        link ? h('a', { class: 'btn sec', href: link, target: '_blank', rel: 'noopener' }, ['Preview']) : null
+      ];
+      steps.appendChild(step(cls, title, small, agreed || cf.Status === 'Changes requested' ? (agreed ? null : [h('button', { class: 'btn sec', type: 'button', onclick: function () { renderForm({ inv: inv, conf: conf }); } }, ['Edit'])]) : sendBtns));
     } else if (so === 'Skipped') {
       steps.appendChild(step('done', 'Owner sign-off skipped', 'You chose to send without the owner confirming.'));
     }
@@ -437,7 +480,19 @@
      ['Meeting', [f['Meeting point'], f['Meeting time']].filter(Boolean).join(', ') || 'not set'], ['Language', f.Language || ''], ['Status', f.Status || '']]
       .filter(Boolean).forEach(function (kv) { sum.appendChild(h('div', { class: 'kv' }, [h('span', { text: kv[0] }), h('span', { text: kv[1] })])); });
     root.appendChild(sum);
+    root.appendChild(h('button', { class: 'btn sec', type: 'button', onclick: function () { renderForm({ inv: inv, conf: conf }); } }, ['Edit']));
+    root.appendChild(h('button', { class: 'btn sec', type: 'button', onclick: function () { root.innerHTML = ''; root.appendChild(h('p', { class: 'sub', text: 'Refreshing…' })); load('', inv.id).catch(showFatal); } }, ['Refresh']));
     root.appendChild(h('a', { class: 'btn sec', href: location.pathname + '?k=' + encodeURIComponent(KEY) }, ['New invoice']));
+  }
+  // Records that the owner message went out (fire-and-forget; survives the jump to WhatsApp).
+  function ownerSent(conf, via) {
+    if (!conf) return;
+    var cf = conf.fields, list = (cf['Sent via'] || []).slice();
+    if (list.indexOf(via) < 0) list.push(via);
+    var body = new URLSearchParams({ k: KEY, action: 'ownerSent', confId: conf.id,
+      status: cf.Status === 'Draft' || !cf.Status ? 'Sent' : cf.Status, sentAt: cf['Sent at'] || new Date().toISOString(), via: list.join(',') });
+    cf.Status = cf.Status === 'Draft' || !cf.Status ? 'Sent' : cf.Status; cf['Sent via'] = list; cf['Sent at'] = cf['Sent at'] || new Date().toISOString();
+    if (navigator.sendBeacon) navigator.sendBeacon(HOOK_ACTIONS, body); else fetch(HOOK_ACTIONS, { method: 'POST', body: body, keepalive: true });
   }
   function step(cls, title, small, buttons) {
     return h('div', { class: 'step' }, [h('div', { class: 'dot ' + (cls || '') }), h('div', { style: 'flex:1' }, [
