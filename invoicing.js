@@ -13,7 +13,8 @@
        and an amount, standalone or attached to a booking as an extra); phone hint for non-Mexican numbers.
    v8 (release v28): the send step is only green when a message was actually sent from this screen; customer fields
        support iPhone AutoFill Contact (and a Choose from contacts button where the browser has a contact picker).
-   v9 (release v29): the phone field says how the number will be read; a 10-digit number gets a one-tap +1 (US/Canada) switch. */
+   v9 (release v29): the phone field says how the number will be read; a 10-digit number gets a one-tap +1 (US/Canada) switch.
+   v10 (release v30): meeting time uses the phone's time picker (15-minute steps), saved as "8:30 am". */
 (function () {
   'use strict';
 
@@ -64,6 +65,20 @@
   function byId(list) { var m = {}; (list || []).forEach(function (r) { m[r.id] = r; }); return m; }
   function lowPrice(range) { var m = String(range || '').replace(/,/g, '').match(/\d+(\.\d+)?/); return m ? Number(m[0]) : 0; }
   function plain(md) { return String(md || '').replace(/\*\*|__|\*|_|#+\s?/g, '').replace(/\n{3,}/g, '\n\n').trim(); }
+  // Meeting time: the form uses a native time picker (HH:MM); the booking stores friendly text ("8:30 am").
+  function toTimeInput(text) {
+    var m = String(text || '').toLowerCase().match(/(\d{1,2})(?::(\d{2}))?\s*(a\.?\s?m|p\.?\s?m)?/);
+    if (!m) return '';
+    var hh = Number(m[1]), mm = m[2] || '00', ap = m[3] ? m[3].charAt(0) : '';
+    if (ap === 'p' && hh < 12) hh += 12; if (ap === 'a' && hh === 12) hh = 0;
+    return hh > 23 ? '' : (hh < 10 ? '0' : '') + hh + ':' + mm;
+  }
+  function fromTimeInput(v) {
+    var m = String(v || '').match(/^(\d{2}):(\d{2})/);
+    if (!m) return '';
+    var hh = Number(m[1]), ap = hh >= 12 ? 'pm' : 'am', h12 = hh % 12 || 12;
+    return h12 + ':' + m[2] + ' ' + ap;
+  }
   function fmtDate(iso, lang) {
     if (!iso) return '';
     var d = new Date(iso + 'T12:00:00');
@@ -114,7 +129,7 @@
       '.vi-top{display:flex;align-items:center;justify-content:space-between;padding:14px 0 10px}.vi-top img{height:38px;width:auto;display:block}.vi-top span{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:' + C.gulf + '}',
       '.vi-stripe{display:flex;height:5px;border-radius:3px;overflow:hidden;margin:0 0 18px}.vi-stripe i{flex:1}',
       '.vi .card{border-left:4px solid ' + C.aqua + '}',
-      '.vi input[type=date]{-webkit-appearance:none;appearance:none;min-width:0;display:block;min-height:44px;line-height:1.2}',
+      '.vi input[type=date],.vi input[type=time]{-webkit-appearance:none;appearance:none;min-width:0;display:block;min-height:44px;line-height:1.2}',
       '.vi h1{font-size:24px;margin:0 0 4px;font-weight:600}',
       '.vi .sub{color:#5a6670;font-size:14px;margin:0 0 18px}',
       '.vi .card{background:#fff;border:1px solid #e4e1dc;border-radius:14px;padding:14px;margin:0 0 12px}',
@@ -279,7 +294,7 @@
     var meet = h('div', { class: 'card' });
     meet.appendChild(h('div', { class: 'row' }, [
       h('div', { style: 'flex:2' }, [h('label', { for: 'vi-mp', text: 'Meeting point' }), h('input', { id: 'vi-mp' })]),
-      h('div', null, [h('label', { for: 'vi-mt', text: 'Time' }), h('input', { id: 'vi-mt', placeholder: '8:30 am' })])
+      h('div', null, [h('label', { for: 'vi-mt', text: 'Time' }), h('input', { id: 'vi-mt', type: 'time', step: '900' })])
     ]));
     meet.appendChild(h('label', { for: 'vi-map', text: 'Map link (optional)' }));
     meet.appendChild(h('input', { id: 'vi-map', type: 'url' }));
@@ -305,7 +320,7 @@
       $('#vi-dep').value = e2.Deposit || '';
       $('#vi-com').value = e2.Commission || '';
       $('#vi-mp').value = e2['Meeting point'] || '';
-      $('#vi-mt').value = e2['Meeting time'] || '';
+      $('#vi-mt').value = toTimeInput(e2['Meeting time']);
       $('#vi-map').value = e2['Meeting map link'] || '';
       $('#vi-note').value = e2['Note to customer'] || '';
       $('#vi-int').value = e2['Internal notes'] || '';
@@ -425,7 +440,7 @@
       $('#vi-mp').value = c.boat.fields['Meeting point (private)'] || '';
       $('#vi-map').value = c.boat.fields['Meeting map link (private)'] || '';
     }
-    if (userChanged || !$('#vi-mt').value) $('#vi-mt').value = f['Meeting time (private)'] || '';
+    if (userChanged || !$('#vi-mt').value) $('#vi-mt').value = toTimeInput(f['Meeting time (private)']);
     $('#vi-mphint').textContent = c.boat && !c.boat.fields['Meeting point (private)'] ? 'No meeting point saved for ' + c.boat.fields.Name + ' yet; what you type here is used for this trip only.' : '';
     var noOwner = !c.gm && !c.owner;
     $('#vi-owncard').style.display = noOwner ? '' : 'none';
@@ -571,7 +586,7 @@
       name: $('#vi-name').value.trim(), phone: $('#vi-phone').value.trim(), email: $('#vi-email').value.trim(), lang: state.form.lang,
       date: $('#vi-date').value, end: $('#vi-end').value, guests: $('#vi-guests').value,
       price: Number($('#vi-price').value) || 0, dep: Number($('#vi-dep').value) || 0, com: Number($('#vi-com').value) || 0,
-      mp: $('#vi-mp').value.trim(), mt: $('#vi-mt').value.trim(), map: $('#vi-map').value.trim(),
+      mp: $('#vi-mp').value.trim(), mt: fromTimeInput($('#vi-mt').value), map: $('#vi-map').value.trim(),
       note: $('#vi-note').value.trim(), onote: $('#vi-onote').value.trim(), internal: $('#vi-int').value.trim()
     };
     var missing = [];
