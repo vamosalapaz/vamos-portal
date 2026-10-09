@@ -166,11 +166,12 @@
       '.vi .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.vi .btns .btn{width:auto;padding:9px 14px;margin:0;font-size:15px}',
       '.vi .kv{display:flex;justify-content:space-between;gap:12px;padding:3px 0;font-size:15px}.vi .kv span:first-child{color:#5a6670}',
       '.vi-top a.vi-home{font-size:14px;color:' + C.gulf + ';text-decoration:none;font-weight:600}',
-      '.vi .seg.tight button{font-size:14px;padding:9px 4px;white-space:nowrap}.vi .dash-tabs{margin:0 0 6px}.vi .dash-tabs button{font-weight:600}',
+      '.vi .seg.tight button{font-size:14px;padding:9px 4px;white-space:nowrap}.vi .dash-tabs{margin:0 0 6px}.vi .dash-tabs button{font-weight:600;font-size:14px;padding:9px 2px;white-space:nowrap}',
       '.vi .dash-meta{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#7a858c;margin:0 0 12px}',
       '.vi .dash-h{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:' + C.gulf + ';margin:18px 0 8px;font-weight:700}',
       '.vi input[type=search]{margin:0 0 4px}',
       '.vi a.brow{display:block;text-decoration:none;color:inherit;margin:0 0 8px}',
+      '.vi .doc .brow-top b{color:#061A2E;font-size:16px;font-weight:600}.vi .doc .btns{margin-top:10px}.vi .doc-seg button{font-size:13px;padding:9px 4px}.vi .doc-p{padding:8px 0;border-bottom:1px solid #eee9e2}.vi .doc-p:last-child{border-bottom:0}',
       '.vi .brow-top{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px;color:#5a6670;margin:0 0 2px}',
       '.vi .brow-need{font-size:14px;color:#5a6670;margin-top:4px}.vi .brow-need.act{color:' + PINK + ';font-weight:600}',
       '.vi .pill{font-size:12px;border-radius:99px;padding:2px 9px;white-space:nowrap;font-weight:600}',
@@ -1074,8 +1075,9 @@
   var TABS = [
     { id: 'bookings', label: 'Bookings', render: dashBookings },
     { id: 'calendar', label: 'Calendar', render: dashCalendar },
-    { id: 'numbers', label: 'Numbers', render: dashNumbers }
-    // Later: { id: 'documents', label: 'Documents', render: … }, { id: 'partners', label: 'Partners', render: … }
+    { id: 'numbers', label: 'Numbers', render: dashNumbers },
+    { id: 'documents', label: 'Documents', render: dashDocuments }
+    // Later: { id: 'partners', label: 'Partners', render: … }
   ];
 
   function homeUrl(extra) { return location.pathname + '?k=' + encodeURIComponent(KEY) + (extra || ''); }
@@ -1133,8 +1135,8 @@
     });
     root.appendChild(tabs);
     var meta = h('div', { class: 'dash-meta' }, [
-      h('span', { text: stale || dash.loading ? 'Updating…' : 'Updated ' + new Date(dash.d.at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) }),
-      h('button', { type: 'button', class: 'link', style: 'margin:0', text: 'Refresh', onclick: function () { dash.loading = true; drawHome(); fetchDash(); } })
+      h('span', { text: dash.tab === 'documents' ? (docs.loading ? 'Updating…' : docs.at ? 'Updated ' + new Date(docs.at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '') : stale || dash.loading ? 'Updating…' : 'Updated ' + new Date(dash.d.at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) }),
+      h('button', { type: 'button', class: 'link', style: 'margin:0', text: 'Refresh', onclick: function () { if (dash.tab === 'documents') { fetchDocs(); return; } dash.loading = true; drawHome(); fetchDash(); } })
     ]);
     root.appendChild(meta);
     var tab = TABS.filter(function (t) { return t.id === dash.tab; })[0] || TABS[0];
@@ -1301,6 +1303,133 @@
       el.appendChild(card);
     });
     el.appendChild(h('p', { class: 'hint', text: 'From the Vamos trips Google calendar, next 4 months. Tap a trip for contacts.' }));
+  }
+
+  /* --- documents: owner booking confirmations and partner agreements (own Make call, only when this tab opens) --- */
+  var HOOK_DOCS = 'https://hook.us2.make.com/3bb4bimbe45j5po3a9seteitffonmch5';
+  var DOCS_CACHE = 'vi-docs-v1';
+  var CONF_TERMS = 'conf-2026-10-09';     // keep in step with TERMS in confirm.js
+  var AGREEMENT_VERSION = '2026-10-08';   // keep in step with AGV in my-listings.js
+  var docs = { d: null, at: 0, loading: false, err: '', filter: '', q: '' };
+  function docsCacheGet() { try { var c = JSON.parse(sessionStorage.getItem(DOCS_CACHE) || 'null'); return c && Date.now() - c.at < 30 * 60000 ? c : null; } catch (e) { return null; } }
+  function fetchDocs() {
+    if (docs.loading) return;
+    docs.loading = true; docs.err = '';
+    if (dash.tab === 'documents') drawHome();
+    post(HOOK_DOCS, { k: KEY, action: 'docs' }).then(function (raw) {
+      docs.d = raw; docs.at = Date.now(); docs.loading = false;
+      try { sessionStorage.setItem(DOCS_CACHE, JSON.stringify({ at: docs.at, raw: raw })); } catch (e) {}
+      if (dash.tab === 'documents') drawHome();
+    }, function (e) {
+      docs.loading = false; docs.err = e.message || 'Could not load documents.';
+      if (dash.tab === 'documents') { drawHome(); if (docs.d) toast('Could not refresh. Showing the last copy.'); }
+    });
+  }
+  function confGroup(st) {
+    if (st === 'Agreed') return 'signed';
+    if (st === 'Changes requested') return 'change';
+    if (st === 'Superseded' || st === 'Cancelled') return 'old';
+    return 'waiting';
+  }
+  var CONF_PILL = { waiting: ['Waiting', '#fdf3e2|#7a4b00'], signed: ['Signed', '#e3f1df|#2c6a1f'], change: ['Change asked', '#fde8ec|#8a1c33'], old: ['', '#e9e6e1|#4a5560'] };
+  function confCard(r) {
+    var f = r.fields, g = confGroup(f.Status), cp = CONF_PILL[g], c = cp[1].split('|');
+    var vlp = String(f.Confirmation || '').split(' · ')[0];
+    var invId = (f.Invoice || [])[0];
+    var link = f['Page token'] ? SITE + '/confirmar?k=' + f['Page token'] : '';
+    var sub = [vlp, f['Trip date'] ? dayLabel(f['Trip date']) : '', f.Trip].filter(Boolean).join(' · ');
+    var note;
+    if (g === 'signed') note = 'Signed by ' + (f['Signed by'] || '—') + (f['Responded at'] ? ', ' + when(f['Responded at']) : '') + ' · terms ' + (f['Terms version'] || '—') + (f['Terms version'] && f['Terms version'] !== CONF_TERMS ? ' (older)' : '');
+    else if (g === 'change') note = '“' + (f['Change request'] || '') + '”' + (f['Responded at'] ? ' · ' + when(f['Responded at']) : '');
+    else if (g === 'waiting') note = f['Sent at'] ? 'Sent ' + when(f['Sent at']) + ((f['Sent via'] || []).length ? ' by ' + f['Sent via'].join(', ') : '') : 'Not sent yet';
+    else note = (f.Status || '') + (f['Signed by'] ? ' · had been signed by ' + f['Signed by'] : '');
+    var btns = [];
+    if (g === 'waiting' && f['Sent at'] && f['Owner phone'] && link) {
+      var es = f.Language !== 'English';
+      var msg = es
+        ? 'Hola ' + first(f['Owner name']) + ', te recuerdo la reservación de ' + (f.Trip || '') + ' el ' + fmtDate(f['Trip date'], 'Español') + (f.Guests ? ' (' + f.Guests + ' personas)' : '') + '. ¿Me la confirmas aquí? ' + link
+        : 'Hi ' + first(f['Owner name']) + ', a reminder about the booking for ' + (f.Trip || '') + ' on ' + fmtDate(f['Trip date'], 'English') + (f.Guests ? ' (' + f.Guests + ' guests)' : '') + '. Could you confirm it here? ' + link;
+      btns.push(h('button', { class: 'btn sec', type: 'button', onclick: function () { openWhatsApp(f['Owner phone'], msg); } }, ['Remind']));
+    }
+    if ((g === 'signed' || g === 'old') && link && f['Signed by']) btns.push(h('a', { class: 'btn sec', href: link, target: '_blank', rel: 'noopener' }, ['View signed copy']));
+    if (invId) btns.push(h('a', { class: 'btn sec', href: invUrl(invId) }, ['Open booking']));
+    return h('div', { class: 'card doc' }, [
+      h('div', { class: 'brow-top' }, [h('b', { text: [first(f['Owner name']) || 'Owner', f.Boat].filter(Boolean).join(' · ') }),
+        h('span', { class: 'pill', style: 'background:' + c[0] + ';color:' + c[1], text: cp[0] || f.Status || '—' })]),
+      h('div', { class: 'hint', style: 'margin:2px 0 0', text: sub }),
+      h('div', { class: 'hint', style: 'margin:2px 0 0', text: note }),
+      btns.length ? h('div', { class: 'btns' }, btns) : null
+    ]);
+  }
+  function partnerRows(el, partners) {
+    var rows = partners.filter(function (r) { return r.fields['Contact Name'] || r.fields.Operator; }).map(function (r) {
+      var f = r.fields, v = f['Agreement version'] || '', cur = v === AGREEMENT_VERSION;
+      return { f: f, rank: cur ? 2 : v ? 0 : 1, name: f.Operator || f['Contact Name'] || '', cur: cur, v: v };
+    });
+    rows.sort(function (a, b) { return a.rank - b.rank || (a.name < b.name ? -1 : 1); });
+    el.appendChild(h('h3', { class: 'dash-h', style: 'margin-top:22px', text: 'Partner agreements' }));
+    el.appendChild(h('p', { class: 'hint', style: 'margin:0 0 8px', text: 'Current version ' + AGREEMENT_VERSION + '. Partners accept it the next time they open their portal.' }));
+    if (!rows.length) { el.appendChild(h('p', { class: 'hint', text: 'No partners yet.' })); return; }
+    var box = h('div', { class: 'card' });
+    rows.forEach(function (x) {
+      var f = x.f, accepted = String(f['Agreement accepted at'] || '').split(' ')[0];
+      var status = x.cur ? 'Accepted ' + accepted : x.v ? 'Older version (' + x.v + ')' : f['Invite sent at'] ? 'Not accepted yet' : 'Not invited yet';
+      var who = [f['Contact Name'] && f['Contact Name'] !== x.name ? f['Contact Name'] : '', f.Arrangement, x.cur && f['Agreement signed by'] ? 'signed by ' + f['Agreement signed by'] : ''].filter(Boolean).join(' · ');
+      var wa = null;
+      if (!x.cur && f['Contact Number'] && (x.v || f['Invite sent at'])) {
+        var es = f.Language !== 'English';
+        var msg = es ? 'Hola ' + first(f['Contact Name']) + ', actualizamos el acuerdo de socios de Vamos a La Paz. La próxima vez que entres a tu portal te pedirá revisarlo y aceptarlo. ¡Gracias!'
+                     : 'Hi ' + first(f['Contact Name']) + ', we updated the Vamos a La Paz partner agreement. Next time you open your partner portal it will ask you to review and accept it. Thanks!';
+        wa = h('button', { type: 'button', class: 'link', style: 'margin:4px 0 0', text: 'WhatsApp ' + (first(f['Contact Name']) || 'partner'), onclick: function () { openWhatsApp(f['Contact Number'], msg); } });
+      }
+      box.appendChild(h('div', { class: 'doc-p' }, [
+        h('div', { class: 'kv', style: 'margin:0' }, [h('span', { style: 'color:inherit', text: x.name }), h('span', { style: 'color:' + (x.cur ? '#2c6a1f' : '#7a4b00'), text: status })]),
+        who ? h('div', { class: 'hint', style: 'margin:0', text: who }) : null, wa
+      ]));
+    });
+    el.appendChild(box);
+  }
+  function dashDocuments(el) {
+    if (!docs.d && !docs.loading && !docs.err) {
+      var c = docsCacheGet();
+      if (c) { docs.d = c.raw; docs.at = c.at; } else { fetchDocs(); }
+    }
+    if (!docs.d) {
+      el.appendChild(h('p', { class: docs.err ? 'warn' : 'sub', text: docs.err || 'Loading documents…' }));
+      if (docs.err) el.appendChild(h('button', { class: 'btn sec', type: 'button', onclick: function () { fetchDocs(); } }, ['Try again']));
+      return;
+    }
+    var confs = flat([docs.d.confirmations]), partners = flat([docs.d.partners]);
+    var groups = { waiting: [], signed: [], change: [], old: [] };
+    confs.forEach(function (r) { groups[confGroup(r.fields.Status)].push(r); });
+    if (!docs.filter) docs.filter = groups.change.length ? 'change' : groups.waiting.length ? 'waiting' : 'signed';
+    var list = h('div');
+    var search = h('input', { type: 'search', placeholder: 'Owner, boat, VLP number', value: docs.q, 'aria-label': 'Search confirmations', oninput: function () { docs.q = search.value; drawList(); } });
+    el.appendChild(h('h3', { class: 'dash-h', text: 'Booking confirmations' }));
+    el.appendChild(search);
+    el.appendChild(list);
+    function drawList() {
+      list.innerHTML = '';
+      var q = docs.q.trim().toLowerCase();
+      if (q) {
+        var hits = confs.filter(function (r) { var f = r.fields; return [f.Confirmation, f['Owner name'], f.Boat, f.Trip, f['Signed by']].join(' ').toLowerCase().indexOf(q) >= 0; });
+        list.appendChild(h('p', { class: 'hint', text: hits.length + (hits.length === 1 ? ' match' : ' matches') }));
+        hits.forEach(function (r) { list.appendChild(confCard(r)); });
+        return;
+      }
+      var seg = h('div', { class: 'seg doc-seg', style: 'margin:10px 0' });
+      [['waiting', 'Waiting'], ['signed', 'Signed'], ['change', 'Changes'], ['old', 'Old']].forEach(function (g) {
+        seg.appendChild(h('button', { type: 'button', class: docs.filter === g[0] ? 'on' : '', text: g[1] + ' ' + groups[g[0]].length, onclick: function () { docs.filter = g[0]; drawList(); } }));
+      });
+      list.appendChild(seg);
+      var rows = groups[docs.filter];
+      if (!rows.length) list.appendChild(h('p', { class: 'hint', text: { waiting: 'Nothing waiting on an owner.', signed: 'No signed confirmations yet.', change: 'No owner has asked for a change.', old: 'No superseded or cancelled confirmations.' }[docs.filter] }));
+      rows.forEach(function (r) { list.appendChild(confCard(r)); });
+      if (docs.d.more) list.appendChild(h('p', { class: 'hint', text: 'Showing the latest 100 confirmations. Older ones are in Airtable.' }));
+    }
+    drawList();
+    if (String(docs.d.perr || '200') !== '200') el.appendChild(h('p', { class: 'warn', text: 'Partner agreements could not be loaded this time. Tap Refresh.' }));
+    else partnerRows(el, partners);
   }
 
   /* --- numbers --- */
