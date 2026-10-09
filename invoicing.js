@@ -19,7 +19,9 @@
        Calendar (Vamos trips Google calendar, tap for contacts) and Numbers (this month / 3 / 6 / 12 months, chart).
        New booking: ?new=1, new quick payment: ?new=quick. The header links back to All bookings.
    v12 (release v32): Reschedule (new date/time, why; payments carry over; calendar, customer page and owner confirmation
-       follow; one-tap WhatsApp to customer and owner). The calendar tab hides events of cancelled or deleted bookings. */
+       follow; one-tap WhatsApp to customer and owner). The calendar tab hides events of cancelled or deleted bookings.
+   v13 (release v33): Numbers has So far / Ahead. Ahead = booked trips from today: expected revenue (Good Medicine net +
+       Vamos commissions), Good Medicine balances still to collect, commissions expected, by month; plus what is not counted yet. */
 (function () {
   'use strict';
 
@@ -1064,7 +1066,7 @@
   var HOOK_DASH = 'https://hook.us2.make.com/urr4hijh6rfamxs0ylh29ctb1w8fs8cr';
   var TZ = 'America/Mazatlan';
   var DASH_CACHE = 'vi-dash-v1';
-  var dash = { d: null, tab: 'bookings', list: 'upcoming', q: '', range: 3, line: 'all', open: '' };
+  var dash = { d: null, tab: 'bookings', list: 'upcoming', q: '', range: 3, line: 'all', open: '', view: 'past', ahead: 3 };
   var TABS = [
     { id: 'bookings', label: 'Bookings', render: dashBookings },
     { id: 'calendar', label: 'Calendar', render: dashCalendar },
@@ -1306,15 +1308,22 @@
   function revenueOf(f) { return f['Business line'] === 'Vamos marketplace' ? n(f['Commission earned']) : n(f['Net revenue']); }
   function lineOk(f) { return dash.line === 'all' || (dash.line === 'gm' ? f['Business line'] === 'Good Medicine direct' : f['Business line'] === 'Vamos marketplace'); }
   function dashNumbers(el) {
-    var rs = h('div', { class: 'seg tight', style: 'margin:0 0 8px' });
+    var vs = h('div', { class: 'seg', style: 'margin:0 0 8px' });
+    [['past', 'So far'], ['ahead', 'Ahead']].forEach(function (o) {
+      vs.appendChild(h('button', { type: 'button', class: dash.view === o[0] ? 'on' : '', text: o[1], onclick: function () { dash.view = o[0]; drawHome(); } }));
+    });
+    el.appendChild(vs);
+    var ls0 = h('div', { class: 'seg tight', style: 'margin:0 0 8px' });
+    [['all', 'All'], ['gm', 'Good Medicine'], ['vamos', 'Vamos']].forEach(function (o) {
+      ls0.appendChild(h('button', { type: 'button', class: dash.line === o[0] ? 'on' : '', text: o[1], onclick: function () { dash.line = o[0]; drawHome(); } }));
+    });
+    el.appendChild(ls0);
+    if (dash.view === 'ahead') return dashAhead(el);
+    var rs = h('div', { class: 'seg tight', style: 'margin:0 0 14px' });
     [[1, 'This month'], [3, '3 mo'], [6, '6 mo'], [12, '12 mo']].forEach(function (o) {
       rs.appendChild(h('button', { type: 'button', class: dash.range === o[0] ? 'on' : '', text: o[1], onclick: function () { dash.range = o[0]; drawHome(); } }));
     });
-    var ls = h('div', { class: 'seg tight', style: 'margin:0 0 14px' });
-    [['all', 'All'], ['gm', 'Good Medicine'], ['vamos', 'Vamos']].forEach(function (o) {
-      ls.appendChild(h('button', { type: 'button', class: dash.line === o[0] ? 'on' : '', text: o[1], onclick: function () { dash.line = o[0]; drawHome(); } }));
-    });
-    el.appendChild(rs); el.appendChild(ls);
+    el.appendChild(rs);
 
     var months = monthsBack(dash.range), inWin = {}, today = todayIso();
     months.forEach(function (k) { inWin[k] = 1; });
@@ -1332,7 +1341,8 @@
     tile('Bookings', String(live.length), cancelled ? cancelled + ' cancelled' : (guests ? guests + ' guests' : ''));
     tile('Sales', money(gross), 'what customers paid');
     tile('Your revenue', money(rev), dash.line === 'vamos' ? 'commission' : dash.line === 'gm' ? 'Good Medicine net' : 'net + commission');
-    tile('Coming up', String(ahead.length), money(sum(ahead, function (f) { return n(f['Gross total']); })) + ' booked ahead');
+    tile('Coming up', String(ahead.length), money(sum(ahead, function (f) { return n(f['Gross total']); })) + ' booked ahead · see Ahead');
+    tiles.lastChild.style.cursor = 'pointer'; tiles.lastChild.addEventListener('click', function () { dash.view = 'ahead'; drawHome(); window.scrollTo(0, 0); });
     el.appendChild(tiles);
 
     // money still moving (invoicing, any date)
@@ -1358,6 +1368,94 @@
     });
     el.appendChild(tbl);
     el.appendChild(h('p', { class: 'hint', text: 'From the Bookings table in Vamos Sales (Bókun, the historical log and paid Vamos invoices), by trip date. Cancelled trips are left out. Good Medicine bookings made in invoicing count once they are entered in Bókun.' }));
+  }
+  /* --- numbers ahead: booked trips from today on, what they should bring in and what is still to collect --- */
+  function monthsFwd(count) {
+    var t = todayIso(), y = Number(t.slice(0, 4)), m = Number(t.slice(5, 7)), out = [];
+    for (var i = 0; i < count; i++) { var mm = m + i, yy = y; while (mm > 12) { mm -= 12; yy++; } out.push(yy + '-' + (mm < 10 ? '0' : '') + mm); }
+    return out;
+  }
+  function aheadOf(f) {
+    var vamos = f['Business line'] === 'Vamos marketplace';
+    var com = vamos ? n(f['Commission earned']) : 0, gm = vamos ? 0 : n(f['Net revenue']);
+    return { vamos: vamos, gm: gm, com: com, comOpen: vamos && f['Commission status'] !== 'Paid' ? com : 0,
+      collect: vamos ? 0 : Math.max(0, n(f['Gross total']) - n(f['Paid amount'])), paid: vamos ? 0 : n(f['Paid amount']) };
+  }
+  function dashAhead(el) {
+    var rs = h('div', { class: 'seg tight', style: 'margin:0 0 14px' });
+    [[1, 'This month'], [3, '3 mo'], [6, '6 mo'], [0, 'All booked']].forEach(function (o) {
+      rs.appendChild(h('button', { type: 'button', class: dash.ahead === o[0] ? 'on' : '', text: o[1], onclick: function () { dash.ahead = o[0]; drawHome(); } }));
+    });
+    el.appendChild(rs);
+    var today = todayIso();
+    var future = dash.d.bookings.filter(function (r) { return lineOk(r.fields) && r.fields.Status !== 'Cancelled' && (r.fields['Activity date'] || '') >= today; });
+    var last = future.reduce(function (a, r) { var k = monthKey(r.fields['Activity date']); return k > a ? k : a; }, monthKey(today));
+    var months = dash.ahead ? monthsFwd(dash.ahead) : monthsFwd(Math.min(24, monthsBetween(monthKey(today), last) + 1));
+    var inWin = {}; months.forEach(function (k) { inWin[k] = 1; });
+    var rows = future.filter(function (r) { return inWin[monthKey(r.fields['Activity date'])]; });
+    var t = { gm: 0, com: 0, comOpen: 0, collect: 0, paid: 0, guests: 0, vamosTrips: 0 };
+    rows.forEach(function (r) { var a = aheadOf(r.fields); t.gm += a.gm; t.com += a.com; t.comOpen += a.comOpen; t.collect += a.collect; t.paid += a.paid; t.guests += n(r.fields['Total guests']); if (a.vamos) t.vamosTrips++; });
+    var m0 = months[0], m1 = months[months.length - 1];
+    el.appendChild(h('h3', { class: 'dash-h', style: 'margin-top:0', text: 'From today' + (m1 ? ' to the end of ' + monthName(m1, true) : '') }));
+    var tiles = h('div', { class: 'tiles' });
+    function tile(k, v, s) { tiles.appendChild(h('div', { class: 'tile' }, [h('span', { text: k }), h('b', { text: v }), s ? h('small', { text: s }) : null])); }
+    tile('Trips booked', String(rows.length), t.guests ? t.guests + ' guests' : '');
+    if (dash.line !== 'vamos') tile('Expected revenue', money(t.gm + t.com), dash.line === 'gm' ? 'Good Medicine net' : 'Good Medicine ' + money(t.gm) + ' · commissions ' + money(t.com));
+    if (dash.line !== 'vamos') tile('Good Medicine to collect', money(t.collect), 'balances still to be paid');
+    if (dash.line === 'gm') tile('Deposits already paid', money(t.paid), 'on these trips');
+    if (dash.line !== 'gm') tile('Commissions expected', money(t.comOpen), t.vamosTrips + (t.vamosTrips === 1 ? ' trip' : ' trips') + ', owners pay on the day');
+    el.appendChild(tiles);
+
+    // month by month
+    var per = months.map(function (k) {
+      var l = rows.filter(function (r) { return monthKey(r.fields['Activity date']) === k; }), p = { k: k, count: l.length, gm: 0, com: 0, collect: 0 };
+      l.forEach(function (r) { var a = aheadOf(r.fields); p.gm += a.gm; p.com += a.com; p.collect += a.collect; });
+      return p;
+    });
+    el.appendChild(aheadChart(per));
+    var tbl = h('div', { class: 'card', style: 'padding:8px 14px' });
+    tbl.appendChild(h('div', { class: 'kv mth' }, [h('span', { text: 'Month' }), h('span', { text: 'Trips' }), h('span', { text: 'Expected' }), h('span', { text: dash.line === 'vamos' ? 'Commission' : 'To collect' })]));
+    per.forEach(function (p) {
+      tbl.appendChild(h('div', { class: 'kv mth' + (p.count ? '' : ' dim') }, [h('span', { text: monthName(p.k) + ' ' + p.k.slice(2, 4) }), h('span', { text: String(p.count) }), h('span', { text: money(p.gm + p.com) }), h('span', { text: money(dash.line === 'vamos' ? p.com : p.collect) })]));
+    });
+    el.appendChild(tbl);
+
+    // not counted above: bookings still waiting for a deposit, and Good Medicine invoices not entered in Bókun yet
+    var last1 = m1 + '-31';
+    var inv = dash.d.invoices.filter(function (r) { var f = r.fields; return !f['Cancelled at'] && f.Kind !== 'Quick payment' && lineOk(f) && (f['Trip date'] || '') >= today && (f['Trip date'] || '') <= last1; });
+    var waiting = inv.filter(function (r) { var f = r.fields; return !(n(f.Deposit) > 0 && n(f['Amount paid']) >= n(f.Deposit)); });
+    var gmInv = inv.filter(function (r) { var f = r.fields; return f['Business line'] === 'Good Medicine direct' && n(f.Deposit) > 0 && n(f['Amount paid']) >= n(f.Deposit); });
+    var potential = function (f) { return f['Business line'] === 'Vamos marketplace' ? n(f.Commission) : n(f['Trip price']); };
+    var notes = [];
+    if (waiting.length) notes.push(waiting.length + (waiting.length === 1 ? ' booking is' : ' bookings are') + ' waiting for a deposit (' + waiting.map(function (r) { return r.fields['Invoice number']; }).join(', ') + '): up to ' + money(waiting.reduce(function (a, r) { return a + potential(r.fields); }, 0)) + ' more if they pay. Not counted above.');
+    if (gmInv.length) notes.push(gmInv.length + ' Good Medicine ' + (gmInv.length === 1 ? 'invoice' : 'invoices') + ' with the deposit paid ' + (gmInv.length === 1 ? 'is' : 'are') + ' not counted until entered in Bókun (' + gmInv.map(function (r) { return r.fields['Invoice number']; }).join(', ') + ': ' + money(gmInv.reduce(function (a, r) { return a + n(r.fields['Trip price']); }, 0)) + ').');
+    var odd = rows.filter(function (r) { return aheadOf(r.fields).gm < 0; });
+    if (odd.length) notes.push('Check in Bókun: ' + odd.map(function (r) { return (r.fields['Booking reference'] || '') + ' (' + shortDay(r.fields['Activity date']) + ') shows net revenue ' + money(n(r.fields['Net revenue'])).replace('$-', '−$'); }).join('; ') + '. It is included as is.');
+    notes.forEach(function (x) { el.appendChild(h('p', { class: 'warn', style: 'margin:0 0 8px;font-size:13px', text: x })); });
+    el.appendChild(h('p', { class: 'hint', text: 'Confirmed trips from the Bookings table, by trip date. Good Medicine: net revenue, and the balance still to collect (price minus what was paid). Vamos: the commission each owner pays on the day. Cancelled trips are left out.' }));
+  }
+  function monthsBetween(a, b) { return (Number(b.slice(0, 4)) - Number(a.slice(0, 4))) * 12 + Number(b.slice(5, 7)) - Number(a.slice(5, 7)); }
+  function aheadChart(per) {
+    var W = 340, H = 190, padL = 8, padR = 8, top = 22, base = 150, bw = (W - padL - padR) / Math.max(per.length, 1);
+    var maxV = Math.max(1, Math.max.apply(null, per.map(function (p) { return Math.max(0, p.gm) + p.com; })));
+    var ns = 'http://www.w3.org/2000/svg';
+    function s(tag, a, txt) { var e = document.createElementNS(ns, tag); Object.keys(a).forEach(function (k) { e.setAttribute(k, a[k]); }); if (txt != null) e.textContent = txt; return e; }
+    var svg = s('svg', { viewBox: '0 0 ' + W + ' ' + H, width: '100%', role: 'img', 'aria-label': 'Expected revenue by month' });
+    svg.appendChild(s('line', { x1: padL, x2: W - padR, y1: base, y2: base, stroke: '#d9d4cc' }));
+    var bar = Math.min(bw * 0.6, 34);
+    per.forEach(function (p, i) {
+      var x = padL + i * bw + (bw - bar) / 2, scale = (base - top - 16) / maxV;
+      var hg = Math.max(0, p.gm) * scale, hc = p.com * scale;
+      if (hg) svg.appendChild(s('rect', { x: x, y: base - hg, width: bar, height: hg, rx: 3, fill: C.aqua }));
+      if (hc) svg.appendChild(s('rect', { x: x, y: base - hg - hc, width: bar, height: Math.max(hc, 2), rx: 3, fill: PINK }));
+      var tot = Math.max(0, p.gm) + p.com;
+      if (tot) svg.appendChild(s('text', { x: x + bar / 2, y: base - hg - hc - 4, 'text-anchor': 'middle', 'font-size': 10.5, fill: C.navy }, tot >= 1000 ? '$' + Math.round(tot / 1000) + 'k' : money(tot)));
+      svg.appendChild(s('text', { x: x + bar / 2, y: base + 15, 'text-anchor': 'middle', 'font-size': 10.5, fill: p.count ? C.navy : '#8a949b' }, monthName(p.k)));
+    });
+    var lg = H - 10;
+    if (dash.line !== 'vamos') { svg.appendChild(s('rect', { x: padL, y: lg - 9, width: 10, height: 10, rx: 2, fill: C.aqua })); svg.appendChild(s('text', { x: padL + 15, y: lg, 'font-size': 11, fill: C.navy }, 'Good Medicine')); }
+    if (dash.line !== 'gm') { var lx = dash.line === 'vamos' ? padL : padL + 110; svg.appendChild(s('rect', { x: lx, y: lg - 9, width: 10, height: 10, rx: 2, fill: PINK })); svg.appendChild(s('text', { x: lx + 15, y: lg, 'font-size': 11, fill: C.navy }, 'Vamos commissions')); }
+    return h('div', { class: 'card', style: 'padding:10px 8px 4px' }, [svg]);
   }
   function chart(per, inWin) {
     var W = 340, H = 190, padL = 8, padR = 8, top = 22, base = 150, n0 = per.length, bw = (W - padL - padR) / n0;
