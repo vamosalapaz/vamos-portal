@@ -10,7 +10,7 @@
 
   var HOOK = 'https://hook.us2.make.com/5fjztbglh5n2romv2hd5hcj5flg43zg4';
   var PETER_WA = '526122194779';
-  var TERMS = 'conf-2026-10';
+  var TERMS = 'conf-2026-10-09';
   var BRAND = '#B51E66', INK = '#061A2E';
   var C = { foam: '#F3EFE6', aqua: '#00C6C0', pacific: '#156AB3', gulf: '#0B4F6C', lima: '#B5C62E', orange: '#E65A37', gold: '#F3B53F' };
   var LOGO = 'https://s3.amazonaws.com/webflow-prod-assets/6a94d97df3061a3b48890971/6ab313cdb43ef771290ceace_download.png';
