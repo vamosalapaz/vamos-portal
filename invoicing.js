@@ -17,7 +17,9 @@
    v10 (release v30): meeting time uses the phone's time picker (15-minute steps), saved as "8:30 am".
    v11 (release v31): the blank link opens a home dashboard: Bookings (search, Needs you, upcoming/past/cancelled),
        Calendar (Vamos trips Google calendar, tap for contacts) and Numbers (this month / 3 / 6 / 12 months, chart).
-       New booking: ?new=1, new quick payment: ?new=quick. The header links back to All bookings. */
+       New booking: ?new=1, new quick payment: ?new=quick. The header links back to All bookings.
+   v12 (release v32): Reschedule (new date/time, why; payments carry over; calendar, customer page and owner confirmation
+       follow; one-tap WhatsApp to customer and owner). The calendar tab hides events of cancelled or deleted bookings. */
 (function () {
   'use strict';
 
@@ -772,7 +774,11 @@
     [['Trip price', money(price)], ['Deposit', money(dep)], com ? ['Your commission', money(com)] : null,
      ['Meeting', [f['Meeting point'], f['Meeting time']].filter(Boolean).join(', ') || 'not set'], ['Language', f.Language || ''], ['Status', f.Status || '']]
       .filter(Boolean).forEach(function (kv) { sum.appendChild(h('div', { class: 'kv' }, [h('span', { text: kv[0] }), h('span', { text: kv[1] })])); });
+    if (f['Reschedule log']) sum.appendChild(h('div', { class: 'hint', style: 'white-space:pre-line;margin-top:8px', text: 'Date changes:\n' + f['Reschedule log'] }));
     root.appendChild(sum);
+    var rBox = h('div');
+    if (!cancelled) root.appendChild(h('button', { class: 'btn sec', type: 'button', onclick: function () { rescheduleForm(inv, conf, rBox); } }, ['Reschedule']));
+    root.appendChild(rBox);
     if (!cancelled) root.appendChild(h('button', { class: 'btn sec', type: 'button', onclick: function () { renderForm({ inv: inv, conf: conf }); } }, ['Edit']));
     root.appendChild(h('button', { class: 'btn sec', type: 'button', onclick: function () { reload(inv, 'Refreshing…'); } }, ['Refresh']));
     root.appendChild(h('a', { class: 'btn sec', href: homeUrl('&new=1') }, ['New invoice']));
@@ -939,6 +945,64 @@
       return chain.then(function () { return reload(inv, 'Saved.'); });
     });
   }
+  function rescheduleForm(inv, conf, box) {
+    var f = inv.fields, cf = conf ? conf.fields : {}, ownerFlow = f['Balance collected by'] === 'Owner';
+    var oldDate = f['Trip date'] || '', oldEnd = f['End date'] && f['End date'] > oldDate ? f['End date'] : '', oldTime = f['Meeting time'] || '';
+    var span = oldEnd ? Math.round((new Date(oldEnd + 'T12:00:00Z') - new Date(oldDate + 'T12:00:00Z')) / 864e5) : 0;
+    var why = 'customer';
+    var dt = h('input', { type: 'date', id: 'vi-rdate', value: oldDate, min: today() });
+    var en = h('input', { type: 'date', id: 'vi-rend', value: oldEnd, min: oldDate });
+    var tm = h('input', { type: 'time', id: 'vi-rtime', step: '900', value: toTimeInput(oldTime) });
+    var nt = h('input', { placeholder: 'Note for your records (optional)' });
+    dt.addEventListener('change', function () { if (span && dt.value) { en.value = addDaysIso(dt.value, span); } en.min = dt.value; });
+    var seg = h('div', { class: 'seg tight', style: 'margin-top:8px' });
+    [['customer', 'Customer asked'], ['weather', 'Port closed'], ['owner', 'Owner asked']].forEach(function (o) {
+      var b = h('button', { type: 'button', text: o[1], class: o[0] === why ? 'on' : '', onclick: function () { why = o[0]; Array.prototype.forEach.call(seg.children, function (x) { x.className = x === b ? 'on' : ''; }); } });
+      seg.appendChild(b);
+    });
+    var rows = [h('div', { class: 'row' }, [field('New date', dt), field('Meeting time', tm)])];
+    if (oldEnd) rows.push(field('Last day', en));
+    rows.push(h('label', { text: 'Why' }), seg, field('Note', nt));
+    rows.push(h('p', { class: 'hint', text: 'Payments stay as they are: the deposit carries over to the new date. The calendar, the customer\'s page' + (conf ? ' and the owner\'s confirmation' : '') + ' update by themselves.' }));
+    formShell(box, 'Reschedule ' + f['Invoice number'], rows, 'Save new date', function () {
+      var nd = dt.value, ne = oldEnd ? en.value : '', ntime = fromTimeInput(tm.value);
+      if (!nd) throw new Error('Choose the new date.');
+      if (ne && ne < nd) throw new Error('The last day is before the new date.');
+      if (nd === oldDate && ntime === oldTime && ne === oldEnd) throw new Error('That is the same date and time.');
+      var reasons = { customer: 'customer asked', weather: 'port closed', owner: 'owner asked' };
+      var label = function (d, t, e) { return shortDay(d) + (e ? '–' + shortDay(e) : '') + (t ? ', ' + t : ''); };
+      var line = today() + ': ' + label(oldDate, oldTime, oldEnd) + ' → ' + label(nd, ntime, ne) + ' (' + reasons[why] + ')' + (nt.value.trim() ? '. ' + nt.value.trim() : '');
+      return post(HOOK_ACTIONS, { k: KEY, action: 'reschedule', id: inv.id, number: f['Invoice number'], tripDate: nd, endDate: ne, meetingTime: ntime,
+        log: (f['Reschedule log'] ? f['Reschedule log'] + '\n' : '') + line, confId: conf ? conf.id : '', confLog: conf ? (cf['Change log'] ? cf['Change log'] + '\n' : '') + line : '' })
+        .then(function () { tellPeople(inv, conf, box, { date: nd, end: ne, time: ntime, why: why, oldDate: oldDate }); });
+    });
+  }
+  // After a reschedule: one-tap WhatsApp messages to the customer and the owner, then reload.
+  function tellPeople(inv, conf, box, r) {
+    var f = inv.fields, cf = conf ? conf.fields : {}, cEs = f.Language !== 'English', oEs = cf.Language !== 'English';
+    var cLink = f['Page token'] ? SITE + '/reserva?k=' + f['Page token'] : '';
+    var oLink = cf['Page token'] ? SITE + '/confirmar?k=' + cf['Page token'] : '';
+    var when = function (es) { return fmtDate(r.date, es ? 'Español' : 'English') + (r.end ? (es ? ' al ' : ' to ') + fmtDate(r.end, es ? 'Español' : 'English') : '') + (r.time ? (es ? ', a las ' : ' at ') + r.time : ''); };
+    var depPaid = n(f.Deposit) > 0 && n(f['Amount paid']) >= n(f.Deposit), passed = n(f['Paid to owner']) > 0;
+    var cMsg = cEs
+      ? 'Hola ' + first(f['Billed to']) + ', ' + (r.why === 'weather' ? 'por el cierre del puerto, ' : '') + 'tu reservación ' + f['Invoice number'] + ' (' + (f.Trip || '') + ') queda para el ' + when(true) + '.' + (depPaid ? ' Tu anticipo se aplica a la nueva fecha.' : '') + (f['Meeting point'] ? ' Punto de encuentro: ' + f['Meeting point'] + '.' : '') + (cLink ? ' Detalles: ' + cLink : '')
+      : 'Hi ' + first(f['Billed to']) + ', ' + (r.why === 'weather' ? 'because the port was closed, ' : '') + 'your booking ' + f['Invoice number'] + ' (' + (f.Trip || '') + ') is now on ' + when(false) + '.' + (depPaid ? ' Your deposit carries over to the new date.' : '') + (f['Meeting point'] ? ' Meeting point: ' + f['Meeting point'] + '.' : '') + (cLink ? ' Details: ' + cLink : '');
+    var oReason = { customer: oEs ? 'a petición del cliente' : 'at the customer\'s request', weather: oEs ? 'por el cierre del puerto' : 'because the port was closed', owner: oEs ? 'como lo acordamos' : 'as we agreed' }[r.why];
+    var oMsg = conf && cf['Owner phone'] ? (oEs
+      ? 'Hola ' + first(cf['Owner name']) + ', la reservación ' + f['Invoice number'] + ' (' + (cf.Trip || f.Trip || '') + ') cambia del ' + fmtDate(r.oldDate, 'Español') + ' al ' + when(true) + ', ' + oReason + '.' + (passed ? ' El anticipo que ya te enviamos queda para la nueva fecha.' : '') + (oLink ? ' Tu confirmación ya muestra la nueva fecha: ' + oLink : '')
+      : 'Hi ' + first(cf['Owner name']) + ', booking ' + f['Invoice number'] + ' (' + (cf.Trip || f.Trip || '') + ') moves from ' + fmtDate(r.oldDate, 'English') + ' to ' + when(false) + ', ' + oReason + '.' + (passed ? ' The deposit we already sent you carries over to the new date.' : '') + (oLink ? ' Your confirmation now shows the new date: ' + oLink : '')) : '';
+    box.innerHTML = '';
+    var btns = [];
+    if (f.Phone) btns.push(h('button', { class: 'btn sec', type: 'button', onclick: function () { openWhatsApp(f.Phone, cMsg); } }, ['WhatsApp ' + (first(f['Billed to']) || 'customer')]));
+    btns.push(h('button', { class: 'btn sec', type: 'button', onclick: function () { copy(cMsg); } }, ['Copy customer message']));
+    if (oMsg) btns.push(h('button', { class: 'btn sec', type: 'button', onclick: function () { openWhatsApp(cf['Owner phone'], oMsg); } }, ['WhatsApp ' + (first(cf['Owner name']) || 'owner')]));
+    box.appendChild(h('div', { style: 'margin-top:10px;padding:12px;border-radius:12px;background:#eef6ef' }, [
+      h('b', { text: 'Moved to ' + fmtDate(r.date, 'English') + (r.time ? ', ' + r.time : '') }),
+      h('p', { class: 'hint', text: 'Saved. The calendar and the booking pages are updated. Let them know:' }),
+      h('div', { class: 'btns' }, btns),
+      h('button', { class: 'btn pri', type: 'button', onclick: function () { reload(inv, 'Saved.'); } }, ['Done'])
+    ]));
+  }
   function cancelForm(inv, conf, box) {
     var f = inv.fields, toOwner = n(f['Paid to owner']), got = n(f['Amount paid']);
     var why = 'customer';
@@ -950,6 +1014,7 @@
       detail.innerHTML = '';
       if (w === 'customer') detail.appendChild(h('p', { class: 'hint', text: f.Kind === 'Quick payment' ? 'The card link is switched off and the page shows the payment as cancelled.' : 'The owner keeps any deposit already passed on and no commission is due. The card link is switched off and the owner\'s confirmation is cancelled.' }));
       else {
+        detail.appendChild(h('p', { class: 'hint', text: 'Moving the trip to another day instead? Close this and tap Reschedule: the deposit carries over and nothing is refunded.' }));
         if (toOwner > 0) { var c1 = h('input', { type: 'checkbox', id: 'vi-ret', style: 'width:auto;margin-right:8px' }); c1.checked = true; detail.appendChild(h('label', { for: 'vi-ret', style: 'display:flex;align-items:center;color:#1d2731;font-size:15px' }, [c1, 'Owner returned the deposit (' + money(toOwner) + ')'])); }
         if (got > 0) {
           var c2 = h('input', { type: 'checkbox', id: 'vi-ref', style: 'width:auto;margin-right:8px' }); c2.checked = true;
@@ -1205,7 +1270,12 @@
   function dashCalendar(el) {
     var evs = dash.d.events.slice().sort(function (a, b) { return evDay(a) + evTime(a) < evDay(b) + evTime(b) ? -1 : 1; });
     var today = todayIso();
-    evs = evs.filter(function (e) { return evDay(e) >= today; });
+    evs = evs.filter(function (e) {
+      if (evDay(e) < today) return false;
+      if (String(e.description || '').indexOf('Booking VLP-') < 0) return true;
+      var r = invForEvent(e);  // booking events whose booking was cancelled or deleted are removed by the server on this load
+      return !!(r && !r.fields['Cancelled at']);
+    });
     if (!evs.length) { el.appendChild(h('p', { class: 'hint', text: 'Nothing on the Vamos trips calendar in the next 4 months. Bookings appear here once the deposit is paid.' })); return; }
     var lastDay = '';
     evs.forEach(function (e) {
