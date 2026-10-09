@@ -22,7 +22,9 @@
        follow; one-tap WhatsApp to customer and owner). The calendar tab hides events of cancelled or deleted bookings.
    v13 (release v33): Numbers has So far / Ahead. Ahead = booked trips from today: expected revenue (Good Medicine net +
        Vamos commissions), Good Medicine balances still to collect, commissions expected, by month; plus what is not counted yet.
-   v14 (release v34): Numbers has an MXN / USD switch (USD at today's rate, remembered on the phone). */
+   v14 (release v34): Numbers has an MXN / USD switch (USD at today's rate, remembered on the phone).
+   v15 (release v35): optional Expenses & margin on Numbers (So far: actual expenses, margin, where the money went;
+       Ahead: estimated costs from the last 3 months' average and projected margin). */
 (function () {
   'use strict';
 
@@ -177,7 +179,8 @@
       '.vi .ev-detail{padding:0 14px 14px;border-top:1px solid #eee9e2}.vi .ev-detail .kv{font-size:14px}.vi .ev-detail .kv span:last-child{text-align:right;overflow-wrap:anywhere}',
       '.vi .tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 8px}.vi .tile{background:#fff;border:1px solid #e4e1dc;border-radius:12px;padding:10px 12px}',
       '.vi .tile span{display:block;font-size:12px;color:#5a6670}.vi .tile b{display:block;font-size:22px;color:' + C.navy + ';margin:2px 0}.vi .tile small{font-size:12px;color:#7a858c}',
-      '.vi .kv.mth{font-size:14px}.vi .kv.mth span{flex:1;text-align:right}.vi .kv.mth span:first-child{text-align:left;color:#1d2731}.vi .kv.mth.dim{opacity:.5}',
+      '.vi .kv.mth{font-size:13.5px;gap:6px}.vi .kv.mth span{flex:1;text-align:right;white-space:nowrap}.vi .kv.mth span:first-child{text-align:left;color:#1d2731}.vi .kv.mth.dim{opacity:.5}',
+      '.vi .chip{border:1px solid #cfcac2;background:#fff;color:#1d2731;border-radius:99px;padding:7px 14px;font:inherit;font-size:14px;cursor:pointer}.vi .chip.on{background:#fdeee8;border-color:' + C.orange + ';color:#8a2f14;font-weight:600}',
       '.vi .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1d2731;color:#fff;padding:10px 16px;border-radius:10px;font-size:15px;z-index:99}'
     ].join('');
     document.head.appendChild(s);
@@ -1095,7 +1098,9 @@
   function cacheSet(raw) { try { sessionStorage.setItem(DASH_CACHE, JSON.stringify({ at: Date.now(), raw: raw })); } catch (e) {} }
   function prepDash(raw, at) {
     var invoices = flat(raw.invoices), bookings = flat(raw.bookings);
-    return { at: at || Date.now(), invoices: invoices, events: (raw.events || []).filter(function (e) { return e && e.status !== 'cancelled'; }), bookings: bookings };
+    var expenses = String(raw.expenses || '').split(';').map(function (x) { var p = x.split('|'); return { d: p[0] || '', brand: p[1] || '', cat: p[2] || '', amt: Number(p[3]) || 0, cur: p[4] || 'MXN' }; })
+      .filter(function (e) { return /^[0-9]{4}-[0-9]{2}/.test(e.d) && e.amt; });
+    return { at: at || Date.now(), invoices: invoices, events: (raw.events || []).filter(function (e) { return e && e.status !== 'cancelled'; }), bookings: bookings, expenses: expenses };
   }
 
   function renderHome() {
@@ -1324,7 +1329,67 @@
   function usd() { return dash.cur === 'USD' && dash.fx; }
   function cm(v) { v = Number(v) || 0; if (!usd()) return money(v); var x = Math.round(v / dash.fx.rate); return (x < 0 ? '-' : '') + 'US$' + Math.abs(x).toLocaleString('en-US'); }
   function cmk(v) { v = Number(v) || 0; var x = usd() ? v / dash.fx.rate : v, p = usd() ? 'US$' : '$'; return Math.abs(x) >= 1000 ? p + Math.round(x / 1000) + 'k' : p + Math.round(x).toLocaleString('en-US'); }
+  /* --- expenses & margin (optional layer on Numbers): Expenses table, P&L amount (personal and card payments are 0) --- */
+  function expOk(e) { return dash.line === 'all' || (dash.line === 'gm' ? e.brand === 'Good Medicine' : e.brand === 'Vamos a La Paz'); }
+  function expMXN(e) {
+    if (e.cur !== 'USD') return e.amt;
+    var fx = dash.fx || fxCached();
+    if (fx) return e.amt * fx.rate;
+    if (!dash.fxLoading) { dash.fxLoading = 1; fxLoad().then(function (v) { dash.fx = v; drawHome(); }, function () {}); }
+    return 0;
+  }
+  function expByMonth() { var m = {}; (dash.d.expenses || []).forEach(function (e) { if (!expOk(e)) return; var k = e.d.slice(0, 7); m[k] = (m[k] || 0) + expMXN(e); }); return m; }
+  function expStart() { var ks = (dash.d.expenses || []).map(function (e) { return e.d.slice(0, 7); }).sort(); return ks[0] || ''; }
+  function expToggle() {
+    return h('button', { type: 'button', class: 'chip' + (dash.exp ? ' on' : ''), text: dash.exp ? '✓ Expenses & margin' : '+ Expenses & margin', onclick: function () {
+      dash.exp = !dash.exp; try { localStorage.setItem('vi-exp', dash.exp ? '1' : ''); } catch (e) {} drawHome();
+    } });
+  }
+  function pct(a, b) { if (!b) return ''; var x = Math.round(a / b * 100); return (x < 0 ? '−' + (-x) : x) + '%'; }
+  function cmS(v) { return v < 0 ? '−' + cm(-v) : cm(v); }
+  // Revenue vs expenses, two bars per month, margin above each pair
+  function gchart(per, inWin, aLabel, bLabel) {
+    var W = 340, H = 196, padL = 8, padR = 8, top = 24, base = 152, bw = (W - padL - padR) / Math.max(per.length, 1);
+    var maxV = Math.max(1, Math.max.apply(null, per.map(function (p) { return Math.max(Math.max(0, p.a), p.b || 0); })));
+    var ns = 'http://www.w3.org/2000/svg';
+    function s(tag, a, txt) { var e = document.createElementNS(ns, tag); Object.keys(a).forEach(function (k) { e.setAttribute(k, a[k]); }); if (txt != null) e.textContent = txt; return e; }
+    var svg = s('svg', { viewBox: '0 0 ' + W + ' ' + H, width: '100%', role: 'img', 'aria-label': aLabel + ' and ' + bLabel + ' by month' });
+    svg.appendChild(s('line', { x1: padL, x2: W - padR, y1: base, y2: base, stroke: '#d9d4cc' }));
+    var bar = Math.min(bw * 0.32, 18), scale = (base - top - 14) / maxV;
+    per.forEach(function (p, i) {
+      var cx = padL + i * bw + bw / 2, on = !inWin || inWin[p.k];
+      var ha = Math.max(0, p.a) * scale, hb = (p.b || 0) * scale;
+      if (ha) svg.appendChild(s('rect', { x: cx - bar - 1, y: base - ha, width: bar, height: ha, rx: 2, fill: on ? C.aqua : '#bfe9e6' }));
+      if (hb) svg.appendChild(s('rect', { x: cx + 1, y: base - hb, width: bar, height: hb, rx: 2, fill: on ? C.orange : '#f3c4b6' }));
+      if (p.b != null && (p.a || p.b)) {
+        var mg = p.a - p.b;
+        svg.appendChild(s('text', { x: cx, y: base - Math.max(ha, hb) - 4, 'text-anchor': 'middle', 'font-size': 10, 'font-weight': 600, fill: mg < 0 ? '#b3261e' : C.gulf }, (mg < 0 ? '−' : '') + cmk(Math.abs(mg))));
+      }
+      svg.appendChild(s('text', { x: cx, y: base + 15, 'text-anchor': 'middle', 'font-size': 10.5, fill: on ? C.navy : '#8a949b' }, monthName(p.k)));
+    });
+    var lg = H - 8;
+    svg.appendChild(s('rect', { x: padL, y: lg - 9, width: 10, height: 10, rx: 2, fill: C.aqua })); svg.appendChild(s('text', { x: padL + 15, y: lg, 'font-size': 11, fill: C.navy }, aLabel));
+    svg.appendChild(s('rect', { x: padL + 96, y: lg - 9, width: 10, height: 10, rx: 2, fill: C.orange })); svg.appendChild(s('text', { x: padL + 111, y: lg, 'font-size': 11, fill: C.navy }, bLabel));
+    svg.appendChild(s('text', { x: W - padR, y: lg, 'text-anchor': 'end', 'font-size': 11, fill: C.gulf }, 'margin above'));
+    return h('div', { class: 'card', style: 'padding:10px 8px 4px' }, [svg]);
+  }
+  function expCategories(el, months) {
+    var inM = {}; months.forEach(function (k) { inM[k] = 1; });
+    var by = {}, total = 0;
+    (dash.d.expenses || []).forEach(function (e) { if (!expOk(e) || !inM[e.d.slice(0, 7)]) return; var v = expMXN(e); by[e.cat || 'Other'] = (by[e.cat || 'Other'] || 0) + v; total += v; });
+    var list = Object.keys(by).map(function (k) { return [k, by[k]]; }).sort(function (a, b) { return b[1] - a[1]; });
+    if (!list.length) return;
+    var top = list.slice(0, 6), rest = list.slice(6).reduce(function (a, x) { return a + x[1]; }, 0);
+    if (rest) top.push(['Everything else', rest]);
+    var card = h('div', { class: 'card', style: 'padding:8px 14px' }, [h('b', { text: 'Where the money went', style: 'display:block;margin:4px 0 6px' })]);
+    top.forEach(function (x) {
+      card.appendChild(h('div', { class: 'kv' }, [h('span', { text: x[0] }), h('span', { text: cm(x[1]) + '  ·  ' + pct(x[1], total) })]));
+      card.appendChild(h('div', { style: 'height:4px;border-radius:2px;background:#f1e5df;margin:0 0 6px' }, [h('div', { style: 'height:4px;border-radius:2px;background:' + C.orange + ';width:' + Math.max(2, Math.round(x[1] / total * 100)) + '%' })]));
+    });
+    el.appendChild(card);
+  }
   function dashNumbers(el) {
+    if (dash.exp === undefined) { try { dash.exp = !!localStorage.getItem('vi-exp'); } catch (e) { dash.exp = false; } }
     if (!dash.cur) { try { dash.cur = localStorage.getItem('vi-cur') || 'MXN'; } catch (e) { dash.cur = 'MXN'; } if (dash.cur === 'USD') dash.fx = fxCached(); if (!dash.fx) dash.cur = 'MXN'; }
     var top = h('div', { style: 'display:flex;gap:8px;margin:0 0 8px' });
     var vs = h('div', { class: 'seg', style: 'flex:1' });
@@ -1348,6 +1413,7 @@
       ls0.appendChild(h('button', { type: 'button', class: dash.line === o[0] ? 'on' : '', text: o[1], onclick: function () { dash.line = o[0]; drawHome(); } }));
     });
     el.appendChild(ls0);
+    el.appendChild(h('div', { style: 'margin:0 0 8px' }, [expToggle()]));
     if (dash.view === 'ahead') return dashAhead(el);
     var rs = h('div', { class: 'seg tight', style: 'margin:0 0 14px' });
     [[1, 'This month'], [3, '3 mo'], [6, '6 mo'], [12, '12 mo']].forEach(function (o) {
@@ -1373,6 +1439,15 @@
     tile('Your revenue', cm(rev), dash.line === 'vamos' ? 'commission' : dash.line === 'gm' ? 'Good Medicine net' : 'net + commission');
     tile('Coming up', String(ahead.length), cm(sum(ahead, function (f) { return n(f['Gross total']); })) + ' booked ahead · see Ahead');
     tiles.lastChild.style.cursor = 'pointer'; tiles.lastChild.addEventListener('click', function () { dash.view = 'ahead'; drawHome(); window.scrollTo(0, 0); });
+    var expM = dash.exp ? expByMonth() : null, eStart = dash.exp ? expStart() : '';
+    if (dash.exp) {
+      var covered = months.filter(function (k) { return eStart && k >= eStart; });
+      var revC = sum(live.filter(function (r) { return covered.indexOf(monthKey(r.fields['Activity date'])) >= 0; }), revenueOf);
+      var expC = covered.reduce(function (a, k) { return a + (expM[k] || 0); }, 0);
+      var part = covered.length && covered.length < months.length ? monthName(covered[0]) + '–' + monthName(covered[covered.length - 1]) + ' only (expenses start ' + monthName(eStart) + ' ' + eStart.slice(0, 4) + ')' : '';
+      tile('Expenses', covered.length ? cm(expC) : '—', part || (dash.line === 'all' ? 'incl. shared costs' : covered.length ? 'from the Expenses table' : 'none recorded for these months'));
+      tile('Margin', covered.length ? cmS(revC - expC) : '—', covered.length ? (revC ? pct(revC - expC, revC) + ' of revenue' : '') + (part ? ' · same months' : '') : '');
+    }
     el.appendChild(tiles);
 
     // money still moving (invoicing, any date)
@@ -1390,14 +1465,27 @@
       var l = dash.d.bookings.filter(function (r) { return lineOk(r.fields) && r.fields.Status !== 'Cancelled' && monthKey(r.fields['Activity date']) === k; });
       return { k: k, count: l.length, rev: sum(l, revenueOf), gross: sum(l, function (f) { return n(f['Gross total']); }) };
     });
-    el.appendChild(chart(per, inWin));
     var tbl = h('div', { class: 'card', style: 'padding:8px 14px' });
-    tbl.appendChild(h('div', { class: 'kv mth' }, [h('span', { text: 'Month' }), h('span', { text: 'Bookings' }), h('span', { text: 'Sales' }), h('span', { text: 'Revenue' })]));
-    per.slice().reverse().forEach(function (p) {
-      tbl.appendChild(h('div', { class: 'kv mth' + (inWin[p.k] ? '' : ' dim') }, [h('span', { text: monthName(p.k) + ' ' + p.k.slice(2, 4) }), h('span', { text: String(p.count) }), h('span', { text: cm(p.gross) }), h('span', { text: cm(p.rev) })]));
-    });
-    el.appendChild(tbl);
-    el.appendChild(h('p', { class: 'hint', text: 'From the Bookings table in Vamos Sales (Bókun, the historical log and paid Vamos invoices), by trip date. Cancelled trips are left out. Good Medicine bookings made in invoicing count once they are entered in Bókun.' }));
+    if (dash.exp) {
+      var tracked = function (k) { return eStart && k >= eStart; };
+      el.appendChild(gchart(per.map(function (p) { return { k: p.k, a: p.rev, b: tracked(p.k) ? (expM[p.k] || 0) : null }; }), inWin, 'Revenue', 'Expenses'));
+      tbl.appendChild(h('div', { class: 'kv mth' }, [h('span', { text: 'Month' }), h('span', { text: 'Revenue' }), h('span', { text: 'Expenses' }), h('span', { text: 'Margin' })]));
+      per.slice().reverse().forEach(function (p) {
+        var e = tracked(p.k) ? (expM[p.k] || 0) : null, mg = e == null ? null : p.rev - e;
+        tbl.appendChild(h('div', { class: 'kv mth' + (inWin[p.k] ? '' : ' dim') }, [h('span', { text: monthName(p.k) + ' ' + p.k.slice(2, 4) }), h('span', { text: cm(p.rev) }), h('span', { text: e == null ? '—' : cm(e) }),
+          h('span', { text: mg == null ? '—' : cmS(mg), style: mg != null && mg < 0 ? 'color:#b3261e' : '' })]));
+      });
+      el.appendChild(tbl);
+      expCategories(el, months.filter(function (k) { return tracked(k); }));
+    } else {
+      el.appendChild(chart(per, inWin));
+      tbl.appendChild(h('div', { class: 'kv mth' }, [h('span', { text: 'Month' }), h('span', { text: 'Bookings' }), h('span', { text: 'Sales' }), h('span', { text: 'Revenue' })]));
+      per.slice().reverse().forEach(function (p) {
+        tbl.appendChild(h('div', { class: 'kv mth' + (inWin[p.k] ? '' : ' dim') }, [h('span', { text: monthName(p.k) + ' ' + p.k.slice(2, 4) }), h('span', { text: String(p.count) }), h('span', { text: cm(p.gross) }), h('span', { text: cm(p.rev) })]));
+      });
+      el.appendChild(tbl);
+    }
+    el.appendChild(h('p', { class: 'hint', text: 'From the Bookings table in Vamos Sales (Bókun, the historical log and paid Vamos invoices), by trip date. Cancelled trips are left out. Good Medicine bookings made in invoicing count once they are entered in Bókun.' + (dash.exp ? ' Expenses come from the Expenses table by date, leaving out personal spending and card or loan payments. Shared costs count under All only. Margin is revenue minus expenses.' : '') }));
   }
   /* --- numbers ahead: booked trips from today on, what they should bring in and what is still to collect --- */
   function monthsFwd(count) {
@@ -1434,6 +1522,20 @@
     if (dash.line !== 'vamos') tile('Good Medicine to collect', cm(t.collect), 'balances still to be paid');
     if (dash.line === 'gm') tile('Deposits already paid', cm(t.paid), 'on these trips');
     if (dash.line !== 'gm') tile('Commissions expected', cm(t.comOpen), t.vamosTrips + (t.vamosTrips === 1 ? ' trip' : ' trips') + ', owners pay on the day');
+    // estimated costs: average of the last 3 complete months with expenses recorded
+    var est = null;
+    if (dash.exp) {
+      var expM = expByMonth(), eStart = expStart(), cur = monthKey(today);
+      var base3 = monthsBack(4).slice(0, 3).filter(function (k) { return eStart && k >= eStart; });
+      if (base3.length) {
+        var avg = base3.reduce(function (a, k) { return a + (expM[k] || 0); }, 0) / base3.length;
+        est = { avg: avg, from: base3, by: {} };
+        months.forEach(function (k) { est.by[k] = k === cur ? Math.max(0, avg - (expM[k] || 0)) : avg; });
+        var estT = months.reduce(function (a, k) { return a + est.by[k]; }, 0), revT = t.gm + t.com;
+        tile('Estimated costs', cm(estT), 'about ' + cm(avg) + ' a month (' + monthName(base3[0]) + '–' + monthName(base3[base3.length - 1]) + ' average)');
+        tile('Projected margin', cmS(revT - estT), revT ? pct(revT - estT, revT) + ' of expected revenue' : 'on trips booked so far');
+      }
+    }
     el.appendChild(tiles);
 
     // month by month
@@ -1442,13 +1544,24 @@
       l.forEach(function (r) { var a = aheadOf(r.fields); p.gm += a.gm; p.com += a.com; p.collect += a.collect; });
       return p;
     });
-    el.appendChild(aheadChart(per));
     var tbl = h('div', { class: 'card', style: 'padding:8px 14px' });
-    tbl.appendChild(h('div', { class: 'kv mth' }, [h('span', { text: 'Month' }), h('span', { text: 'Trips' }), h('span', { text: 'Expected' }), h('span', { text: dash.line === 'vamos' ? 'Commission' : 'To collect' })]));
-    per.forEach(function (p) {
-      tbl.appendChild(h('div', { class: 'kv mth' + (p.count ? '' : ' dim') }, [h('span', { text: monthName(p.k) + ' ' + p.k.slice(2, 4) }), h('span', { text: String(p.count) }), h('span', { text: cm(p.gm + p.com) }), h('span', { text: cm(dash.line === 'vamos' ? p.com : p.collect) })]));
-    });
+    if (est) {
+      el.appendChild(gchart(per.map(function (p) { return { k: p.k, a: p.gm + p.com, b: est.by[p.k] }; }), null, 'Expected', 'Est. costs'));
+      tbl.appendChild(h('div', { class: 'kv mth' }, [h('span', { text: 'Month' }), h('span', { text: 'Expected' }), h('span', { text: 'Est. costs' }), h('span', { text: 'Margin' })]));
+      per.forEach(function (p) {
+        var mg = p.gm + p.com - est.by[p.k];
+        tbl.appendChild(h('div', { class: 'kv mth' }, [h('span', { text: monthName(p.k) + ' ' + p.k.slice(2, 4) }), h('span', { text: cm(p.gm + p.com) }), h('span', { text: cm(est.by[p.k]) }), h('span', { text: cmS(mg), style: mg < 0 ? 'color:#b3261e' : '' })]));
+      });
+    } else {
+      el.appendChild(aheadChart(per));
+      tbl.appendChild(h('div', { class: 'kv mth' }, [h('span', { text: 'Month' }), h('span', { text: 'Trips' }), h('span', { text: 'Expected' }), h('span', { text: dash.line === 'vamos' ? 'Commission' : 'To collect' })]));
+      per.forEach(function (p) {
+        tbl.appendChild(h('div', { class: 'kv mth' + (p.count ? '' : ' dim') }, [h('span', { text: monthName(p.k) + ' ' + p.k.slice(2, 4) }), h('span', { text: String(p.count) }), h('span', { text: cm(p.gm + p.com) }), h('span', { text: cm(dash.line === 'vamos' ? p.com : p.collect) })]));
+      });
+    }
     el.appendChild(tbl);
+    if (dash.exp && !est) el.appendChild(h('p', { class: 'warn', style: 'margin:0 0 8px;font-size:13px', text: 'No expenses recorded in the last 3 months for this view, so there is no cost estimate.' }));
+    if (est) el.appendChild(h('p', { class: 'hint', text: 'Estimated costs are your average monthly expenses for the last 3 complete months' + (dash.line === 'all' ? ', shared costs included' : '') + '; this month counts only what is left of that average. Costs come every month while further-out months are still filling with bookings, so their margin will rise as trips are booked.' }));
 
     // not counted above: bookings still waiting for a deposit, and Good Medicine invoices not entered in Bókun yet
     var last1 = m1 + '-31';
@@ -1460,7 +1573,7 @@
     if (waiting.length) notes.push(waiting.length + (waiting.length === 1 ? ' booking is' : ' bookings are') + ' waiting for a deposit (' + waiting.map(function (r) { return r.fields['Invoice number']; }).join(', ') + '): up to ' + cm(waiting.reduce(function (a, r) { return a + potential(r.fields); }, 0)) + ' more if they pay. Not counted above.');
     if (gmInv.length) notes.push(gmInv.length + ' Good Medicine ' + (gmInv.length === 1 ? 'invoice' : 'invoices') + ' with the deposit paid ' + (gmInv.length === 1 ? 'is' : 'are') + ' not counted until entered in Bókun (' + gmInv.map(function (r) { return r.fields['Invoice number']; }).join(', ') + ': ' + cm(gmInv.reduce(function (a, r) { return a + n(r.fields['Trip price']); }, 0)) + ').');
     var odd = rows.filter(function (r) { return aheadOf(r.fields).gm < 0; });
-    if (odd.length) notes.push('Check in Bókun: ' + odd.map(function (r) { return (r.fields['Booking reference'] || '') + ' (' + shortDay(r.fields['Activity date']) + ') shows net revenue ' + cm(n(r.fields['Net revenue'])).replace('-', '−'); }).join('; ') + '. It is included as is.');
+    if (odd.length) notes.push('Check in Bókun: ' + odd.map(function (r) { return (r.fields['Booking reference'] || '') + ' (' + shortDay(r.fields['Activity date']) + ') shows net revenue ' + cmS(n(r.fields['Net revenue'])); }).join('; ') + '. It is included as is.');
     notes.forEach(function (x) { el.appendChild(h('p', { class: 'warn', style: 'margin:0 0 8px;font-size:13px', text: x })); });
     el.appendChild(h('p', { class: 'hint', text: 'Confirmed trips from the Bookings table, by trip date. Good Medicine: net revenue, and the balance still to collect (price minus what was paid). Vamos: the commission each owner pays on the day. Cancelled trips are left out.' }));
   }
