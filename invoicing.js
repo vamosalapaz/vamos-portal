@@ -24,13 +24,20 @@
        Vamos commissions), Good Medicine balances still to collect, commissions expected, by month; plus what is not counted yet.
    v14 (release v34): Numbers has an MXN / USD switch (USD at today's rate, remembered on the phone).
    v15 (release v35): optional Expenses & margin on Numbers (So far: actual expenses, margin, where the money went;
-       Ahead: estimated costs from the last 3 months' average and projected margin). */
+       Ahead: estimated costs from the last 3 months' average and projected margin).
+   v16 (release v38): Mercado Pago. Every unpaid booking or quick payment also gets a Checkout Pro link (made by the
+       "Mercado Pago links" scenario, remade when the amount changes; expires after 7 days or at the end of the trip date
+       for bookings; OXXO only when the trip is 5+ days away, since it takes 1-2 business days to clear; vouchers last up to 3 days and stop 4 days before the trip). Expired links get a
+       "New Mercado Pago link" button. Quick payments can be for Good Medicine (Bókun booking, trip date, guests), which
+       co-brands the customer page. A pending OXXO payment shows on the tracker. */
 (function () {
   'use strict';
 
   var HOOK_DATA = 'https://hook.us2.make.com/sj7umgqbg14kim902rg0ochd4ny6i72f';
   var HOOK_CREATE = 'https://hook.us2.make.com/4vs20d3adxqy8nnc1hftzito01rn933q';
   var HOOK_ACTIONS = 'https://hook.us2.make.com/f4uho6gwh1mu94gu4b4y5kbb86if4prm';
+  var HOOK_MP = 'https://hook.us2.make.com/zs62953sn02kxysp9i19cc9ettav3ihf';      // makes Mercado Pago links
+  var HOOK_MP_PAY = 'https://hook.us2.make.com/2j7cqnppew2crvf4u06ixez1jzmboq05';  // Mercado Pago payment notifications
   var SITE = 'https://vamosalapaz.com';
   var PINK = '#B51E66';           // Bugambilia
   var C = { navy: '#061A2E', foam: '#F3EFE6', aqua: '#00C6C0', pacific: '#156AB3', gulf: '#0B4F6C', lima: '#B5C62E', orange: '#E65A37', gold: '#F3B53F' };
@@ -533,8 +540,33 @@
     root.innerHTML = '';
     if (!parent && !edit) root.appendChild(modeSwitch('quick'));
     root.appendChild(h('h1', { text: edit ? 'Edit ' + (ef['Invoice number'] || 'payment') : parent ? 'Extra payment for ' + pf['Invoice number'] : 'Quick payment' }));
-    root.appendChild(h('p', { class: 'sub', text: parent ? (pf['Billed to'] || '') + ' · ' + (pf.Trip || '') : 'A card link and a payment page for any amount, such as an extra hour or an add-on.' }));
+    root.appendChild(h('p', { class: 'sub', text: parent ? (pf['Billed to'] || '') + ' · ' + (pf.Trip || '') : 'Card and Mercado Pago links and a payment page for any amount, such as an extra hour, an add-on or a Good Medicine balance.' }));
     var card = h('div', { class: 'card' });
+    var bl = edit ? ef['Business line'] : parent ? pf['Business line'] : 'Vamos marketplace';
+    state.form.gm = bl === 'Good Medicine direct';
+    var gmBox = h('div', { id: 'vi-gm' });
+    var showGm = function () { gmBox.style.display = state.form.gm ? '' : 'none'; };
+    if (!parent) {
+      card.appendChild(h('label', { text: 'For' }));
+      var bseg = h('div', { class: 'seg' });
+      [['vamos', 'Vamos a La Paz'], ['gm', 'Good Medicine']].forEach(function (b) {
+        bseg.appendChild(h('button', { type: 'button', class: (b[0] === 'gm') === state.form.gm ? 'on' : '', text: b[1], onclick: function () {
+          state.form.gm = b[0] === 'gm';
+          Array.prototype.forEach.call(bseg.children, function (x) { x.className = x.textContent === b[1] ? 'on' : ''; });
+          showGm();
+        } }));
+      });
+      card.appendChild(bseg);
+      gmBox.appendChild(h('label', { for: 'vi-qbokun', text: 'Bókun booking ID (the customer sees this)' }));
+      gmBox.appendChild(h('input', { id: 'vi-qbokun', value: ef['Bókun booking ID'] || '', placeholder: 'GOO-106214493', autocapitalize: 'characters' }));
+      gmBox.appendChild(h('div', { class: 'row' }, [
+        h('div', null, [h('label', { for: 'vi-qdate', text: 'Trip date' }), h('input', { id: 'vi-qdate', type: 'date', value: ef['Trip date'] || today() })]),
+        h('div', null, [h('label', { for: 'vi-qguests', text: 'Guests' }), h('input', { id: 'vi-qguests', type: 'number', inputmode: 'numeric', value: ef.Guests || '' })])
+      ]));
+      gmBox.appendChild(h('div', { class: 'hint', text: 'Their page shows the Good Medicine logo, "vía Vamos a La Paz" and this booking. Add the payment to Bókun yourself once it lands.' }));
+      card.appendChild(gmBox);
+      showGm();
+    }
     card.appendChild(h('label', { for: 'vi-qdesc', text: 'What is it for? (the customer sees this)' }));
     card.appendChild(h('input', { id: 'vi-qdesc', value: ef.Trip || '', placeholder: lang === 'English' ? 'Extra hour on the boat' : 'Hora extra en el barco' }));
     card.appendChild(h('label', { for: 'vi-qamt', text: 'Amount (MXN, IVA included)' }));
@@ -571,7 +603,9 @@
       if (state.busy) return;
       err.innerHTML = '';
       var v = { desc: $('#vi-qdesc').value.trim(), amt: Number($('#vi-qamt').value) || 0, name: $('#vi-name').value.trim(), phone: $('#vi-phone').value.trim(), email: $('#vi-email').value.trim(),
-        note: $('#vi-note').value.trim(), internal: $('#vi-int').value.trim(), lang: state.form.lang };
+        note: $('#vi-note').value.trim(), internal: $('#vi-int').value.trim(), lang: state.form.lang,
+        gm: !parent && state.form.gm, bokun: $('#vi-qbokun') ? $('#vi-qbokun').value.trim().toUpperCase() : '',
+        qdate: $('#vi-qdate') ? $('#vi-qdate').value : '', qguests: $('#vi-qguests') ? $('#vi-qguests').value : '' };
       var missing = [];
       if (!v.desc) missing.push('what it is for');
       if (!(v.amt >= 10)) missing.push('the amount (at least $10)');
@@ -585,7 +619,9 @@
         parentId: parent ? parent.id : '', parentNumber: parent ? pf['Invoice number'] : '',
         customerId: state.customerId, inquiryId: '', mirrorId: ids(base.Operator).join(','), offeringId: base['Offering record ID'] || '',
         source: 'WhatsApp', lang: v.lang, billedTo: v.name, phone: v.phone, email: v.email, trip: v.desc, duration: '',
-        businessLine: base['Business line'] || 'Vamos marketplace', balanceBy: 'Vamos', tripDate: base['Trip date'] || today(), endDate: '', guests: '',
+        businessLine: parent ? (pf['Business line'] || 'Vamos marketplace') : (v.gm ? 'Good Medicine direct' : 'Vamos marketplace'),
+        balanceBy: 'Vamos', tripDate: v.gm ? (v.qdate || today()) : (parent ? pf['Trip date'] || today() : edit ? ef['Trip date'] || today() : today()), endDate: '', guests: v.gm ? v.qguests : '',
+        bokunId: v.gm ? v.bokun : '',
         price: v.amt, deposit: v.amt, commission: '', ownerPayout: '', meetingPoint: '', meetingTime: '', mapLink: '', provider: '', note: v.note, internalNotes: v.internal,
         cancellation: '', signoff: 'Not needed', oldConfId: ''
       };
@@ -595,6 +631,7 @@
       });
       chain.then(function () { return post(edit ? HOOK_ACTIONS : HOOK_CREATE, payload); }).then(function (r) {
         var id = edit ? edit.id : r.id;
+        if (edit) state.forceMp = id;
         history.replaceState(null, '', location.pathname + '?k=' + encodeURIComponent(KEY) + '&invoice=' + id);
         root.innerHTML = ''; root.appendChild(h('p', { class: 'sub', text: (edit ? 'Saved. ' : 'Created ' + r.number + '. ') + 'Loading…' }));
         return load('', id);
@@ -745,7 +782,8 @@
     var payList = (d.payments || []).map(function (p) { var x = p.fields; return shortDay(x['Received on']) + ' · ' + (x.Method || '') + ' · ' + money(x.Amount); }).join('\n');
     var depBox = h('div');
     steps.appendChild(step(depPaid ? 'done' : (ready && !cancelled ? 'now' : ''), depPaid ? 'Deposit ' + money(dep) + ' paid' : 'Deposit ' + money(dep),
-      (payList ? payList + '\n' : '') + (depPaid ? '' : 'Card payments appear here by themselves (tap Refresh). Transfer or cash: Mark paid.'),
+      (payList ? payList + '\n' : '') + (f['Mercado Pago pending'] && !depPaid ? 'Mercado Pago waiting: ' + f['Mercado Pago pending'] + '\n' : '')
+        + (depPaid ? '' : 'Card and Mercado Pago payments appear here by themselves (tap Refresh). Transfer or cash: Mark paid.'),
       cancelled || depPaid ? null : [h('button', { class: 'btn sec', type: 'button', onclick: function () { payForm(inv, depBox, Math.max(0, dep - got), 'Deposit'); } }, ['Mark paid'])], depBox));
     if (!ownerFlow) {
       var balBox = h('div'), full = price > 0 && got >= price;
@@ -816,7 +854,7 @@
   function renderQuickInvoice(inv) {
     var f = inv.fields, amt = n(f['Trip price']), got = n(f['Amount paid']), paid = amt > 0 && got >= amt, cancelled = !!f['Cancelled at'];
     root.innerHTML = '';
-    root.appendChild(h('p', { class: 'sub', text: (f['Invoice number'] || '') + ' · Quick payment · ' + (f['Billed to'] || '') + ' · ' + (f.Status || '') }));
+    root.appendChild(h('p', { class: 'sub', text: (f['Invoice number'] || '') + ' · Quick payment' + (f['Business line'] === 'Good Medicine direct' ? ' · Good Medicine' + (f['Bókun booking ID'] ? ' ' + f['Bókun booking ID'] : '') : '') + ' · ' + (f['Billed to'] || '') + ' · ' + (f.Status || '') }));
     root.appendChild(h('h1', { text: (f.Trip || '') + ', ' + money(amt) }));
     if (f['Extra for (record ID)']) root.appendChild(h('a', { class: 'btn sec', style: 'margin:0 0 12px', href: location.pathname + '?k=' + encodeURIComponent(KEY) + '&invoice=' + f['Extra for (record ID)'] }, ['Extra for ' + (f['Extra for booking'] || 'booking') + ' →']));
     if (cancelled) root.appendChild(h('p', { class: 'warn', style: 'margin:0 0 12px', text: 'Cancelled ' + when(f['Cancelled at']) + '.' }));
@@ -825,7 +863,9 @@
     var payList = (state.data.payments || []).map(function (p) { var x = p.fields; return shortDay(x['Received on']) + ' · ' + (x.Method || '') + ' · ' + money(x.Amount); }).join('\n');
     var box = h('div');
     steps.appendChild(step(paid ? 'done' : (!cancelled ? 'now' : ''), paid ? 'Paid' : 'Payment ' + money(amt),
-      (payList ? payList + '\n' : '') + (paid ? '' : 'Card payments appear here by themselves (tap Refresh). Transfer or cash: Mark paid.'),
+      (payList ? payList + '\n' : '') + (f['Mercado Pago pending'] && !paid ? 'Mercado Pago waiting: ' + f['Mercado Pago pending'] + '\n' : '')
+        + (paid ? (f['Business line'] === 'Good Medicine direct' ? 'Add this payment to Bókun' + (f['Bókun booking ID'] ? ' (' + f['Bókun booking ID'] + ')' : '') + ' with Enter payment manually.' : '')
+          : 'Card and Mercado Pago payments appear here by themselves (tap Refresh). Transfer or cash: Mark paid.'),
       cancelled || paid ? null : [h('button', { class: 'btn sec', type: 'button', onclick: function () { payForm(inv, box, Math.max(0, amt - got), 'Payment'); } }, ['Mark paid'])], box));
     root.appendChild(steps);
     if (!cancelled && !paid) root.appendChild(h('button', { class: 'btn sec', type: 'button', onclick: function () { renderQuick({ edit: inv }); } }, ['Edit']));
@@ -844,18 +884,27 @@
     var linkOk = !!f['Stripe payment link'] && n(f['Payment link amount']) === dep;
     var needLink = !depPaid && !cancelled && dep > 0 && !linkOk;
     if (needLink && !state.linking && state.linkFailed !== inv.id) makeLink(inv);
+    var mp = mpState(f, dep);
+    var needMp = !depPaid && !cancelled && dep > 0 && (!mp.ok && !mp.expired || state.forceMp === inv.id);
+    if (needMp && !state.mpLinking && state.mpFailed !== inv.id) makeMpLink(inv);
     var sent = f['Sent at'];
     var title = sent ? 'Sent to ' + who : 'Send to ' + who;
     var small = sent ? 'Sent ' + when(sent) + (f['Sent via'] && f['Sent via'].length ? ' by ' + [].concat(f['Sent via']).join(', ') : '') + '.' : f.Kind === 'Quick payment' ? 'Their page has the amount, card payment and transfer details.' : 'Their page has the trip, card payment and transfer details.';
     if (state.linking) small += ' Making the card payment link…';
     else if (state.linkFailed === inv.id) small += ' The card link could not be made; the page still shows transfer details. Tap Refresh to try again.';
+    if (!depPaid && !cancelled) {
+      if (state.mpLinking) small += ' Making the Mercado Pago link…';
+      else if (state.mpFailed === inv.id) small += ' The Mercado Pago link could not be made (' + (state.mpError || 'error') + '); card and transfer still work. Tap Refresh to try again.';
+      else if (mp.expired) small += ' The Mercado Pago link expired ' + when(f['Mercado Pago link expires']) + '.';
+      else if (mp.ok) small += ' Mercado Pago link good until ' + when(f['Mercado Pago link expires']) + (mp.oxxo ? '' : ' (no OXXO: trip too soon)') + '.';
+    }
     if (depPaid || cancelled) {
       // Only green when a message actually went out from here; paying via a page shared another way doesn't count as sent.
       if (!sent) { title = 'Not sent from here'; small = depPaid ? 'The customer paid anyway, so there is nothing to send.' : 'Nothing was sent before the cancellation.'; }
       return step(sent ? 'done' : '', title, small, [h('a', { class: 'btn sec', href: page, target: '_blank', rel: 'noopener' }, ['Customer page'])]);
     }
     var msg = customerMessage(f, page);
-    var wait = !!state.linking;
+    var wait = !!state.linking || !!state.mpLinking;
     var btns = [
       f.Phone ? h('button', { class: 'btn sec', type: 'button', disabled: wait, onclick: function () { customerSent(inv, 'WhatsApp', msg); openWhatsApp(f.Phone, msg); } }, [sent ? 'WhatsApp again' : 'WhatsApp ' + who]) : null,
       h('button', { class: 'btn sec', type: 'button', disabled: wait, onclick: function () { customerSent(inv, 'Copied', msg); copy(msg); } }, ['Copy message']),
@@ -863,18 +912,19 @@
         customerSent(inv, 'Email', msg);
         location.href = 'mailto:' + f.Email + '?subject=' + encodeURIComponent((f.Kind === 'Quick payment' ? (f.Language === 'English' ? 'Payment ' : 'Pago ') : (f.Language === 'English' ? 'Your booking ' : 'Tu reservación ')) + f['Invoice number']) + '&body=' + encodeURIComponent(msg);
       } }, ['Email']) : null,
-      h('a', { class: 'btn sec', href: page, target: '_blank', rel: 'noopener' }, ['Preview'])
+      h('a', { class: 'btn sec', href: page, target: '_blank', rel: 'noopener' }, ['Preview']),
+      mp.expired && !state.mpLinking ? h('button', { class: 'btn sec', type: 'button', onclick: function () { state.mpFailed = ''; makeMpLink(inv); } }, ['New Mercado Pago link']) : null
     ];
     return step(sent ? 'done' : 'now', title, small, btns);
   }
   function customerMessage(f, page) {
     var en = f.Language === 'English', dep = n(f.Deposit);
     if (f.Kind === 'Quick payment') return en
-      ? 'Hi ' + first(f['Billed to']) + ', here is the link to pay for ' + f.Trip + ' (' + mxn(dep) + ')' + (f['Extra for booking'] ? ', booking ' + f['Extra for booking'] : '') + '. You can pay by card or bank transfer:\n' + page + '\n\nThank you!'
-      : 'Hola ' + first(f['Billed to']) + ', aquí está el enlace para pagar ' + f.Trip + ' (' + mxn(dep) + ')' + (f['Extra for booking'] ? ', reservación ' + f['Extra for booking'] : '') + '. Puedes pagar con tarjeta o por transferencia:\n' + page + '\n\n¡Gracias!';
+      ? 'Hi ' + first(f['Billed to']) + ', here is the link to pay for ' + f.Trip + ' (' + mxn(dep) + ')' + (f['Extra for booking'] ? ', booking ' + f['Extra for booking'] : '') + '. You can pay by card, Mercado Pago or bank transfer:\n' + page + '\n\nThank you!'
+      : 'Hola ' + first(f['Billed to']) + ', aquí está el enlace para pagar ' + f.Trip + ' (' + mxn(dep) + ')' + (f['Extra for booking'] ? ', reservación ' + f['Extra for booking'] : '') + '. Puedes pagar con tarjeta, Mercado Pago o transferencia:\n' + page + '\n\n¡Gracias!';
     return en
-      ? 'Hi ' + first(f['Billed to']) + ', here is your booking ' + f['Invoice number'] + ': ' + f.Trip + ', ' + fmtDate(f['Trip date'], 'English') + (f.Guests ? ', ' + f.Guests + ' guests' : '') + '.\n\nTotal ' + mxn(f['Trip price']) + ' (IVA included). To secure your spot, pay the ' + mxn(dep) + ' deposit by card or bank transfer here:\n' + page + '\n\nAny questions, just message me!'
-      : 'Hola ' + first(f['Billed to']) + ', aquí está tu reservación ' + f['Invoice number'] + ': ' + f.Trip + ', ' + fmtDate(f['Trip date'], 'Español') + (f.Guests ? ', ' + f.Guests + ' personas' : '') + '.\n\nPrecio total ' + mxn(f['Trip price']) + ' (IVA incluido). Para asegurar tu lugar, paga el anticipo de ' + mxn(dep) + ' con tarjeta o por transferencia aquí:\n' + page + '\n\n¡Cualquier duda, me escribes!';
+      ? 'Hi ' + first(f['Billed to']) + ', here is your booking ' + f['Invoice number'] + ': ' + f.Trip + ', ' + fmtDate(f['Trip date'], 'English') + (f.Guests ? ', ' + f.Guests + ' guests' : '') + '.\n\nTotal ' + mxn(f['Trip price']) + ' (IVA included). To secure your spot, pay the ' + mxn(dep) + ' deposit by card, Mercado Pago or bank transfer here:\n' + page + '\n\nAny questions, just message me!'
+      : 'Hola ' + first(f['Billed to']) + ', aquí está tu reservación ' + f['Invoice number'] + ': ' + f.Trip + ', ' + fmtDate(f['Trip date'], 'Español') + (f.Guests ? ', ' + f.Guests + ' personas' : '') + '.\n\nPrecio total ' + mxn(f['Trip price']) + ' (IVA incluido). Para asegurar tu lugar, paga el anticipo de ' + mxn(dep) + ' con tarjeta, Mercado Pago o transferencia aquí:\n' + page + '\n\n¡Cualquier duda, me escribes!';
   }
   function makeLink(inv) {
     var f = inv.fields;
@@ -890,6 +940,59 @@
       .catch(function () { state.linking = false; state.linkFailed = inv.id; })
       .then(function () { if (state.data.invoice && state.data.invoice[0] && state.data.invoice[0].id === inv.id) renderInvoice(inv); });
   }
+  /* Mercado Pago (Checkout Pro). The preference is built here and posted as-is by the "Mercado Pago links" scenario,
+     which also switches off the previous link and saves the new one on the invoice. La Paz is UTC-7 all year. */
+  function isoMx(ms) { return new Date(ms - 7 * 3600e3).toISOString().replace('Z', '-07:00'); }
+  function mpPlan(f) {
+    var now = Date.now(), quick = f.Kind === 'Quick payment', trip = f['Trip date'] || '';
+    var end = now + 7 * 864e5;
+    if (!quick && trip) end = Math.min(end, new Date(trip + 'T23:59:00-07:00').getTime());
+    if (end < now + 3600e3) end = now + 3600e3;  // a trip today still gets a link for the rest of the day
+    // Mercado Pago says an OXXO payment takes 1 to 2 business days to clear, so OXXO is only offered when the trip is at
+    // least 5 days away, and the voucher (3 days at most) stops 4 days before the trip.
+    var oxxo = !!trip && trip >= addDaysIso(todayIso(), 5);
+    var ticket = Math.min(now + 3 * 864e5, end, trip ? new Date(addDaysIso(trip, -4) + 'T23:59:00-07:00').getTime() : end);
+    return { end: end, oxxo: oxxo, ticket: ticket };
+  }
+  function mpState(f, amount) {
+    var url = f['Mercado Pago link'], exp = f['Mercado Pago link expires'];
+    var fresh = !!url && n(f['Mercado Pago link amount']) === amount;
+    var expired = fresh && !!exp && new Date(exp).getTime() <= Date.now();
+    return { ok: fresh && !expired, expired: expired, oxxo: mpPlan(f).oxxo };
+  }
+  function makeMpLink(inv) {
+    var f = inv.fields, amount = n(f.Deposit), num = f['Invoice number'] || '', es = f.Language !== 'English';
+    var quick = f.Kind === 'Quick payment', plan = mpPlan(f);
+    var page = SITE + '/reserva?k=' + (f['Page token'] || '');
+    var title = (num + ' · ' + (quick ? (f.Trip || (es ? 'Pago' : 'Payment')) : (es ? 'Anticipo ' : 'Deposit ') + (f.Trip || ''))).slice(0, 250);
+    var pref = {
+      items: [{ id: num, title: title, quantity: 1, currency_id: 'MXN', unit_price: amount }],
+      external_reference: num,
+      metadata: { invoice_id: inv.id, invoice_number: num },
+      back_urls: { success: page + '&pagado=1', pending: page + '&mp=pending', failure: page },
+      auto_return: 'approved',
+      notification_url: HOOK_MP_PAY + '?source_news=webhooks',
+      statement_descriptor: 'VAMOSLAPAZ',
+      expires: true,
+      expiration_date_from: isoMx(Date.now() - 60e3),
+      expiration_date_to: isoMx(plan.end),
+      payment_methods: { excluded_payment_types: plan.oxxo ? [] : [{ id: 'ticket' }] }
+    };
+    if (plan.oxxo) pref.date_of_expiration = isoMx(plan.ticket);
+    state.mpLinking = true;
+    if (state.forceMp === inv.id) state.forceMp = '';
+    post(HOOK_MP, { k: KEY, action: 'mplink', id: inv.id, amount: amount, expires: isoMx(plan.end), bokunId: f['Bókun booking ID'] || '',
+      oldPrefId: f['Mercado Pago preference ID'] || '', pref: JSON.stringify(pref) })
+      .then(function (r) {
+        state.mpLinking = false;
+        if (!r.url) throw new Error('no link');
+        f['Mercado Pago link'] = r.url; f['Mercado Pago preference ID'] = r.id; f['Mercado Pago link amount'] = amount;
+        f['Mercado Pago link expires'] = isoMx(plan.end); state.mpFailed = '';
+      })
+      .catch(function (e) { state.mpLinking = false; state.mpFailed = inv.id; state.mpError = String(e && e.message || '').replace(/^Saving failed \((.*?)\).*$/, '$1'); })
+      .then(function () { if (state.data.invoice && state.data.invoice[0] && state.data.invoice[0].id === inv.id) renderInvoice(inv); });
+  }
+
   // Records the customer send (fire-and-forget; survives the jump to WhatsApp or Mail).
   function customerSent(inv, via, msg) {
     var f = inv.fields, list = [].concat(f['Sent via'] || []);
@@ -1195,7 +1298,7 @@
       var q = dash.q.trim().toLowerCase(), qd = digits(q);
       if (q) {
         var hits = all.filter(function (r) {
-          var f = r.fields, hay = [f['Invoice number'], f['Billed to'], f.Trip, f.Email, f['Extra for booking'], f.Provider].join(' ').toLowerCase();
+          var f = r.fields, hay = [f['Invoice number'], f['Billed to'], f.Trip, f.Email, f['Extra for booking'], f.Provider, f['Bókun booking ID']].join(' ').toLowerCase();
           return hay.indexOf(q) >= 0 || (qd.length >= 4 && digits(f.Phone).indexOf(qd) >= 0);
         });
         list.appendChild(h('h3', { class: 'dash-h', text: hits.length + (hits.length === 1 ? ' match' : ' matches') }));
