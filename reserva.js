@@ -8,7 +8,9 @@
    v38: "Pagar con Mercado Pago" next to the card button (Checkout Pro link made by Make; hidden once it expires);
         an OXXO payment waiting to be paid shows as pending; Good Medicine payments are co-branded (Good Medicine logo,
         "vía Vamos a La Paz") and show the Bókun booking; every page ends with a link to vamosalapaz.com (/es in Spanish).
-   v39: quick payments with several lines list each line above the total. */
+   v39: quick payments with several lines list each line above the total.
+   v40: a cancelled quick payment says "Esta solicitud de pago fue cancelada" (not "reservación"); its WhatsApp
+        question asks about the payment, not a booking. */
 (function () {
   'use strict';
 
@@ -46,6 +48,8 @@
       paidFull: 'Pagado por completo. ¡Nos vemos pronto!', paidDeposit: 'Recibimos tu anticipo.',
       payment: 'Pago', qHi: 'aquí está tu pago', qPaid: '¡Pago recibido, gracias!', qPay: 'Paga', forBooking: 'Reservación', qTotal: 'Total a pagar',
       qReceipt: 'Hola, te envío el comprobante de la transferencia del pago ',
+      qCancelled: 'Esta solicitud de pago fue cancelada. Si tienes dudas, escríbenos por WhatsApp.',
+      qQuestionsMsg: 'Hola, tengo una pregunta sobre el pago ',
       payMp: 'Pagar con Mercado Pago', mpSub: 'Tarjeta, saldo de Mercado Pago y más', via: 'vía',
       mpPending: 'Tu pago con Mercado Pago está pendiente. Si elegiste OXXO, paga en la tienda antes de que venza tu ficha; se acredita en 1 a 2 días hábiles y lo verás aquí.',
       mpBack: 'Recibimos tu solicitud de pago. Si elegiste OXXO, paga en la tienda antes de que venza tu ficha; te avisaremos por WhatsApp cuando se acredite.',
@@ -72,6 +76,8 @@
       paidFull: 'Paid in full. See you soon!', paidDeposit: 'We received your deposit.',
       payment: 'Payment', qHi: 'here is your payment', qPaid: 'Payment received, thank you!', qPay: 'Pay', forBooking: 'Booking', qTotal: 'Amount due',
       qReceipt: 'Hi, here is the transfer receipt for payment ',
+      qCancelled: 'This payment request has been cancelled. If you have questions, message us on WhatsApp.',
+      qQuestionsMsg: 'Hi, I have a question about payment ',
       payMp: 'Pay with Mercado Pago', mpSub: 'Card, Mercado Pago balance and more', via: 'via',
       mpPending: 'Your Mercado Pago payment is pending. If you chose OXXO, pay at the store before your voucher expires; it takes 1 to 2 business days to show here.',
       mpBack: 'We got your payment request. If you chose OXXO, pay at the store before your voucher expires; we\'ll message you on WhatsApp once it\'s confirmed.',
@@ -236,8 +242,8 @@
     root.innerHTML = '';
     root.appendChild(h('p', { class: 'eyebrow', text: eyebrowName() + ' · ' + L.payment + ' ' + num }));
     if (st === 'Cancelled') {
-      root.appendChild(h('p', { class: 'msg warn', text: L.cancelled }));
-      root.appendChild(h('a', { class: 'btn wa', href: wa(VAMOS_WA, L.questionsMsg + num) }, [L.questions]));
+      root.appendChild(h('p', { class: 'msg warn', text: L.qCancelled }));
+      root.appendChild(h('a', { class: 'btn wa', href: wa(VAMOS_WA, L.qQuestionsMsg + num) }, [L.questions]));
       return;
     }
     var paid = depositPaid();
@@ -274,7 +280,7 @@
       }
       root.appendChild(card);
     }
-    root.appendChild(h('a', { class: 'btn sec', href: wa(VAMOS_WA, L.questionsMsg + num) }, [L.questions]));
+    root.appendChild(h('a', { class: 'btn sec', href: wa(VAMOS_WA, L.qQuestionsMsg + num) }, [L.questions]));
   }
 
   function tripCard() {
