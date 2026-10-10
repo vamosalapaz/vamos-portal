@@ -1,5 +1,5 @@
 (function(){
-// Vamos a La Paz partner portal — v19 (Oct 2026): success messages promise an email when changes go live (partner notice automations); "View vamosalapaz.com" link next to the language switch and a "View on site" entry in each published listing's ••• menu (and the profile), all opening in one shared second tab in the portal's language. v18: formatting hint (bullets with "- ", bold with **…**) under the text boxes that support it. v17: photo uploads go to the standalone "Vamos Portal — photo uploads" scenario; the old consolidated scenario is no longer called; transparent images (e.g. PNG logos) get a white background instead of black when converted to JPEG. v16: clicking Show/Hide (or Edit) no longer also opens the editor via the card click. v15: hide/show, remove and cancel-remove go to the standalone "Vamos Portal — visibility & removal" Make scenario, and failures are now reported instead of silently treated as success. v14: creates, edits, Spanish text and photo copies go to the standalone "Vamos Portal — partner edits" Make scenario. v13: listings (incl. Spanish + cancellation fields) come from the standalone "Vamos Portal — listings" Make scenario in one call; the v10–v12 feed workarounds are gone because the feed is fixed at source. v9: Duplicate an offering from the ••• menu (photos copied server-side). v8: language from the invite link (?lang=es|en), language switch on the agreement screen. v7: final partner agreement, Spanish-first (Spanish prevails)
+// Vamos a La Paz partner portal — Oct 10 2026: "Paused by Vamos a La Paz" pills (listing, boat or whole profile held by Vamos, or shared tour waiting for online booking) from the listings feed's vamosPause fields; partners can still flip their own Visible box but it has no effect while paused. Earlier — v19 (Oct 2026): success messages promise an email when changes go live (partner notice automations); "View vamosalapaz.com" link next to the language switch and a "View on site" entry in each published listing's ••• menu (and the profile), all opening in one shared second tab in the portal's language. v18: formatting hint (bullets with "- ", bold with **…**) under the text boxes that support it. v17: photo uploads go to the standalone "Vamos Portal — photo uploads" scenario; the old consolidated scenario is no longer called; transparent images (e.g. PNG logos) get a white background instead of black when converted to JPEG. v16: clicking Show/Hide (or Edit) no longer also opens the editor via the card click. v15: hide/show, remove and cancel-remove go to the standalone "Vamos Portal — visibility & removal" Make scenario, and failures are now reported instead of silently treated as success. v14: creates, edits, Spanish text and photo copies go to the standalone "Vamos Portal — partner edits" Make scenario. v13: listings (incl. Spanish + cancellation fields) come from the standalone "Vamos Portal — listings" Make scenario in one call; the v10–v12 feed workarounds are gone because the feed is fixed at source. v9: Duplicate an offering from the ••• menu (photos copied server-side). v8: language from the invite link (?lang=es|en), language switch on the agreement screen. v7: final partner agreement, Spanish-first (Spanish prevails)
 // Spanish-first interface with an English switch; bilingual listing text (ES/EN tabs,
 // AI translation via the "Vamos Portal — translate" Make scenario); cancellation policy.
 // Spanish + cancellation fields are read/saved through "Vamos Portal — bilingual fields".
@@ -24,7 +24,7 @@ try{var ul=new URLSearchParams(location.search).get("lang");if(ul=="en"||ul=="es
 function rememberLang(){try{localStorage.setItem("vamos-portal-lang",LANG)}catch(e){}try{var u=new URL(location.href);u.searchParams.set("lang",LANG);history.replaceState(null,"",u.toString())}catch(e){}}
 var S={
 es:{
- live:"\u25CF Publicado",removal:"Eliminaci\u00f3n solicitada",review:"En revisi\u00f3n",hidden:"Oculto",hiddenProfile:"Oculto porque tu perfil est\u00e1 oculto",
+ live:"\u25CF Publicado",removal:"Eliminaci\u00f3n solicitada",review:"En revisi\u00f3n",hidden:"Oculto",hiddenProfile:"Oculto porque tu perfil est\u00e1 oculto",pausedVamos:"Pausado por Vamos a La Paz",pausedBooking:"Pausado por Vamos a La Paz \u00b7 falta reserva en l\u00ednea",pausedVamosTip:"Vamos a La Paz paus\u00f3 esta publicaci\u00f3n. Escr\u00edbenos por WhatsApp si tienes dudas.",pausedBookingTip:"Los tours compartidos se publican cuando tienen reserva en l\u00ednea. Env\u00edanos tu c\u00f3digo de afiliado (por ejemplo FareHarbor) y lo activamos.",
  changesReview:"Cambios en revisi\u00f3n",willLive:"Se publicar\u00e1 al guardar",willHide:"Se ocultar\u00e1 al guardar",willShow:"Se mostrar\u00e1 al guardar",
  cancelRemoval:"Cancelar solicitud de eliminaci\u00f3n",hide:"Ocultar",show:"Mostrar",edit:"Editar",more:"M\u00e1s acciones",requestRemoval:"Solicitar eliminaci\u00f3n",dup:"Duplicar",siteLink:"Ver vamosalapaz.com",viewSite:"Ver en el sitio",previewSite:"Vista previa en el sitio",viewProfile:"Ver mi perfil en el sitio",previewProfile:"Vista previa de mi perfil",
  upTo:function(n){return "Hasta "+n+" personas"},
@@ -103,7 +103,7 @@ tAddB:"Agregar un barco",tEditB:"Editar barco",tEditP:"Editar tu perfil",
   "Non-refundable":"No reembolsable","Custom (see notes)":"Personalizada (ver notas)"}
 },
 en:{
- live:"\u25CF Live",removal:"Removal requested",review:"Pending review",hidden:"Hidden",hiddenProfile:"Hidden because your profile is hidden",
+ live:"\u25CF Live",removal:"Removal requested",review:"Pending review",hidden:"Hidden",hiddenProfile:"Hidden because your profile is hidden",pausedVamos:"Paused by Vamos a La Paz",pausedBooking:"Paused by Vamos a La Paz \u00b7 needs online booking",pausedVamosTip:"Vamos a La Paz has paused this listing. Message us on WhatsApp with any questions.",pausedBookingTip:"Shared tours go live once they have online booking. Send us your affiliate booking code (e.g. FareHarbor) and we'll switch it on.",
  changesReview:"Changes awaiting review",willLive:"Will go live when you save",willHide:"Will be hidden when you save",willShow:"Will show when you save",
  cancelRemoval:"Cancel removal request",hide:"Hide",show:"Show",edit:"Edit",more:"More actions",requestRemoval:"Request removal",dup:"Duplicate",siteLink:"View vamosalapaz.com",viewSite:"View on site",previewSite:"Preview on site",viewProfile:"View my profile on site",previewProfile:"Preview my profile",
  upTo:function(n){return "Up to "+n+" guests"},
@@ -229,9 +229,16 @@ function siteLabel(key){return t(key)+" \u2197"}
  row.appendChild(a);h1.parentNode.insertBefore(row,h1.nextSibling)}})();
 
 var LIVE=function(){return t("live")};
-function pillFor(it){
+function pauseOf(it,kind){
+ if(DATA&&DATA.operator&&D(DATA.operator.vamosPause))return"admin";
+ if(D(it.vamosPause))return D(it.vamosPause);
+ if(kind=="o"&&it.boatId&&DATA){var b=DATA.boats.filter(function(x){return x.id==it.boatId})[0];if(b&&D(b.vamosPause))return"admin"}
+ return"";
+}
+function pillFor(it,kind){
  if(D(it.status)=="Removal requested")return[t("removal"),"#FBE9E9","#98302F"];
  if(D(it.status)=="Submitted for review")return[t("review"),"#FDF1DC","#8A5A12"];
+ var pz=pauseOf(it,kind);if(pz)return[t(pz=="booking"?"pausedBooking":"pausedVamos"),"#FBEFE3","#9A4B12",t(pz=="booking"?"pausedBookingTip":"pausedVamosTip")];
  if(it.visible!="true")return[t("hidden"),"#EEF1F3","#5A6670"];
  if(it.effectiveVisible!="1")return[t("hiddenProfile"),"#EEF1F3","#5A6670"];
  return[LIVE(),"#E6F4EC","#1B6B43"];
@@ -268,7 +275,7 @@ function card(it,kind){
  var dur=LANG=="es"&&D(it.durationEs)?D(it.durationEs):D(it.duration);
  n.querySelector(".boat-card-type").textContent=kind=="b"?D(it.model):[optLabel(D(it.tourType)),dur].filter(Boolean).join(" \u00b7 ");
  n.querySelector(".boat-card-capacity").textContent=kind=="b"?(it.capacity?t("upTo")(it.capacity):""):[D(it.priceRange),optLabel(D(it.priceUnit))].filter(Boolean).join(" ");
- var p=n.querySelector(".ml-pill"),pl=pillFor(it);setPill(p,pl[0],pl[1],pl[2]);
+ var p=n.querySelector(".ml-pill"),pl=pillFor(it,kind);setPill(p,pl[0],pl[1],pl[2]);if(pl[3])p.title=pl[3];
  var acts=n.querySelector(".ml-actions");
  if(D(it.status)=="Removal requested"){
   acts.innerHTML="";
@@ -312,7 +319,7 @@ function summary(){
  function chip(x){s.appendChild(el("span","ml-chip",x))}
  chip(t("nOff")(DATA.offerings.length));
  chip(t("nBoat")(DATA.boats.length));
- chip(DATA.operator&&DATA.operator.visible=="true"?t("profLive"):t("profHidden"));
+ chip(DATA.operator&&D(DATA.operator.vamosPause)?t("pausedVamos"):DATA.operator&&DATA.operator.visible=="true"?t("profLive"):t("profHidden"));
  var all=DATA.offerings.concat(DATA.boats);
  var waiting=all.filter(function(x){
   var st=D(x.status);return st=="Submitted for review"||st=="Removal requested"||editPending(x)}).length+(editPending(DATA.operator)?1:0);
@@ -337,7 +344,8 @@ function profile(op){
  ds.textContent=txt.length>260?txt.slice(0,260)+"\u2026":txt;
  var pl=el("div","ml-pill");
  var live=op.visible=="true";
- if(live)setPill(pl,LIVE(),"#E6F4EC","#1B6B43");else setPill(pl,t("hidden"),"#EEF1F3","#5A6670");
+ if(D(op.vamosPause)){setPill(pl,t("pausedVamos"),"#FBEFE3","#9A4B12");pl.title=t("pausedVamosTip")}
+ else if(live)setPill(pl,LIVE(),"#E6F4EC","#1B6B43");else setPill(pl,t("hidden"),"#EEF1F3","#5A6670");
  var pills=el("div");pills.style.cssText="display:flex;flex-wrap:wrap;gap:6px";pills.appendChild(pl);
  body.appendChild(nm);body.appendChild(ds);body.appendChild(pills);
  var acts=el("div");acts.style.cssText="flex:0 0 auto;display:flex;gap:8px;align-items:center";
