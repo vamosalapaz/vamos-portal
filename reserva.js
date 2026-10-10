@@ -7,7 +7,8 @@
    v27: quick payments (Kind = Quick payment): a one-off amount with a description, e.g. an extra hour ("Pago VLP-xxxx").
    v38: "Pagar con Mercado Pago" next to the card button (Checkout Pro link made by Make; hidden once it expires);
         an OXXO payment waiting to be paid shows as pending; Good Medicine payments are co-branded (Good Medicine logo,
-        "vía Vamos a La Paz") and show the Bókun booking; every page ends with a link to vamosalapaz.com (/es in Spanish). */
+        "vía Vamos a La Paz") and show the Bókun booking; every page ends with a link to vamosalapaz.com (/es in Spanish).
+   v39: quick payments with several lines list each line above the total. */
 (function () {
   'use strict';
 
@@ -250,6 +251,11 @@
       x['Note to customer'] ? h('p', { class: 'pre', style: 'margin-top:8px', text: x['Note to customer'] }) : null
     ]));
     var m = h('div', { class: 'card money-card' });
+    var lines = [];
+    try { lines = JSON.parse(x['Line items'] || '[]'); } catch (e) { lines = []; }
+    if (Array.isArray(lines) && lines.length > 1) lines.forEach(function (l) {
+      if (l && l.d) m.appendChild(h('div', { class: 'money' }, [h('span', { text: l.d }), h('b', { text: money(l.a) })]));
+    });
     m.appendChild(h('div', { class: 'money total' }, [h('span', { text: paid ? L.paid : L.qTotal }), h('b', { text: money(amount) })]));
     m.appendChild(h('p', { class: 'iva', text: L.iva }));
     root.appendChild(m);
