@@ -33,7 +33,9 @@
    v17 (release v39): customer links go to /reserva, /reserva-gm, /pago or /pago-gm (Vamos or Good Medicine, booking or
        quick payment), under /es for Spanish customers, so WhatsApp previews show the right title and image.
        Quick payments can have several lines (description + amount; the total is charged; stored as JSON in "Line items").
-       Send receipt step (WhatsApp / Copy) once any payment has landed, on bookings and quick payments. */
+       Send receipt step (WhatsApp / Copy) once any payment has landed, on bookings and quick payments.
+   v18 (release v41): Good Medicine quick payments look up that day's Bókun bookings (sales ledger) from the trip date;
+       tapping one fills the Bókun ID, guests, customer (if empty) and a first line with the balance due. */
 (function () {
   'use strict';
 
@@ -559,18 +561,58 @@
           state.form.gm = b[0] === 'gm';
           Array.prototype.forEach.call(bseg.children, function (x) { x.className = x.textContent === b[1] ? 'on' : ''; });
           showGm();
+          if (state.form.gm) findBokun();
         } }));
       });
       card.appendChild(bseg);
-      gmBox.appendChild(h('label', { for: 'vi-qbokun', text: 'Bókun booking ID (the customer sees this)' }));
-      gmBox.appendChild(h('input', { id: 'vi-qbokun', value: ef['Bókun booking ID'] || '', placeholder: 'GOO-106214493', autocapitalize: 'characters' }));
+      // Trip date first: it lists that day's Bókun bookings (from the sales ledger, synced every 2 hours); tapping one fills the rest.
+      var bkList = h('div', { id: 'vi-bklist' });
+      var findBokun = function () {
+        var d = $('#vi-qdate') && $('#vi-qdate').value;
+        bkList.innerHTML = '';
+        if (!d || edit) return;
+        bkList.appendChild(h('p', { class: 'hint', text: 'Looking for Bókun bookings on this date…' }));
+        post(HOOK_EXTRAS, { k: KEY, action: 'bokunday', date: d }).then(function (r) {
+          if ($('#vi-qdate').value !== d) return;
+          bkList.innerHTML = '';
+          var list = (r.bookings || []).map(function (b) { return b.fields || {}; }).filter(function (x) { return x['Booking reference']; });
+          if (!list.length) { bkList.appendChild(h('p', { class: 'hint', text: 'No Bókun bookings found on this date. Type the Bókun ID below (bookings made in the last 2 hours may not be here yet).' })); return; }
+          bkList.appendChild(h('p', { class: 'hint', text: 'Tap the booking to fill in the details:' }));
+          list.forEach(function (x) {
+            var bal = Math.max(0, n(x['Gross total']) - n(x['Paid amount']));
+            bkList.appendChild(h('button', { type: 'button', class: 'btn sec', style: 'text-align:left;margin:0 0 6px;padding:10px 12px;font-size:14px;line-height:1.35', onclick: function () { pickBokun(x, bal); } }, [
+              h('b', { text: niceName(x['Customer name']) || 'No name' }), h('br'),
+              shortTrip(x['Product name (as sold)']) + (x['Total guests'] ? ' · ' + x['Total guests'] + ' guests' : '') + ' · ' + x['Booking reference'] + ' · balance ' + money(bal)
+            ]));
+          });
+        }).catch(function () { bkList.innerHTML = ''; bkList.appendChild(h('p', { class: 'hint', text: 'Could not load Bókun bookings. Type the Bókun ID below.' })); });
+      };
+      var pickBokun = function (x, bal) {
+        $('#vi-qbokun').value = x['Booking reference'] || '';
+        if (x['Total guests']) $('#vi-qguests').value = x['Total guests'];
+        if (!$('#vi-name').value.trim() && x['Customer name']) $('#vi-name').value = niceName(x['Customer name']);
+        if (!$('#vi-email').value.trim() && x['Customer email'] && !/^info\+/i.test(x['Customer email'])) $('#vi-email').value = x['Customer email'];
+        if (!$('#vi-phone').value.trim() && x['Customer phone']) { $('#vi-phone').value = x['Customer phone']; $('#vi-phone').dispatchEvent(new Event('change')); }
+        var first = linesBox.querySelector('.qline'), es = state.form.lang !== 'English';
+        if (first && bal > 0) {
+          first.querySelector('.qd').value = (es ? 'Saldo reserva ' : 'Balance, booking ') + shortTrip(x['Product name (as sold)']);
+          first.querySelector('.qa').value = bal;
+          sumLines();
+        }
+        Array.prototype.forEach.call(bkList.querySelectorAll('button'), function (b) { b.style.outline = ''; });
+        toast('Filled from ' + x['Booking reference']);
+      };
+      gmBox.appendChild(h('label', { for: 'vi-qdate', text: 'Trip date' }));
+      gmBox.appendChild(h('input', { id: 'vi-qdate', type: 'date', value: ef['Trip date'] || today(), onchange: findBokun }));
+      gmBox.appendChild(bkList);
       gmBox.appendChild(h('div', { class: 'row' }, [
-        h('div', null, [h('label', { for: 'vi-qdate', text: 'Trip date' }), h('input', { id: 'vi-qdate', type: 'date', value: ef['Trip date'] || today() })]),
+        h('div', null, [h('label', { for: 'vi-qbokun', text: 'Bókun booking ID' }), h('input', { id: 'vi-qbokun', value: ef['Bókun booking ID'] || '', placeholder: 'GOO-106214493', autocapitalize: 'characters' })]),
         h('div', null, [h('label', { for: 'vi-qguests', text: 'Guests' }), h('input', { id: 'vi-qguests', type: 'number', inputmode: 'numeric', value: ef.Guests || '' })])
       ]));
       gmBox.appendChild(h('div', { class: 'hint', text: 'Their page shows the Good Medicine logo, "vía Vamos a La Paz" and this booking. Add the payment to Bókun yourself once it lands.' }));
       card.appendChild(gmBox);
       showGm();
+      if (state.form.gm) setTimeout(findBokun, 0);
     }
     card.appendChild(h('label', { text: 'Lines (the customer sees these; MXN, IVA included)' }));
     var linesBox = h('div', { id: 'vi-lines' }), totalEl = h('b', { id: 'vi-qtotal' });
@@ -982,6 +1024,14 @@
   }
   function parseLines(raw) {
     try { var x = JSON.parse(raw || '[]'); return Array.isArray(x) ? x.filter(function (l) { return l && l.d; }) : []; } catch (e) { return []; }
+  }
+  // "Carlos Daniel Cruz villaloVos" → "Carlos Daniel Cruz Villalovos"
+  function niceName(s) {
+    return String(s || '').trim().split(/\s+/).map(function (w) { return w ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : w; }).join(' ');
+  }
+  // "Day Trip to Playa Balandra (8 hours)" → "Playa Balandra"
+  function shortTrip(s) {
+    return String(s || '').replace(/^\s*(day trip|excursi[oó]n de un d[ií]a)\s+(to|a)\s+/i, '').replace(/\s*\([^)]*\)\s*$/, '').trim();
   }
   function customerPage(f) {
     var slug = (f.Kind === 'Quick payment' ? 'pago' : 'reserva') + (f['Business line'] === 'Good Medicine direct' ? '-gm' : '');
