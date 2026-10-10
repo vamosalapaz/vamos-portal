@@ -29,7 +29,11 @@
        "Mercado Pago links" scenario, remade when the amount changes; expires after 7 days or at the end of the trip date
        for bookings; OXXO only when the trip is 5+ days away, since it takes 1-2 business days to clear; vouchers last up to 3 days and stop 4 days before the trip). Expired links get a
        "New Mercado Pago link" button. Quick payments can be for Good Medicine (Bókun booking, trip date, guests), which
-       co-brands the customer page. A pending OXXO payment shows on the tracker. */
+       co-brands the customer page. A pending OXXO payment shows on the tracker.
+   v17 (release v39): customer links go to /reserva, /reserva-gm, /pago or /pago-gm (Vamos or Good Medicine, booking or
+       quick payment), under /es for Spanish customers, so WhatsApp previews show the right title and image.
+       Quick payments can have several lines (description + amount; the total is charged; stored as JSON in "Line items").
+       Send receipt step (WhatsApp / Copy) once any payment has landed, on bookings and quick payments. */
 (function () {
   'use strict';
 
@@ -38,6 +42,7 @@
   var HOOK_ACTIONS = 'https://hook.us2.make.com/f4uho6gwh1mu94gu4b4y5kbb86if4prm';
   var HOOK_MP = 'https://hook.us2.make.com/zs62953sn02kxysp9i19cc9ettav3ihf';      // makes Mercado Pago links
   var HOOK_MP_PAY = 'https://hook.us2.make.com/2j7cqnppew2crvf4u06ixez1jzmboq05';  // Mercado Pago payment notifications
+  var HOOK_EXTRAS = 'https://hook.us2.make.com/6liy9ne4gixy48wc5d7ev7uhxtx6v0k6';  // line items, Bókun ID, receipt sent
   var SITE = 'https://vamosalapaz.com';
   var PINK = '#B51E66';           // Bugambilia
   var C = { navy: '#061A2E', foam: '#F3EFE6', aqua: '#00C6C0', pacific: '#156AB3', gulf: '#0B4F6C', lima: '#B5C62E', orange: '#E65A37', gold: '#F3B53F' };
@@ -567,10 +572,25 @@
       card.appendChild(gmBox);
       showGm();
     }
-    card.appendChild(h('label', { for: 'vi-qdesc', text: 'What is it for? (the customer sees this)' }));
-    card.appendChild(h('input', { id: 'vi-qdesc', value: ef.Trip || '', placeholder: lang === 'English' ? 'Extra hour on the boat' : 'Hora extra en el barco' }));
-    card.appendChild(h('label', { for: 'vi-qamt', text: 'Amount (MXN, IVA included)' }));
-    card.appendChild(h('input', { id: 'vi-qamt', type: 'number', inputmode: 'numeric', value: ef['Trip price'] || '' }));
+    card.appendChild(h('label', { text: 'Lines (the customer sees these; MXN, IVA included)' }));
+    var linesBox = h('div', { id: 'vi-lines' }), totalEl = h('b', { id: 'vi-qtotal' });
+    var addLine = function (d, a) {
+      var row = h('div', { class: 'qline', style: 'display:grid;grid-template-columns:minmax(0,1fr) 96px 32px;gap:6px;margin:0 0 6px;align-items:center' });
+      row.appendChild(h('input', { class: 'qd', value: d || '', placeholder: lang === 'English' ? 'Extra hour on the boat' : 'Hora extra en el barco', oninput: sumLines }));
+      row.appendChild(h('input', { class: 'qa', type: 'number', inputmode: 'numeric', value: a || '', placeholder: '0', style: 'text-align:right', oninput: sumLines }));
+      row.appendChild(h('button', { type: 'button', class: 'link', 'aria-label': 'Remove line', text: '×', style: 'font-size:22px;padding:0;margin:0', onclick: function () {
+        if (linesBox.children.length > 1) linesBox.removeChild(row); else { row.querySelector('.qd').value = ''; row.querySelector('.qa').value = ''; }
+        sumLines();
+      } }));
+      linesBox.appendChild(row);
+    };
+    var sumLines = function () { totalEl.textContent = money(readLines().reduce(function (t, l) { return t + l.a; }, 0)); };
+    var saved = parseLines(ef['Line items']);
+    if (saved.length) saved.forEach(function (l) { addLine(l.d, l.a); }); else addLine(ef.Trip || '', ef['Trip price'] || '');
+    card.appendChild(linesBox);
+    card.appendChild(h('button', { type: 'button', class: 'link', text: '+ Add line', style: 'margin:2px 0 8px', onclick: function () { addLine('', ''); linesBox.lastChild.querySelector('.qd').focus(); } }));
+    card.appendChild(h('div', { style: 'display:flex;justify-content:space-between;border-top:1px solid #e3ddd2;padding-top:8px' }, [h('b', { text: 'Total' }), totalEl]));
+    setTimeout(sumLines, 0);
     root.appendChild(card);
     var cust = h('form', { class: 'card', autocomplete: 'on', onsubmit: function (e) { e.preventDefault(); } });
     setTimeout(langHint, 0);
@@ -602,13 +622,15 @@
     var btn = h('button', { class: 'btn pri', type: 'button', onclick: function () {
       if (state.busy) return;
       err.innerHTML = '';
-      var v = { desc: $('#vi-qdesc').value.trim(), amt: Number($('#vi-qamt').value) || 0, name: $('#vi-name').value.trim(), phone: $('#vi-phone').value.trim(), email: $('#vi-email').value.trim(),
+      var lines = readLines();
+      var v = { lines: lines, desc: lines.map(function (l) { return l.d; }).join(' + '), amt: lines.reduce(function (t, l) { return t + l.a; }, 0), name: $('#vi-name').value.trim(), phone: $('#vi-phone').value.trim(), email: $('#vi-email').value.trim(),
         note: $('#vi-note').value.trim(), internal: $('#vi-int').value.trim(), lang: state.form.lang,
         gm: !parent && state.form.gm, bokun: $('#vi-qbokun') ? $('#vi-qbokun').value.trim().toUpperCase() : '',
         qdate: $('#vi-qdate') ? $('#vi-qdate').value : '', qguests: $('#vi-qguests') ? $('#vi-qguests').value : '' };
       var missing = [];
-      if (!v.desc) missing.push('what it is for');
-      if (!(v.amt >= 10)) missing.push('the amount (at least $10)');
+      if (!lines.length || lines.some(function (l) { return !l.d; })) missing.push('a description on every line');
+      if (lines.some(function (l) { return !(l.a > 0); })) missing.push('an amount on every line');
+      if (!(v.amt >= 10)) missing.push('a total of at least $10');
       if (!v.name) missing.push('customer name');
       if (!v.phone && !v.email) missing.push('a WhatsApp number or email');
       if (missing.length) { err.appendChild(h('p', { class: 'err', text: 'Add ' + missing.join(', ') + '.' })); return; }
@@ -630,6 +652,10 @@
         return post(HOOK_CREATE, { k: KEY, action: 'customer', name: v.name, phone: v.phone, email: v.email, lang: v.lang }).then(function (r) { state.customerId = payload.customerId = r.id; });
       });
       chain.then(function () { return post(edit ? HOOK_ACTIONS : HOOK_CREATE, payload); }).then(function (r) {
+        // Lines and the Bókun ID are saved separately (the create/edit scenarios don't carry them).
+        return post(HOOK_EXTRAS, { k: KEY, action: 'extras', id: edit ? edit.id : r.id, bokunId: payload.bokunId || '',
+          lines: v.lines.length > 1 ? JSON.stringify(v.lines) : '' }).then(function () { return r; });
+      }).then(function (r) {
         var id = edit ? edit.id : r.id;
         if (edit) state.forceMp = id;
         history.replaceState(null, '', location.pathname + '?k=' + encodeURIComponent(KEY) + '&invoice=' + id);
@@ -791,6 +817,8 @@
         cancelled || full || !depPaid ? null : [h('button', { class: 'btn sec', type: 'button', onclick: function () { payForm(inv, balBox, Math.max(0, price - got), 'Balance'); } }, ['Mark paid'])], balBox));
     }
 
+    if (got > 0 && !cancelled) steps.appendChild(receiptStep(inv));
+
     // 4–5. managed booking: pass the deposit on, settle at the dock
     if (ownerFlow) {
       var toOwner = n(f['Paid to owner']), owed = n(f['Owner deposit owed']), comGot = n(f['Commission received']);
@@ -856,6 +884,8 @@
     root.innerHTML = '';
     root.appendChild(h('p', { class: 'sub', text: (f['Invoice number'] || '') + ' · Quick payment' + (f['Business line'] === 'Good Medicine direct' ? ' · Good Medicine' + (f['Bókun booking ID'] ? ' ' + f['Bókun booking ID'] : '') : '') + ' · ' + (f['Billed to'] || '') + ' · ' + (f.Status || '') }));
     root.appendChild(h('h1', { text: (f.Trip || '') + ', ' + money(amt) }));
+    var qLines = parseLines(f['Line items']);
+    if (qLines.length > 1) root.appendChild(h('p', { class: 'sub', style: 'white-space:pre-line', text: qLines.map(function (l) { return l.d + ' · ' + money(l.a); }).join('\n') }));
     if (f['Extra for (record ID)']) root.appendChild(h('a', { class: 'btn sec', style: 'margin:0 0 12px', href: location.pathname + '?k=' + encodeURIComponent(KEY) + '&invoice=' + f['Extra for (record ID)'] }, ['Extra for ' + (f['Extra for booking'] || 'booking') + ' →']));
     if (cancelled) root.appendChild(h('p', { class: 'warn', style: 'margin:0 0 12px', text: 'Cancelled ' + when(f['Cancelled at']) + '.' }));
     var steps = h('div', { class: 'card' });
@@ -867,6 +897,7 @@
         + (paid ? (f['Business line'] === 'Good Medicine direct' ? 'Add this payment to Bókun' + (f['Bókun booking ID'] ? ' (' + f['Bókun booking ID'] + ')' : '') + ' with Enter payment manually.' : '')
           : 'Card and Mercado Pago payments appear here by themselves (tap Refresh). Transfer or cash: Mark paid.'),
       cancelled || paid ? null : [h('button', { class: 'btn sec', type: 'button', onclick: function () { payForm(inv, box, Math.max(0, amt - got), 'Payment'); } }, ['Mark paid'])], box));
+    if (got > 0 && !cancelled) steps.appendChild(receiptStep(inv));
     root.appendChild(steps);
     if (!cancelled && !paid) root.appendChild(h('button', { class: 'btn sec', type: 'button', onclick: function () { renderQuick({ edit: inv }); } }, ['Edit']));
     root.appendChild(h('button', { class: 'btn sec', type: 'button', onclick: function () { reload(inv, 'Refreshing…'); } }, ['Refresh']));
@@ -880,7 +911,7 @@
   function customerStep(inv, ready, depPaid, cancelled) {
     var f = inv.fields, who = first(f['Billed to']) || 'the customer', dep = n(f.Deposit);
     if (!ready) return step('', 'Send to ' + who, 'Unlocks when the owner confirms.');
-    var page = SITE + '/reserva?k=' + (f['Page token'] || '');
+    var page = customerPage(f);
     var linkOk = !!f['Stripe payment link'] && n(f['Payment link amount']) === dep;
     var needLink = !depPaid && !cancelled && dep > 0 && !linkOk;
     if (needLink && !state.linking && state.linkFailed !== inv.id) makeLink(inv);
@@ -940,6 +971,23 @@
       .catch(function () { state.linking = false; state.linkFailed = inv.id; })
       .then(function () { if (state.data.invoice && state.data.invoice[0] && state.data.invoice[0].id === inv.id) renderInvoice(inv); });
   }
+  /* The customer's page link. Four Webflow pages run the same reserva.js and differ only in their WhatsApp/social
+     preview (title + image): reserva / reserva-gm (bookings) and pago / pago-gm (quick payments), Vamos or Good Medicine.
+     Spanish customers get the /es version, whose preview title is in Spanish. */
+  // Quick payment lines: [{d: description, a: amount}] from the form, or from the invoice's "Line items" JSON.
+  function readLines() {
+    return Array.prototype.map.call(document.querySelectorAll('#vi-lines .qline'), function (row) {
+      return { d: row.querySelector('.qd').value.trim(), a: Number(row.querySelector('.qa').value) || 0 };
+    }).filter(function (l) { return l.d || l.a; });
+  }
+  function parseLines(raw) {
+    try { var x = JSON.parse(raw || '[]'); return Array.isArray(x) ? x.filter(function (l) { return l && l.d; }) : []; } catch (e) { return []; }
+  }
+  function customerPage(f) {
+    var slug = (f.Kind === 'Quick payment' ? 'pago' : 'reserva') + (f['Business line'] === 'Good Medicine direct' ? '-gm' : '');
+    return SITE + (f.Language === 'English' ? '' : '/es') + '/' + slug + '?k=' + (f['Page token'] || '');
+  }
+
   /* Mercado Pago (Checkout Pro). The preference is built here and posted as-is by the "Mercado Pago links" scenario,
      which also switches off the previous link and saves the new one on the invoice. La Paz is UTC-7 all year. */
   function isoMx(ms) { return new Date(ms - 7 * 3600e3).toISOString().replace('Z', '-07:00'); }
@@ -963,7 +1011,7 @@
   function makeMpLink(inv) {
     var f = inv.fields, amount = n(f.Deposit), num = f['Invoice number'] || '', es = f.Language !== 'English';
     var quick = f.Kind === 'Quick payment', plan = mpPlan(f);
-    var page = SITE + '/reserva?k=' + (f['Page token'] || '');
+    var page = customerPage(f);
     var title = (num + ' · ' + (quick ? (f.Trip || (es ? 'Pago' : 'Payment')) : (es ? 'Anticipo ' : 'Deposit ') + (f.Trip || ''))).slice(0, 250);
     var pref = {
       items: [{ id: num, title: title, quantity: 1, currency_id: 'MXN', unit_price: amount }],
@@ -991,6 +1039,34 @@
       })
       .catch(function (e) { state.mpLinking = false; state.mpFailed = inv.id; state.mpError = String(e && e.message || '').replace(/^Saving failed \((.*?)\).*$/, '$1'); })
       .then(function () { if (state.data.invoice && state.data.invoice[0] && state.data.invoice[0].id === inv.id) renderInvoice(inv); });
+  }
+
+  /* Send receipt: once money has landed, a thank-you in the customer's language with their page link (which now shows
+     the payment). Green when sent after the latest payment; "Send again" after a later payment. */
+  function receiptStep(inv) {
+    var f = inv.fields, who = first(f['Billed to']) || 'the customer', es = f.Language !== 'English';
+    var got = n(f['Amount paid']), price = n(f['Trip price']), quick = f.Kind === 'Quick payment', num = f['Invoice number'] || '';
+    var page = customerPage(f), when2 = fmtDate(f['Trip date'], es ? 'Español' : 'English');
+    var last = (state.data.payments || []).reduce(function (m, p) { var t = p.fields['Recorded at'] || p.createdTime || ''; return t > m ? t : m; }, '');
+    var sentAt = f['Receipt sent at'] || '', current = !!sentAt && (!last || sentAt >= last);
+    var msg;
+    if (quick) msg = es
+      ? 'Hola ' + first(f['Billed to']) + ', recibimos tu pago de ' + mxn(got) + ' (' + num + '). ¡Gracias! Tu comprobante: ' + page
+      : 'Hi ' + first(f['Billed to']) + ', we received your payment of ' + mxn(got) + ' (' + num + '). Thank you! Your receipt: ' + page;
+    else msg = es
+      ? 'Hola ' + first(f['Billed to']) + ', recibimos tu pago de ' + mxn(got) + ' para tu reservación ' + num + ' (' + (f.Trip || '') + ', ' + when2 + ')' + (price > got ? '. Saldo pendiente: ' + mxn(price - got) : '') + '. ¡Gracias! Aquí está tu reservación: ' + page
+      : 'Hi ' + first(f['Billed to']) + ', we received your payment of ' + mxn(got) + ' for booking ' + num + ' (' + (f.Trip || '') + ', ' + when2 + ')' + (price > got ? '. Balance due: ' + mxn(price - got) : '') + '. Thank you! Here is your booking: ' + page;
+    var mark = function () {
+      f['Receipt sent at'] = new Date().toISOString();
+      var body = new URLSearchParams({ k: KEY, action: 'receipt', id: inv.id, at: f['Receipt sent at'] });
+      if (navigator.sendBeacon) navigator.sendBeacon(HOOK_EXTRAS, body); else fetch(HOOK_EXTRAS, { method: 'POST', body: body, keepalive: true });
+      setTimeout(function () { renderInvoice(inv); }, 400);
+    };
+    return step(current ? 'done' : 'now', current ? 'Receipt sent to ' + who : 'Send receipt to ' + who,
+      current ? 'Sent ' + when(sentAt) + '.' : 'A thank-you with ' + mxn(got) + ' received and their page link, which shows the payment.', [
+        f.Phone ? h('button', { class: 'btn sec', type: 'button', onclick: function () { mark(); openWhatsApp(f.Phone, msg); } }, [current ? 'Send again' : 'WhatsApp ' + who]) : null,
+        h('button', { class: 'btn sec', type: 'button', onclick: function () { mark(); copy(msg); } }, ['Copy message'])
+      ]);
   }
 
   // Records the customer send (fire-and-forget; survives the jump to WhatsApp or Mail).
@@ -1090,7 +1166,7 @@
   // After a reschedule: one-tap WhatsApp messages to the customer and the owner, then reload.
   function tellPeople(inv, conf, box, r) {
     var f = inv.fields, cf = conf ? conf.fields : {}, cEs = f.Language !== 'English', oEs = cf.Language !== 'English';
-    var cLink = f['Page token'] ? SITE + '/reserva?k=' + f['Page token'] : '';
+    var cLink = f['Page token'] ? customerPage(f) : '';
     var oLink = cf['Page token'] ? SITE + '/confirmar?k=' + cf['Page token'] : '';
     var when = function (es) { return fmtDate(r.date, es ? 'Español' : 'English') + (r.end ? (es ? ' al ' : ' to ') + fmtDate(r.end, es ? 'Español' : 'English') : '') + (r.time ? (es ? ', a las ' : ' at ') + r.time : ''); };
     var depPaid = n(f.Deposit) > 0 && n(f['Amount paid']) >= n(f.Deposit), passed = n(f['Paid to owner']) > 0;
