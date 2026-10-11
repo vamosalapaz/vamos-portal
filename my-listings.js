@@ -24,7 +24,7 @@ try{var ul=new URLSearchParams(location.search).get("lang");if(ul=="en"||ul=="es
 function rememberLang(){try{localStorage.setItem("vamos-portal-lang",LANG)}catch(e){}try{var u=new URL(location.href);u.searchParams.set("lang",LANG);history.replaceState(null,"",u.toString())}catch(e){}}
 var S={
 es:{
- live:"\u25CF Publicado",removal:"Eliminaci\u00f3n solicitada",review:"En revisi\u00f3n",hidden:"Oculto",hiddenProfile:"Oculto porque tu perfil est\u00e1 oculto",pausedVamos:"Pausado por Vamos a La Paz",pausedBooking:"Pausado por Vamos a La Paz \u00b7 falta reserva en l\u00ednea",pausedVamosTip:"Vamos a La Paz paus\u00f3 esta publicaci\u00f3n. Escr\u00edbenos por WhatsApp si tienes dudas.",pausedBookingTip:"Los tours compartidos se publican cuando tienen reserva en l\u00ednea. Env\u00edanos tu c\u00f3digo de afiliado (por ejemplo FareHarbor) y lo activamos.",
+ live:"\u25CF Publicado",removal:"Eliminaci\u00f3n solicitada",review:"En revisi\u00f3n",hidden:"Oculto",hiddenProfile:"Oculto porque tu perfil est\u00e1 oculto",profReview:"Perfil en revisi\u00f3n",profReviewTip:"Revisaremos tu perfil y te avisaremos por WhatsApp cuando est\u00e9 publicado.",awaitingProfile:"Se publica al aprobar tu perfil",pausedVamos:"Pausado por Vamos a La Paz",pausedBooking:"Pausado por Vamos a La Paz \u00b7 falta reserva en l\u00ednea",pausedVamosTip:"Vamos a La Paz paus\u00f3 esta publicaci\u00f3n. Escr\u00edbenos por WhatsApp si tienes dudas.",pausedBookingTip:"Los tours compartidos se publican cuando tienen reserva en l\u00ednea. Env\u00edanos tu c\u00f3digo de afiliado (por ejemplo FareHarbor) y lo activamos.",
  changesReview:"Cambios en revisi\u00f3n",willLive:"Se publicar\u00e1 al guardar",willHide:"Se ocultar\u00e1 al guardar",willShow:"Se mostrar\u00e1 al guardar",
  cancelRemoval:"Cancelar solicitud de eliminaci\u00f3n",hide:"Ocultar",show:"Mostrar",edit:"Editar",more:"M\u00e1s acciones",requestRemoval:"Solicitar eliminaci\u00f3n",dup:"Duplicar",siteLink:"Ver vamosalapaz.com",viewSite:"Ver en el sitio",previewSite:"Vista previa en el sitio",viewProfile:"Ver mi perfil en el sitio",previewProfile:"Vista previa de mi perfil",
  upTo:function(n){return "Hasta "+n+" personas"},
@@ -103,7 +103,7 @@ tAddB:"Agregar un barco",tEditB:"Editar barco",tEditP:"Editar tu perfil",
   "Non-refundable":"No reembolsable","Custom (see notes)":"Personalizada (ver notas)"}
 },
 en:{
- live:"\u25CF Live",removal:"Removal requested",review:"Pending review",hidden:"Hidden",hiddenProfile:"Hidden because your profile is hidden",pausedVamos:"Paused by Vamos a La Paz",pausedBooking:"Paused by Vamos a La Paz \u00b7 needs online booking",pausedVamosTip:"Vamos a La Paz has paused this listing. Message us on WhatsApp with any questions.",pausedBookingTip:"Shared tours go live once they have online booking. Send us your affiliate booking code (e.g. FareHarbor) and we'll switch it on.",
+ live:"\u25CF Live",removal:"Removal requested",review:"Pending review",hidden:"Hidden",hiddenProfile:"Hidden because your profile is hidden",profReview:"Profile in review",profReviewTip:"We'll review your profile and let you know on WhatsApp when it's live.",awaitingProfile:"Goes live when your profile is approved",pausedVamos:"Paused by Vamos a La Paz",pausedBooking:"Paused by Vamos a La Paz \u00b7 needs online booking",pausedVamosTip:"Vamos a La Paz has paused this listing. Message us on WhatsApp with any questions.",pausedBookingTip:"Shared tours go live once they have online booking. Send us your affiliate booking code (e.g. FareHarbor) and we'll switch it on.",
  changesReview:"Changes awaiting review",willLive:"Will go live when you save",willHide:"Will be hidden when you save",willShow:"Will show when you save",
  cancelRemoval:"Cancel removal request",hide:"Hide",show:"Show",edit:"Edit",more:"More actions",requestRemoval:"Request removal",dup:"Duplicate",siteLink:"View vamosalapaz.com",viewSite:"View on site",previewSite:"Preview on site",viewProfile:"View my profile on site",previewProfile:"Preview my profile",
  upTo:function(n){return "Up to "+n+" guests"},
@@ -235,12 +235,13 @@ function pauseOf(it,kind){
  if(kind=="o"&&it.boatId&&DATA){var b=DATA.boats.filter(function(x){return x.id==it.boatId})[0];if(b&&D(b.vamosPause))return"admin"}
  return"";
 }
+function opInReview(){var op=DATA&&DATA.operator;return!!(op&&op.id&&op.placeholder!="true"&&D(op.status)&&D(op.status)!="Live")}
 function pillFor(it,kind){
  if(D(it.status)=="Removal requested")return[t("removal"),"#FBE9E9","#98302F"];
  if(D(it.status)=="Submitted for review")return[t("review"),"#FDF1DC","#8A5A12"];
  var pz=pauseOf(it,kind);if(pz)return[t(pz=="booking"?"pausedBooking":"pausedVamos"),"#FBEFE3","#9A4B12",t(pz=="booking"?"pausedBookingTip":"pausedVamosTip")];
  if(it.visible!="true")return[t("hidden"),"#EEF1F3","#5A6670"];
- if(it.effectiveVisible!="1")return[t("hiddenProfile"),"#EEF1F3","#5A6670"];
+ if(it.effectiveVisible!="1"){if(opInReview()&&DATA.operator.visible=="true")return[t("awaitingProfile"),"#FDF1DC","#8A5A12",t("profReviewTip")];return[t("hiddenProfile"),"#EEF1F3","#5A6670"]}
  return[LIVE(),"#E6F4EC","#1B6B43"];
 }
 function addEditPill(after,it){
@@ -319,7 +320,7 @@ function summary(){
  function chip(x){s.appendChild(el("span","ml-chip",x))}
  chip(t("nOff")(DATA.offerings.length));
  chip(t("nBoat")(DATA.boats.length));
- chip(DATA.operator&&D(DATA.operator.vamosPause)?t("pausedVamos"):DATA.operator&&DATA.operator.visible=="true"?t("profLive"):t("profHidden"));
+ chip(DATA.operator&&D(DATA.operator.vamosPause)?t("pausedVamos"):DATA.operator&&DATA.operator.visible=="true"?(opInReview()?t("profReview"):t("profLive")):t("profHidden"));
  var all=DATA.offerings.concat(DATA.boats);
  var waiting=all.filter(function(x){
   var st=D(x.status);return st=="Submitted for review"||st=="Removal requested"||editPending(x)}).length+(editPending(DATA.operator)?1:0);
@@ -345,6 +346,7 @@ function profile(op){
  var pl=el("div","ml-pill");
  var live=op.visible=="true";
  if(D(op.vamosPause)){setPill(pl,t("pausedVamos"),"#FBEFE3","#9A4B12");pl.title=t("pausedVamosTip")}
+ else if(live&&opInReview()){setPill(pl,t("profReview"),"#FDF1DC","#8A5A12");pl.title=t("profReviewTip")}
  else if(live)setPill(pl,LIVE(),"#E6F4EC","#1B6B43");else setPill(pl,t("hidden"),"#EEF1F3","#5A6670");
  var pills=el("div");pills.style.cssText="display:flex;flex-wrap:wrap;gap:6px";pills.appendChild(pl);
  body.appendChild(nm);body.appendChild(ds);body.appendChild(pills);
@@ -354,7 +356,7 @@ function profile(op){
  var hd=el("button","ml-btn ml-btn-ghost",(pv(op.id)!==undefined?pv(op.id):live)?t("hide"):t("show"));
  hd.onclick=function(){toggle(op.id,live,"p")};
  acts.appendChild(ed);acts.appendChild(hd);
- if(D(op.slug)&&op.onSite=="true")acts.appendChild(moreMenu([{label:siteLabel(live?"viewProfile":"previewProfile"),go:function(){openSite("/operators/"+D(op.slug))}}]));
+ if(D(op.slug)&&op.onSite=="true")acts.appendChild(moreMenu([{label:siteLabel(live&&!opInReview()?"viewProfile":"previewProfile"),go:function(){openSite("/operators/"+D(op.slug))}}]));
  if(pv(op.id)!==undefined){
   box.style.boxShadow="0 0 0 3px rgba(43,74,139,.12)";
   setPill(pl,pv(op.id)?t("willShow"):t("willHide"),"#E8EEFB","#2B4A8B");
