@@ -11,6 +11,11 @@ var EHOOK="https://hook.us2.make.com/bp3es6qs5gufdg2nnbs6k4gtx84aew5c"; // Vamos
 var VHOOK="https://hook.us2.make.com/y85x9uzm4ifvddavh1n8wpv1yk5dptqs"; // Vamos Portal — visibility & removal
 var AGV="2026-10-10";
 var K=new URLSearchParams(location.search).get("k")||"";
+// Admin view (Oct 13 2026): /my-listings?admin=<key> lets Peter pick any partner and work in their portal.
+// No agreement prompt; edits are published straight away through the Apply/Approve routes and are silent
+// (rows are flagged Admin edit / Admin created by "Vamos Portal — partner edits", which the notice automations skip).
+var AHOOK="https://hook.us2.make.com/dhurxhgplonz84bucokys8llr46nd3av"; // Vamos Portal — admin
+var ADM=new URLSearchParams(location.search).get("admin")||"";
 var $=function(i){return document.getElementById(i)};
 var D=function(v){if(v==null||v==="")return "";try{return decodeURIComponent(String(v))}catch(e){return String(v)}};
 var TPL=$("ml-card-tpl");
@@ -390,7 +395,7 @@ function save(){
 }
 function showBanner(x){$("ml-banner").textContent=x;$("ml-banner").style.display="block";window.scrollTo({top:0});}
 function sendForm(params,url){
- return fetch(url||UHOOK,{method:"POST",body:new URLSearchParams(Object.assign({k:K},params))})
+ return fetch(url||UHOOK,{method:"POST",body:new URLSearchParams(Object.assign(ADM?{k:K,a:ADM}:{k:K},params))})
  .then(function(r){return r.json()}).then(function(d){if(!d||!d.ok)throw 0;return d});
 }
 function shrink(file){
@@ -983,8 +988,10 @@ function openEditor(kind,it,restore,dup){
   step();
  }
  function done(){
+  if(ADM&&rowId&&target&&(extrasWarn||copyWarn)){adminPublish(target,rowId,extrasWarn?t("extrasFail"):t("copyFail"));return;}
   if(extrasWarn){showBanner(t("extrasFail"));load();return;}
   if(copyWarn){showBanner(t("copyFail"));load();return;}
+  if(ADM&&rowId&&target){adminPublish(target,rowId);return;}
   showBanner(isNew?t("doneNew"):t("doneEdit"));load();
  }
  function aiTags(){
@@ -1049,6 +1056,58 @@ function openEditor(kind,it,restore,dup){
  document.body.style.overflow="hidden";var fi=inputs.name;if(fi&&fi.focus)fi.focus();
 }
 
+// ---------- Admin view ----------
+var APARTNERS=[];
+function adminPublish(kind,id,warn){
+ showBanner("Publishing on the site… (admin edit, the partner isn't notified)");
+ fetch(AHOOK,{method:"POST",body:new URLSearchParams({formType:"admin_apply",a:ADM,kind:kind,r:id})})
+ .then(function(r){return r.text()}).then(function(tx){var d=null;try{d=JSON.parse(tx)}catch(e){}
+  if(d&&d.ok)showBanner("Published on the site. The partner wasn't notified."+(warn?" "+warn:""));
+  else if(d&&d.why=="fareharbor")showBanner("Saved but not published: the FareHarbor code didn't pass the check (unreadable, or this operator isn't ticked Affiliate approved). Fix it, then Apply the row in Vamos Admin.");
+  else showBanner("Saved but not published. Open the row in Vamos Admin and click Apply/Approve.");
+ }).catch(function(){showBanner("Saved, but publishing didn't respond. Check the row in Vamos Admin and click Apply/Approve if it's still pending.")})
+ .then(function(){load()});
+}
+function adminBar(){
+ var bar=document.createElement("div");bar.id="ml-admin";
+ bar.style.cssText="background:#FBEAF0;border:1px solid #ED93B1;border-radius:10px;padding:10px 14px;margin:0 0 14px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;font-size:14px;color:#72243E;";
+ var tag=document.createElement("span");tag.textContent="Admin";tag.style.cssText="background:#993556;color:#FBEAF0;font-size:12px;padding:3px 10px;border-radius:6px;";
+ var lab=document.createElement("label");lab.textContent="Viewing as";lab.htmlFor="ml-admin-sel";
+ var sel=document.createElement("select");sel.id="ml-admin-sel";sel.style.cssText="min-width:240px;max-width:100%;padding:6px 8px;border:1px solid #ED93B1;border-radius:6px;background:#fff;color:#1d2731;font-size:14px;";
+ var note=document.createElement("div");note.id="ml-admin-note";note.style.cssText="flex-basis:100%;font-size:13px;color:#72243E;";
+ note.textContent="Loading partners…";
+ bar.appendChild(tag);bar.appendChild(lab);bar.appendChild(sel);bar.appendChild(note);
+ var root=$("ml-root");root.parentNode.insertBefore(bar,root);
+ return sel;
+}
+function adminPick(sel){
+ var p=null;APARTNERS.forEach(function(x){if(x.id==sel.value)p=x});if(!p)return;
+ if(Object.keys(pending).length&&!confirm("Discard the unsaved visibility changes for this partner?")){sel.value=sel.dataset.cur||sel.value;return;}
+ sel.dataset.cur=p.id;K=p.token;pending={};DATA=null;AG=null;
+ try{var u=new URL(location.href);u.searchParams.set("p",p.id);history.replaceState(null,"",u.toString())}catch(e){}
+ $("ml-admin-note").textContent="You're seeing "+p.label+"'s portal"+(p.arrangement?" ("+p.arrangement+")":"")+". Edits go live straight away and the partner isn't notified. No agreement prompt in this view.";
+ $("ml-root").style.display="";$("ml-banner").style.display="none";var bl=$("ml-badlink");if(bl)bl.style.display="none";
+ loadAgreement(true);load();
+}
+function adminStart(){
+ var sel=adminBar();$("ml-root").style.display="none";
+ fetch(AHOOK,{method:"POST",body:new URLSearchParams({formType:"admin_partners",a:ADM})})
+ .then(function(r){return r.text()}).then(function(tx){
+  var d=null;try{d=JSON.parse(tx)}catch(e){}
+  if(!d||!d.ok||!d.partners||!d.partners.length){$("ml-admin-note").textContent="This admin link doesn't work. Check the key in your bookmark.";return;}
+  APARTNERS=d.partners.filter(function(x){return x.token&&x.id});
+  APARTNERS.sort(function(a,b){return String(a.label).localeCompare(String(b.label))});
+  [["Operators",function(x){return String(x.privateOwner)!="1"}],["Private owners",function(x){return String(x.privateOwner)=="1"}]].forEach(function(g){
+   var og=document.createElement("optgroup");og.label=g[0];
+   APARTNERS.filter(g[1]).forEach(function(x){var o=document.createElement("option");o.value=x.id;o.textContent=String(x.label).replace(/\s+/g," ");og.appendChild(o)});
+   if(og.children.length)sel.appendChild(og);
+  });
+  var want=new URLSearchParams(location.search).get("p");
+  if(want&&APARTNERS.some(function(x){return x.id==want}))sel.value=want;
+  sel.onchange=function(){adminPick(sel)};adminPick(sel);
+ }).catch(function(){$("ml-admin-note").textContent="Couldn't load the partner list. Reload the page to try again."});
+}
+
 function render(){
  if(!DATA)return;
  summary();profile(DATA.operator);
@@ -1083,5 +1142,6 @@ $("ml-discard").onclick=function(){pending={};render()};
 $("ml-add-offering").onclick=function(e){e.preventDefault();openEditor("o",null)};
 $("ml-add-boat").onclick=function(e){e.preventDefault();openEditor("b",null)};
 window.addEventListener("beforeunload",function(e){if(Object.keys(pending).length||BUSY){e.preventDefault();e.returnValue=""}});
-applyStatic();loadAgreement();load();
+applyStatic();
+if(ADM)adminStart();else{loadAgreement();load();}
 })();
