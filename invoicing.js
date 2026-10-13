@@ -41,7 +41,8 @@
        Your commission = trip price minus the owner's net (plus extra guests) instead of Commission %. If the experience
        has one net rate per price in Price Range, picking a rate also fills that price. Commission can still be typed by hand.
    v20 (release v47): the home header links to Partner listings (/my-listings admin view, opened with this same invoicing key);
-       Partner agreements uses the current agreement version (2026-10-10, same as AGV in my-listings.js). */
+       Partner agreements uses the current agreement version (2026-10-10, same as AGV in my-listings.js).
+   v48: new master logo (new L photo). */
 (function () {
   'use strict';
 
@@ -56,7 +57,7 @@
   var C = { navy: '#061A2E', foam: '#F3EFE6', aqua: '#00C6C0', pacific: '#156AB3', gulf: '#0B4F6C', lima: '#B5C62E', orange: '#E65A37', gold: '#F3B53F' };
   var CUSTOM = '__custom';
   var PHONE_HINT = 'Mexican numbers: 10 digits. Others: start with + and the country code (+1 for US and Canada).';
-  var LOGO = 'https://s3.amazonaws.com/webflow-prod-assets/6a94d97df3061a3b48890971/6ab313cdb43ef771290ceace_download.png';
+  var LOGO = 'https://s3.amazonaws.com/webflow-prod-assets/6a94d97df3061a3b48890971/6ace8f86b04cad21148d4d76_LA-PAZ-master-p-500.png';
 
   var qs = new URLSearchParams(location.search);
   var KEY = qs.get('k') || '';
