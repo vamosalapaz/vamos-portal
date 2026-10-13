@@ -39,7 +39,9 @@
    v19 (release v45): net-rate owners. When an experience has "Owner net rates (private)" in Airtable (one 'label: amount'
        per line, plus optional Net guests included / Net per extra guest), the form shows an "Owner's net" picker and
        Your commission = trip price minus the owner's net (plus extra guests) instead of Commission %. If the experience
-       has one net rate per price in Price Range, picking a rate also fills that price. Commission can still be typed by hand. */
+       has one net rate per price in Price Range, picking a rate also fills that price. Commission can still be typed by hand.
+   v20 (release v47): the home header links to Partner listings (/my-listings admin view, opened with this same invoicing key);
+       Partner agreements uses the current agreement version (2026-10-10, same as AGV in my-listings.js). */
 (function () {
   'use strict';
 
@@ -203,6 +205,7 @@
       '.vi .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.vi .btns .btn{width:auto;padding:9px 14px;margin:0;font-size:15px}',
       '.vi .kv{display:flex;justify-content:space-between;gap:12px;padding:3px 0;font-size:15px}.vi .kv span:first-child{color:#5a6670}',
       '.vi-top a.vi-home{font-size:14px;color:' + C.gulf + ';text-decoration:none;font-weight:600}',
+      '.vi-top .vi-right{display:flex;align-items:center;gap:14px}',
       '.vi .seg.tight button{font-size:14px;padding:9px 4px;white-space:nowrap}.vi .dash-tabs{margin:0 0 6px}.vi .dash-tabs button{font-weight:600;font-size:14px;padding:9px 2px;white-space:nowrap}',
       '.vi .dash-meta{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#7a858c;margin:0 0 12px}',
       '.vi .dash-h{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:' + C.gulf + ';margin:18px 0 8px;font-weight:700}',
@@ -243,7 +246,7 @@
     var stripe = h('div', { class: 'vi-stripe' });
     [C.aqua, C.pacific, C.lima, C.gold, C.orange, PINK].forEach(function (c) { stripe.appendChild(h('i', { style: 'background:' + c })); });
     var home = !qs.get('inquiry') && !qs.get('invoice') && !qs.get('phone') && !qs.get('new');
-    shell.appendChild(h('div', { class: 'vi-top' }, [h('a', { href: KEY ? homeUrl() : '#', 'aria-label': 'All bookings' }, [h('img', { src: LOGO, alt: 'Vamos a La Paz' })]), home ? h('span', { text: 'Invoicing' }) : h('a', { class: 'vi-home', href: homeUrl(), text: '← All bookings' })]));
+    shell.appendChild(h('div', { class: 'vi-top' }, [h('a', { href: KEY ? homeUrl() : '#', 'aria-label': 'All bookings' }, [h('img', { src: LOGO, alt: 'Vamos a La Paz' })]), home ? h('div', { class: 'vi-right' }, [h('a', { class: 'vi-home', href: '/my-listings?admin=' + encodeURIComponent(KEY), text: 'Partner listings' }), h('span', { text: 'Invoicing' })]) : h('a', { class: 'vi-home', href: homeUrl(), text: '← All bookings' })]));
     shell.appendChild(stripe);
     shell.appendChild(root);
     if (!KEY) { root.appendChild(h('p', { class: 'warn', text: 'This page needs your private invoicing link. Open it from an inquiry email.' })); return; }
@@ -1595,7 +1598,7 @@
   var HOOK_DOCS = 'https://hook.us2.make.com/3bb4bimbe45j5po3a9seteitffonmch5';
   var DOCS_CACHE = 'vi-docs-v1';
   var CONF_TERMS = 'conf-2026-10-09';     // keep in step with TERMS in confirm.js
-  var AGREEMENT_VERSION = '2026-10-08';   // keep in step with AGV in my-listings.js
+  var AGREEMENT_VERSION = '2026-10-10';   // keep in step with AGV in my-listings.js
   var docs = { d: null, at: 0, loading: false, err: '', filter: '', q: '' };
   function docsCacheGet() { try { var c = JSON.parse(sessionStorage.getItem(DOCS_CACHE) || 'null'); return c && Date.now() - c.at < 30 * 60000 ? c : null; } catch (e) { return null; } }
   function fetchDocs() {
