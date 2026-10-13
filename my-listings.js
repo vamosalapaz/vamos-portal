@@ -11,11 +11,12 @@ var EHOOK="https://hook.us2.make.com/bp3es6qs5gufdg2nnbs6k4gtx84aew5c"; // Vamos
 var VHOOK="https://hook.us2.make.com/y85x9uzm4ifvddavh1n8wpv1yk5dptqs"; // Vamos Portal — visibility & removal
 var AGV="2026-10-10";
 var K=new URLSearchParams(location.search).get("k")||"";
-// Admin view (Oct 13 2026): /my-listings?admin=<key> lets Peter pick any partner and work in their portal.
+// Admin view (Oct 13 2026): /my-listings?admin=<invoicing key> (linked from the invoicing home header) lets Peter pick any partner and work in their portal.
 // No agreement prompt; edits are published straight away through the Apply/Approve routes and are silent
 // (rows are flagged Admin edit / Admin created by "Vamos Portal — partner edits", which the notice automations skip).
 var AHOOK="https://hook.us2.make.com/dhurxhgplonz84bucokys8llr46nd3av"; // Vamos Portal — admin
 var ADM=new URLSearchParams(location.search).get("admin")||"";
+var FK=""; // key "Vamos Portal — partner edits" uses to flag admin rows; sent back by the admin route after the admin key checks out
 var $=function(i){return document.getElementById(i)};
 var D=function(v){if(v==null||v==="")return "";try{return decodeURIComponent(String(v))}catch(e){return String(v)}};
 var TPL=$("ml-card-tpl");
@@ -395,7 +396,7 @@ function save(){
 }
 function showBanner(x){$("ml-banner").textContent=x;$("ml-banner").style.display="block";window.scrollTo({top:0});}
 function sendForm(params,url){
- return fetch(url||UHOOK,{method:"POST",body:new URLSearchParams(Object.assign(ADM?{k:K,a:ADM}:{k:K},params))})
+ return fetch(url||UHOOK,{method:"POST",body:new URLSearchParams(Object.assign(ADM&&FK?{k:K,a:FK}:{k:K},params))})
  .then(function(r){return r.json()}).then(function(d){if(!d||!d.ok)throw 0;return d});
 }
 function shrink(file){
@@ -1094,7 +1095,8 @@ function adminStart(){
  fetch(AHOOK,{method:"POST",body:new URLSearchParams({formType:"admin_partners",a:ADM})})
  .then(function(r){return r.text()}).then(function(tx){
   var d=null;try{d=JSON.parse(tx)}catch(e){}
-  if(!d||!d.ok||!d.partners||!d.partners.length){$("ml-admin-note").textContent="This admin link doesn't work. Check the key in your bookmark.";return;}
+  if(!d||!d.ok||!d.fk||!d.partners||!d.partners.length){$("ml-admin-note").textContent="This admin link doesn't work. Check the key in your bookmark.";return;}
+  FK=d.fk||"";
   APARTNERS=d.partners.filter(function(x){return x.token&&x.id});
   APARTNERS.sort(function(a,b){return String(a.label).localeCompare(String(b.label))});
   [["Operators",function(x){return String(x.privateOwner)!="1"}],["Private owners",function(x){return String(x.privateOwner)=="1"}]].forEach(function(g){
