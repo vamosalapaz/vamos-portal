@@ -10,7 +10,8 @@
         "vía Vamos a La Paz") and show the Bókun booking; every page ends with a link to vamosalapaz.com (/es in Spanish).
    v39: quick payments with several lines list each line above the total.
    v40: a cancelled quick payment says "Esta solicitud de pago fue cancelada" (not "reservación"); its WhatsApp
-        question asks about the payment, not a booking. */
+        question asks about the payment, not a booking.
+   v48: new master logo (new L photo). */
 (function () {
   'use strict';
 
@@ -18,7 +19,7 @@
   var VAMOS_WA = '526122194779';
   var BRAND = '#B51E66', INK = '#061A2E';
   var C = { foam: '#F3EFE6', aqua: '#00C6C0', pacific: '#156AB3', gulf: '#0B4F6C', lima: '#B5C62E', orange: '#E65A37', gold: '#F3B53F' };
-  var LOGO = 'https://s3.amazonaws.com/webflow-prod-assets/6a94d97df3061a3b48890971/6ab313cdb43ef771290ceace_download.png';
+  var LOGO = 'https://s3.amazonaws.com/webflow-prod-assets/6a94d97df3061a3b48890971/6ace8f86b04cad21148d4d76_LA-PAZ-master-p-500.png';
   var qs = new URLSearchParams(location.search);
   var TOKEN = qs.get('k') || '';
   var JUST_PAID = qs.get('pagado') === '1';
@@ -124,7 +125,7 @@
     var s = document.createElement('style');
     s.textContent = [
       '.vr{max-width:520px;margin:0 auto;padding:0 16px 72px;font-family:"DM Sans",system-ui,sans-serif;color:' + INK + ';font-size:17px;line-height:1.5}',
-      '.vr-top{display:flex;justify-content:center;padding:18px 0 12px}.vr-top img{height:46px;width:auto;display:block}',
+      '.vr-top{display:flex;justify-content:center;padding:18px 0 12px}.vr-top img{height:40px;width:auto;display:block}',
       '.vr-stripe{display:flex;height:5px;border-radius:3px;overflow:hidden;margin:0 0 20px}.vr-stripe i{flex:1}',
       '.vr .eyebrow{font-size:13px;letter-spacing:.02em;color:#5b6772;margin:0 0 6px}',
       '.vr h1{font-size:26px;line-height:1.2;margin:0 0 14px;font-weight:600;color:' + C.gulf + '}',
