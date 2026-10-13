@@ -4,7 +4,8 @@
    ticks agree and types their name, or asks for a change. Never linked from anything a customer sees.
    v22: first release. v23: total trip price, Vamos logo and palette. v24: commission line without timing; ignore a Last day before the trip date.
    v25: once the owner has agreed and the customer's deposit is paid, shows the customer's name and WhatsApp with
-   Save contact (vCard), Copy number and WhatsApp buttons. The number only ever arrives from the server after the deposit. */
+   Save contact (vCard), Copy number and WhatsApp buttons. The number only ever arrives from the server after the deposit.
+   v48: new master logo (new L photo). */
 (function () {
   'use strict';
 
@@ -13,7 +14,7 @@
   var TERMS = 'conf-2026-10-09';
   var BRAND = '#B51E66', INK = '#061A2E';
   var C = { foam: '#F3EFE6', aqua: '#00C6C0', pacific: '#156AB3', gulf: '#0B4F6C', lima: '#B5C62E', orange: '#E65A37', gold: '#F3B53F' };
-  var LOGO = 'https://s3.amazonaws.com/webflow-prod-assets/6a94d97df3061a3b48890971/6ab313cdb43ef771290ceace_download.png';
+  var LOGO = 'https://s3.amazonaws.com/webflow-prod-assets/6a94d97df3061a3b48890971/6ace8f86b04cad21148d4d76_LA-PAZ-master-p-500.png';
   var TOKEN = new URLSearchParams(location.search).get('k') || '';
 
   var T = {
@@ -98,7 +99,7 @@
     var s = document.createElement('style');
     s.textContent = [
       '.vc{max-width:520px;margin:0 auto;padding:0 16px 72px;font-family:"DM Sans",system-ui,sans-serif;color:' + INK + ';font-size:17px;line-height:1.5}',
-      '.vc-top{display:flex;justify-content:center;padding:18px 0 12px}.vc-top img{height:46px;width:auto;display:block}',
+      '.vc-top{display:flex;justify-content:center;padding:18px 0 12px}.vc-top img{height:40px;width:auto;display:block}',
       '.vc-stripe{display:flex;height:5px;border-radius:3px;overflow:hidden;margin:0 0 20px}.vc-stripe i{flex:1}',
       '.vc .card.trip-card{border-left:5px solid ' + C.aqua + '}',
       '.vc .card.money-card{border-left:5px solid ' + C.gold + '}',
