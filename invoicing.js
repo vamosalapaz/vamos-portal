@@ -35,7 +35,11 @@
        Quick payments can have several lines (description + amount; the total is charged; stored as JSON in "Line items").
        Send receipt step (WhatsApp / Copy) once any payment has landed, on bookings and quick payments.
    v18 (release v41): Good Medicine quick payments look up that day's Bókun bookings (sales ledger) from the trip date;
-       tapping one fills the Bókun ID, guests, customer (if empty) and a first line with the balance due. */
+       tapping one fills the Bókun ID, guests, customer (if empty) and a first line with the balance due.
+   v19 (release v45): net-rate owners. When an experience has "Owner net rates (private)" in Airtable (one 'label: amount'
+       per line, plus optional Net guests included / Net per extra guest), the form shows an "Owner's net" picker and
+       Your commission = trip price minus the owner's net (plus extra guests) instead of Commission %. If the experience
+       has one net rate per price in Price Range, picking a rate also fills that price. Commission can still be typed by hand. */
 (function () {
   'use strict';
 
@@ -142,7 +146,26 @@
     var mirror = (d.mirror || []).filter(function (m) { return m.fields['Operations record ID'] === opsId; })[0] || null;
     var gm = (mirror && mirror.fields['Business line'] === 'Good Medicine direct') || /good medicine/i.test(op ? op.fields.Name : '');
     var comPct = owner && owner.fields['Commission %'] ? Number(owner.fields['Commission %']) : 0.15;
-    return { o: o, f: f, boat: boat, op: op, placeholder: placeholder, owner: owner, opsId: opsId, mirror: mirror, gm: gm, comPct: comPct };
+    var net = gm ? [] : netRates(f['Owner net rates (private)']);
+    return { o: o, f: f, boat: boat, op: op, placeholder: placeholder, owner: owner, opsId: opsId, mirror: mirror, gm: gm, comPct: comPct,
+      net: net, netIncl: Number(f['Net guests included (private)']) || 0, netExtra: Number(f['Net per extra guest (private)']) || 0 };
+  }
+  // "4 hours: 22000" per line -> [{label:'4 hours', amount:22000}]; a bare number is allowed too.
+  function netRates(txt) {
+    return String(txt || '').split(/\n+/).map(function (line) {
+      var m = line.trim().match(/^(.*?)[:=]?\s*\$?\s*([\d.,]+)\s*(mxn)?$/i);
+      if (!m) return null;
+      var amt = Number(m[2].replace(/,/g, ''));
+      return amt ? { label: m[1].replace(/[:=]\s*$/, '').trim(), amount: amt } : null;
+    }).filter(Boolean);
+  }
+  function allPrices(range) { return (String(range || '').replace(/,/g, '').match(/\d+(\.\d+)?/g) || []).map(Number); }
+  // owner's net for the chosen rate and guest count, or null when the experience isn't on net rates
+  function ownerNet(c) {
+    if (!c || !c.net || !c.net.length) return null;
+    var sel = $('#vi-net'), i = sel ? Number(sel.value) || 0 : 0, r = c.net[i] || c.net[0];
+    var g = Number($('#vi-guests').value) || 0, extra = c.netIncl && c.netExtra && g > c.netIncl ? (g - c.netIncl) * c.netExtra : 0;
+    return { base: r.amount, extra: extra, total: r.amount + extra };
   }
 
   /* ---------- styles ---------- */
@@ -304,7 +327,7 @@
     ]));
     trip.appendChild(h('div', { class: 'row' }, [
       h('div', null, [h('label', { for: 'vi-date', text: 'Date' }), h('input', { id: 'vi-date', type: 'date', value: f['Requested date'] || '', onchange: syncEnd })]),
-      h('div', null, [h('label', { for: 'vi-guests', text: 'Guests' }), h('input', { id: 'vi-guests', type: 'number', inputmode: 'numeric', min: '1', value: f.Guests || '' })])
+      h('div', null, [h('label', { for: 'vi-guests', text: 'Guests' }), h('input', { id: 'vi-guests', type: 'number', inputmode: 'numeric', min: '1', value: f.Guests || '', oninput: function () { recalc('guests'); } })])
     ]));
     trip.appendChild(h('label', { for: 'vi-end', text: 'Last day (multi-day trips only)' }));
     trip.appendChild(h('input', { id: 'vi-end', type: 'date', value: f['Requested date'] || '' }));
@@ -327,6 +350,7 @@
     mon.appendChild(h('label', { for: 'vi-price', text: 'Trip price (MXN, IVA included)' }));
     mon.appendChild(h('input', { id: 'vi-price', type: 'number', inputmode: 'numeric', oninput: function () { recalc('price'); } }));
     mon.appendChild(h('div', { class: 'hint', id: 'vi-range' }));
+    mon.appendChild(h('div', { id: 'vi-netwrap', style: 'display:none' }, [h('label', { for: 'vi-net', text: 'Owner\'s net' }), h('select', { id: 'vi-net', onchange: function () { netPicked(); } })]));
     mon.appendChild(h('div', { class: 'row' }, [
       h('div', null, [h('label', { for: 'vi-dep', text: 'Deposit' }), h('input', { id: 'vi-dep', type: 'number', inputmode: 'numeric', oninput: function () { recalc('dep'); } })]),
       h('div', { id: 'vi-comwrap' }, [h('label', { for: 'vi-com', text: 'Your commission' }), h('input', { id: 'vi-com', type: 'number', inputmode: 'numeric', oninput: function () { recalc('com'); } })])
@@ -470,14 +494,16 @@
     var custom = $('#vi-grp') && $('#vi-grp').value === CUSTOM;
     var id = $('#vi-off').value, c = custom ? customCtx() : id ? ctx(id) : null;
     state.ctx = c;
+    if (!c || custom) fillNet(null, true);
     if (!c) { $('#vi-owncard').style.display = 'none'; $('#vi-range').textContent = ''; refresh(); return; }
     if (custom) { $('#vi-owncard').style.display = 'none'; $('#vi-range').textContent = ''; $('#vi-mphint').textContent = ''; refresh(); return; }
     var f = c.f;
+    fillNet(c, userChanged);
     if (userChanged || !$('#vi-price').value) {
       var p = lowPrice(f['Price Range']);
       $('#vi-price').value = p || '';
       $('#vi-dep').value = p ? Math.round(p * 0.2) : '';
-      $('#vi-com').value = p && !c.gm ? Math.round(p * c.comPct) : '';
+      $('#vi-com').value = p && !c.gm ? autoCom(c, p) : '';
     }
     $('#vi-range').textContent = f['Price Range'] ? 'Listed: ' + f['Price Range'] + (f['Price Unit'] ? ' ' + f['Price Unit'] : '') : '';
     if (c.boat && (userChanged || !$('#vi-mp').value)) {
@@ -495,8 +521,38 @@
     var c = state.ctx, price = Number($('#vi-price').value) || 0;
     if (which === 'price' && price) {
       $('#vi-dep').value = Math.round(price * 0.2);
-      if (c && !c.gm) $('#vi-com').value = Math.round(price * c.comPct);
+      if (c && !c.gm && !c.custom) $('#vi-com').value = autoCom(c, price);
     }
+    if (which === 'guests' && price && c && !c.gm && !c.custom && ownerNet(c)) $('#vi-com').value = autoCom(c, price);
+    refresh();
+  }
+  // commission the screen suggests: price minus the owner's net on net-rate experiences, otherwise Commission %
+  function autoCom(c, price) {
+    var nt = ownerNet(c);
+    return nt ? Math.max(0, Math.round(price - nt.total)) : Math.round(price * c.comPct);
+  }
+  function fillNet(c, userChanged) {
+    var wrap = $('#vi-netwrap'), sel = $('#vi-net');
+    if (!wrap) return;
+    var rates = c && !c.gm && !c.custom ? c.net : [];
+    wrap.style.display = rates.length ? '' : 'none';
+    var keep = !userChanged && sel.value !== '' ? Number(sel.value) : -1;
+    sel.innerHTML = '';
+    rates.forEach(function (r, i) { sel.appendChild(h('option', { value: String(i), text: (r.label ? r.label + ' · ' : '') + money(r.amount) })); });
+    if (!rates.length) return;
+    // when editing, preselect the rate whose matching listed price equals the saved price
+    var price = Number($('#vi-price').value) || 0, prices = allPrices(c.f['Price Range']), pick = 0;
+    if (keep > -1 && keep < rates.length) pick = keep;
+    else if (price && prices.length === rates.length && prices.indexOf(price) > -1) pick = prices.indexOf(price);
+    sel.value = String(pick);
+  }
+  function netPicked() {
+    var c = state.ctx;
+    if (!c) return;
+    var i = Number($('#vi-net').value) || 0, prices = allPrices(c.f['Price Range']);
+    if (prices.length === c.net.length && prices[i]) { $('#vi-price').value = prices[i]; $('#vi-dep').value = Math.round(prices[i] * 0.2); }
+    var price = Number($('#vi-price').value) || 0;
+    if (price) $('#vi-com').value = autoCom(c, price);
     refresh();
   }
   function refresh() {
@@ -511,7 +567,8 @@
       var pct = Math.round(dep / price * 100);
       split = gm ? 'Deposit ' + pct + '% · balance ' + money(price - dep) + ' on the day'
         : c && c.custom ? 'Deposit ' + pct + '% · balance ' + money(price - dep) + ' on the day'
-        : 'Deposit ' + pct + '% goes to ' + (c && c.owner ? first(c.owner.fields['Contact Name']) : 'the owner') + ' · owner collects ' + money(price - dep) + ' at the dock' + (com ? ' · owes you ' + money(com) : '');
+        : 'Deposit ' + pct + '% goes to ' + (c && c.owner ? first(c.owner.fields['Contact Name']) : 'the owner') + ' · owner collects ' + money(price - dep) + ' at the dock' + (com ? ' · owes you ' + money(com) : '')
+          + (ownerNet(c) ? ' · owner keeps ' + money(price - com) + (price - com !== ownerNet(c).total ? ' (net is ' + money(ownerNet(c).total) + ')' : ' (their net' + (ownerNet(c).extra ? ' incl. ' + money(ownerNet(c).extra) + ' extra guests' : '') + ')') : '');
     }
     $('#vi-split').textContent = split;
     var ed = !!state.edit;
@@ -773,7 +830,7 @@
         billedTo: v.name, phone: v.phone, email: v.email,
         trip: es ? (f['Name (ES)'] || f.Name) : f.Name, duration: es ? (f['Duration (ES)'] || f.Duration || '') : (f.Duration || ''),
         businessLine: c.gm ? 'Good Medicine direct' : 'Vamos marketplace', balanceBy: c.gm || c.custom ? 'Vamos' : 'Owner', kind: 'Booking',
-        tripDate: v.date, endDate: v.end, guests: v.guests, price: v.price, deposit: v.dep, commission: c.gm || c.custom ? '' : v.com, ownerPayout: '',
+        tripDate: v.date, endDate: v.end, guests: v.guests, price: v.price, deposit: v.dep, commission: c.gm || c.custom ? '' : v.com, ownerPayout: !c.gm && !c.custom && ownerNet(c) ? v.price - v.com : '',
         meetingPoint: v.mp, meetingTime: v.mt, mapLink: v.map, provider: provider, note: v.note, internalNotes: v.internal,
         cancellation: c.custom ? $('#vi-ccan').value.trim() : cancellationText(c.o, lang), signoff: signoff,
         partnerId: owner && !owner.typed ? owner.id : '', ownerName: owner ? owner.fields['Contact Name'] : '', ownerPhone: owner ? owner.fields['Contact Number'] || '' : '', ownerLang: oLang,
