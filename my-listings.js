@@ -851,19 +851,10 @@ function openEditor(kind,it,restore,dup){
 
  if(kind=="o"){
   var wc=inputs.widgetCode;wc.style.fontFamily="monospace";wc.style.fontSize="13px";wc.spellcheck=false;
-  var dLab=wraps.description.querySelector("label");
-  var dHelp=el("p","ml-ed-help",t("shortHelp"));
-  wraps.description.appendChild(dHelp);
-  var incNote=el("p","ml-ed-note",t("inclNote"));
-  grid.insertBefore(incNote,wraps.whatsIncluded.nextSibling);
   var mode=function(){
-   var plat=inputs.bookingPlatform.value,wd=!!(plat&&wc.value.trim());
+   var plat=inputs.bookingPlatform.value;
    wraps.otherBookingPlatform.style.display=plat=="Other"?"":"none";
    wraps.widgetCode.style.display=plat?"":"none";
-   dLab.textContent=wd?t("shortDesc"):f("description");
-   dHelp.style.display=wd?"block":"none";
-   wraps.whatsIncluded.style.display=wd?"none":"";
-   incNote.style.display=wd?"block":"none";
   };
   inputs.bookingPlatform.addEventListener("change",mode);wc.addEventListener("input",mode);mode();
   if(!(DATA&&DATA.boats&&DATA.boats.length))
