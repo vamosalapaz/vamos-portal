@@ -1364,7 +1364,7 @@
 
   /* ---------- home dashboard (blank link): Bookings · Calendar · Numbers ----------
      Data: one call to HOOK_DASH (invoices of the last 4 months plus anything still open, the Vamos trips calendar for
-     the next 4 months, and the Bookings ledger for the last 13 months). New tabs: add an entry to TABS. */
+     the next 12 months, and the Bookings ledger for the last 13 months). New tabs: add an entry to TABS. */
   var HOOK_DASH = 'https://hook.us2.make.com/urr4hijh6rfamxs0ylh29ctb1w8fs8cr';
   var TZ = 'America/Mazatlan';
   var DASH_CACHE = 'vi-dash-v1';
@@ -1702,7 +1702,7 @@
     el.appendChild(seg);
     var evs = all.filter(function (x) { return brand === 'all' || (brand === 'gm') === x.gm; });
     if (!evs.length) {
-      el.appendChild(h('p', { class: 'hint', style: 'margin-top:12px', text: brand === 'gm' ? 'No Good Medicine bookings in Bókun for the next 4 months.' : brand === 'vamos' ? 'Nothing on the Vamos trips calendar in the next 4 months. Bookings appear here once the deposit is paid.' : 'Nothing booked in the next 4 months.' }));
+      el.appendChild(h('p', { class: 'hint', style: 'margin-top:12px', text: brand === 'gm' ? 'No Good Medicine bookings in Bókun for the next 12 months.' : brand === 'vamos' ? 'Nothing on the Vamos trips calendar in the next 12 months. Bookings appear here once the deposit is paid.' : 'Nothing booked in the next 12 months.' }));
       return;
     }
     var lastDay = '';
@@ -1720,7 +1720,7 @@
       if (isOpen) card.appendChild(x.b ? gmDetail(x.b) : eventDetail(x.ev));
       el.appendChild(card);
     });
-    el.appendChild(h('p', { class: 'hint', text: 'Next 4 months. Vamos a La Paz: the Vamos trips Google calendar. Good Medicine: Bókun bookings (synced every 2 hours). Tap a trip for contacts and details.' }));
+    el.appendChild(h('p', { class: 'hint', text: 'Next 12 months. Vamos a La Paz: the Vamos trips Google calendar. Good Medicine: Bókun bookings (synced every 2 hours). Tap a trip for contacts and details.' }));
   }
 
   /* --- documents: owner booking confirmations and partner agreements (own Make call, only when this tab opens) --- */
