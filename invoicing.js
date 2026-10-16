@@ -42,7 +42,11 @@
        has one net rate per price in Price Range, picking a rate also fills that price. Commission can still be typed by hand.
    v20 (release v47): the home header links to Partner listings (/my-listings admin view, opened with this same invoicing key);
        Partner agreements uses the current agreement version (2026-10-10, same as AGV in my-listings.js).
-   v48: new master logo (new L photo). */
+   v48: new master logo (new L photo).
+   v21 (release v50): Calendar shows Good Medicine's Bókun bookings (from the Bookings ledger) alongside the Vamos trips
+       calendar, with an All / Vamos a La Paz / Good Medicine toggle (All by default). Tap a Good Medicine booking for
+       contacts (WhatsApp, call, email), rate, guests, extras, notes, broker/channel, paid and balance, multi-day dates
+       and any linked invoices. Good Medicine invoices already in Bókun show once. */
 (function () {
   'use strict';
 
@@ -218,6 +222,9 @@
       '.vi .pill{font-size:12px;border-radius:99px;padding:2px 9px;white-space:nowrap;font-weight:600}',
       '.vi .ev{padding:0;overflow:hidden;margin:0 0 8px}.vi .ev-head{display:block;width:100%;background:none;border:0;font:inherit;color:inherit;text-align:left;padding:12px 14px;cursor:pointer}',
       '.vi .ev-row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:0 0 2px}.vi .ev-time{font-size:13px;color:#5a6670}.vi .ev-title{display:block;font-weight:600}',
+      '.vi .ev.is-gm{border-left:4px solid ' + C.aqua + '}.vi .ev.is-vamos{border-left:4px solid ' + PINK + '}.vi .ev.cont{opacity:.72}.vi .ev-time{display:inline-flex;align-items:center;gap:7px}',
+      '.vi .ev-brand{font-size:11px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;border-radius:5px;padding:1px 6px}.vi .ev-brand.gm{background:#d9f4f2;color:#0b5e5a}.vi .ev-brand.vamos{background:#fbe3ee;color:' + PINK + '}',
+      '.vi .ev-note{margin:8px 0 2px;font-size:14px}.vi .ev-note b{display:block;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:#5a6670;margin:0 0 2px}.vi .ev-note div{white-space:pre-line;background:#faf8f4;border-radius:8px;padding:8px 10px}',
       '.vi .ev-detail{padding:0 14px 14px;border-top:1px solid #eee9e2}.vi .ev-detail .kv{font-size:14px}.vi .ev-detail .kv span:last-child{text-align:right;overflow-wrap:anywhere}',
       '.vi .tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 8px}.vi .tile{background:#fff;border:1px solid #e4e1dc;border-radius:12px;padding:10px 12px}',
       '.vi .tile span{display:block;font-size:12px;color:#5a6670}.vi .tile b{display:block;font-size:22px;color:' + C.navy + ';margin:2px 0}.vi .tile small{font-size:12px;color:#7a858c}',
@@ -1361,7 +1368,7 @@
   var HOOK_DASH = 'https://hook.us2.make.com/urr4hijh6rfamxs0ylh29ctb1w8fs8cr';
   var TZ = 'America/Mazatlan';
   var DASH_CACHE = 'vi-dash-v1';
-  var dash = { d: null, tab: 'bookings', list: 'upcoming', q: '', range: 3, line: 'all', open: '', view: 'past', ahead: 3, cur: '', fx: null };
+  var dash = { d: null, tab: 'bookings', cal: 'all', list: 'upcoming', q: '', range: 3, line: 'all', open: '', view: 'past', ahead: 3, cur: '', fx: null };
   var TABS = [
     { id: 'bookings', label: 'Bookings', render: dashBookings },
     { id: 'calendar', label: 'Calendar', render: dashCalendar },
@@ -1392,7 +1399,7 @@
     var invoices = flat(raw.invoices), bookings = flat(raw.bookings);
     var expenses = String(raw.expenses || '').split(';').map(function (x) { var p = x.split('|'); return { d: p[0] || '', brand: p[1] || '', cat: p[2] || '', amt: Number(p[3]) || 0, cur: p[4] || 'MXN' }; })
       .filter(function (e) { return /^[0-9]{4}-[0-9]{2}/.test(e.d) && e.amt; });
-    return { at: at || Date.now(), invoices: invoices, events: (raw.events || []).filter(function (e) { return e && e.status !== 'cancelled'; }), bookings: bookings, expenses: expenses };
+    return { at: at || Date.now(), invoices: invoices, gm: flat(raw.gm), events: (raw.events || []).filter(function (e) { return e && e.status !== 'cancelled'; }), bookings: bookings, expenses: expenses };
   }
 
   function renderHome() {
@@ -1516,7 +1523,13 @@
     drawList();
   }
 
-  /* --- calendar --- */
+  /* --- calendar ---
+     Two sources, merged by day: the Vamos trips Google calendar (Vamos bookings once the deposit is paid, plus events
+     added by hand) and Good Medicine's Bókun bookings from the Bookings ledger (dash.d.gm, synced every 2 hours).
+     Toggle: All (default every time) · Vamos a La Paz · Good Medicine. A Good Medicine booking made in invoicing whose
+     Bókun booking ID is also in the ledger shows once, as the Bókun booking, with its invoices linked. */
+  var CAL_BRANDS = [['all', 'All'], ['vamos', 'Vamos a La Paz'], ['gm', 'Good Medicine']];
+  var CC = { us: '1', ca: '1', mx: '52', gb: '44', uk: '44', es: '34', de: '49', fr: '33', it: '39', nl: '31', ch: '41', at: '43', be: '32', ie: '353', pt: '351', se: '46', no: '47', dk: '45', fi: '358', pl: '48', au: '61', nz: '64', ar: '54', br: '55', cl: '56', co: '57', pe: '51', cr: '506', gt: '502', il: '972', jp: '81', kr: '82', cn: '86', in: '91', za: '27' };
   function evDay(e) { return e.start && e.start.date ? e.start.date : new Date(e.start.dateTime).toLocaleDateString('en-CA', { timeZone: TZ }); }
   function evTime(e) {
     if (!e.start || e.start.date) return 'All day';
@@ -1534,6 +1547,91 @@
     var p = (f && f['Meeting point']) || e.location;
     return p ? 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(p + ', La Paz BCS') : '';
   }
+  /* Bókun phones arrive as "us3105622486" / "mx6122179788"; returns digits with country code for wa.me, or '' */
+  function gmPhone(p) {
+    p = String(p || '').trim();
+    if (!p) return '';
+    var m = p.match(/^([a-z]{2})\s*(.*)$/i);
+    if (m) { var cc = CC[m[1].toLowerCase()], d = digits(m[2]); if (!cc || d.length < 7) return ''; return d.indexOf(cc) === 0 && d.length > 10 ? d : cc + d; }
+    if (p.charAt(0) === '+') return digits(p);
+    return digits(p).length >= 10 ? waNumber(p) : '';
+  }
+  function showPhone(d) {
+    var cc = d.charAt(0) === '1' ? '1' : d.slice(0, 2), rest = d.slice(cc.length);
+    return '+' + cc + ' ' + (rest.length === 10 ? rest.slice(0, 3) + ' ' + rest.slice(3, 6) + ' ' + rest.slice(6) : rest);
+  }
+  /* Bókun lists per-guest extras once per guest: "A, A, A, B" → "A × 3", "B" */
+  function gmExtras(x) {
+    var order = [], count = {};
+    String(x || '').split(/,\s*(?=[A-ZÁÉÍÓÚÑ])/).forEach(function (t) { t = t.trim(); if (!t) return; if (!count[t]) { count[t] = 0; order.push(t); } count[t]++; });
+    return order.map(function (t) { return t + (count[t] > 1 ? ' × ' + count[t] : ''); }).join('\n');
+  }
+  function realEmail(em) { return em && !/^info(\+[^@]*)?@goodmedicinelapaz\.com$/i.test(em) ? em : ''; }
+  function gmDays(f) {
+    var start = f['Activity date'] || '', end = f['End date'] || '', nDays = 1;
+    if (end && end > start) nDays = Math.round((new Date(end + 'T12:00:00Z') - new Date(start + 'T12:00:00Z')) / 864e5) + 1;
+    var m = String(f['Rate / option'] || '').match(/([0-9]+)\s*(full\s*)?days?/i);
+    if (m && /overnight|multi|night/i.test((f['Product name (as sold)'] || '') + ' ' + (f['Rate / option'] || ''))) nDays = Math.max(nDays, Number(m[1]) || 1);
+    return Math.min(nDays, 14);
+  }
+  function gmTime(f) { var t = String(f['Start time'] || ''); return !t || /^0?0:00$/.test(t) ? 'All day' : t; }
+  function gmTitle(f) {
+    var p = String(f['Product name (as sold)'] || 'Good Medicine').replace(/^Day Trip to\s*/i, '').replace(/\s*\((up to )?[0-9+]+\s*hours?\)\s*$/i, '');
+    return p + ' — ' + (f['Customer name'] || 'No name') + (f['Total guests'] ? ' (' + f['Total guests'] + ')' : '');
+  }
+  var GM_PAY = { DEPOSIT: 'Deposit paid', PAID_IN_FULL: 'Paid in full', PARTIALLY_PAID: 'Part paid', NOT_PAID: 'Not paid', UNPAID: 'Not paid', FREE: 'Free' };
+  function gmPill(f) {
+    var st = GM_PAY[f['Payment status']] || (n(f['Paid amount']) >= n(f['Gross total']) && n(f['Gross total']) > 0 ? 'Paid in full' : n(f['Paid amount']) > 0 ? 'Deposit paid' : 'Not paid');
+    var c = (PILL[{ 'Not paid': 'Sent', 'Free': 'Not sent' }[st] || st] || '#e9e6e1|#4a5560').split('|');
+    return h('span', { class: 'pill', style: 'background:' + c[0] + ';color:' + c[1], text: st });
+  }
+  function brandTag(gm) { return h('span', { class: 'ev-brand ' + (gm ? 'gm' : 'vamos'), text: gm ? 'Good Medicine' : 'Vamos' }); }
+  function invoicesForRef(ref) { return ref ? dash.d.invoices.filter(function (r) { return r.fields['Bókun booking ID'] === ref; }) : []; }
+
+  function contactButtons(btns, phone, name, email) {
+    if (phone) {
+      btns.push(h('a', { class: 'btn sec', href: 'https://wa.me/' + phone }, ['WhatsApp ' + (first(name) || 'customer')]));
+      btns.push(h('a', { class: 'btn sec', href: 'tel:+' + phone }, ['Call']));
+    }
+    if (email) btns.push(h('a', { class: 'btn sec', href: 'mailto:' + email }, ['Email']));
+  }
+  function gmDetail(b) {
+    var f = b.fields, box = h('div', { class: 'ev-detail' });
+    function kv(k, v) { if (v) box.appendChild(h('div', { class: 'kv' }, [h('span', { text: k }), h('span', { text: v })])); }
+    var phone = gmPhone(f['Customer phone']), email = realEmail(f['Customer email']);
+    var gross = n(f['Gross total']), paid = n(f['Paid amount']), refunded = n(f['Refunded amount']), days = gmDays(f);
+    var broker = String(f['Booking labels'] || '').match(/Broker:\s*([^,;]+)/i);
+    var via = broker ? broker[1].trim() : (f['Channel (raw)'] && f['Channel (raw)'] !== 'Backend' ? f['Channel (raw)'] : f['Sales channel']);
+    kv('Customer', f['Customer name']);
+    kv('WhatsApp', phone ? showPhone(phone) : f['Customer phone'] ? f['Customer phone'] + ' (check number)' : 'Not in Bókun');
+    kv('Email', email);
+    kv('Language', f['Customer language']);
+    kv('Country', f['Customer country']);
+    kv('Trip', f['Product name (as sold)']);
+    kv('Rate', f['Rate / option']);
+    kv('Guests', f['Total guests'] ? String(f['Total guests']) + (n(f.Children) ? ' (' + n(f.Adults) + ' adults, ' + n(f.Children) + ' children)' : '') : '');
+    if (days > 1) kv('Dates', dayLabel(f['Activity date']) + ' → ' + dayLabel(addDaysIso(f['Activity date'], days - 1)) + ' (' + days + ' days)');
+    kv('Start', gmTime(f) === 'All day' ? '' : gmTime(f));
+    kv('Meeting', f['Pickup / meeting point']);
+    kv('Booked via', via || '');
+    kv('Paid', money(paid) + ' of ' + money(gross) + (refunded ? ' · ' + money(refunded) + ' refunded' : ''));
+    if (gross > paid) kv('Balance', money(gross - paid) + ' (to collect)');
+    kv('Bókun', f['Booking reference']);
+    if (f.Extras) box.appendChild(h('div', { class: 'ev-note' }, [h('b', { text: 'Extras' }), h('div', { text: gmExtras(f.Extras) })]));
+    if (f['Special requests / notes']) box.appendChild(h('div', { class: 'ev-note' }, [h('b', { text: 'Notes' }), h('div', { text: f['Special requests / notes'] })]));
+    var invs = invoicesForRef(f['Booking reference']);
+    if (invs.length) box.appendChild(h('div', { class: 'kv' }, [h('span', { text: 'In invoicing' }), h('span', null, invs.map(function (r, i) {
+      return h('a', { href: invUrl(r.id), style: 'margin-left:' + (i ? '8px' : '0') }, [(r.fields['Invoice number'] || 'Invoice') + ' (' + (r.fields.Status || '') + ')']);
+    }))]));
+    var btns = [];
+    contactButtons(btns, phone, f['Customer name'], email);
+    btns.push(h('button', { type: 'button', class: 'btn sec', onclick: function () {
+      var ref = f['Booking reference'] || '';
+      (navigator.clipboard ? navigator.clipboard.writeText(ref) : Promise.reject()).then(function () { toast('Copied ' + ref); }, function () { toast(ref); });
+    } }, ['Copy Bókun ID']));
+    box.appendChild(h('div', { class: 'btns' }, btns));
+    return box;
+  }
   function eventDetail(e) {
     var r = invForEvent(e), box = h('div', { class: 'ev-detail' });
     function kv(k, v) { if (v) box.appendChild(h('div', { class: 'kv' }, [h('span', { text: k }), h('span', { text: v })])); }
@@ -1544,6 +1642,8 @@
       kv('Customer', f['Billed to']);
       kv('WhatsApp', f.Phone);
       kv('Email', f.Email);
+      kv('Language', f.Language);
+      kv('Trip', f.Trip);
       kv('Guests', f.Guests ? String(f.Guests) : '');
       kv('Boat', f.Provider);
       kv('Captain', capName ? capName + (capPhone ? ' · ' + capPhone : '') : '');
@@ -1551,8 +1651,8 @@
       kv('Paid', money(got) + ' of ' + money(price));
       if (price > got) kv('Balance', money(price - got) + (ownerFlow ? ' (customer pays the owner)' : ' (to you)'));
       kv('Status', f.Status);
-      if (f.Phone) btns.push(h('a', { class: 'btn sec', href: 'https://wa.me/' + waNumber(f.Phone) }, ['WhatsApp ' + (first(f['Billed to']) || 'customer')]));
-      if (f.Phone) btns.push(h('a', { class: 'btn sec', href: 'tel:+' + waNumber(f.Phone) }, ['Call']));
+      kv('Booking', f['Invoice number']);
+      if (f.Phone) { btns.push(h('a', { class: 'btn sec', href: 'https://wa.me/' + waNumber(f.Phone) }, ['WhatsApp ' + (first(f['Billed to']) || 'customer')])); btns.push(h('a', { class: 'btn sec', href: 'tel:+' + waNumber(f.Phone) }, ['Call'])); }
       if (capPhone) btns.push(h('a', { class: 'btn sec', href: 'https://wa.me/' + waNumber(capPhone) }, ['WhatsApp ' + (first(capName) || 'captain')]));
       var map = mapsLink(e, f);
       if (map) btns.push(h('a', { class: 'btn sec', href: map, target: '_blank', rel: 'noopener' }, ['Map']));
@@ -1567,32 +1667,60 @@
     box.appendChild(h('div', { class: 'btns' }, btns));
     return box;
   }
-  function dashCalendar(el) {
-    var evs = dash.d.events.slice().sort(function (a, b) { return evDay(a) + evTime(a) < evDay(b) + evTime(b) ? -1 : 1; });
-    var today = todayIso();
-    evs = evs.filter(function (e) {
-      if (evDay(e) < today) return false;
-      if (String(e.description || '').indexOf('Booking VLP-') < 0) return true;
-      var r = invForEvent(e);  // booking events whose booking was cancelled or deleted are removed by the server on this load
-      return !!(r && !r.fields['Cancelled at']);
-    });
-    if (!evs.length) { el.appendChild(h('p', { class: 'hint', text: 'Nothing on the Vamos trips calendar in the next 4 months. Bookings appear here once the deposit is paid.' })); return; }
-    var lastDay = '';
-    evs.forEach(function (e) {
+  function calItems() {
+    var today = todayIso(), items = [], gm = dash.d.gm || [], refs = {};
+    gm.forEach(function (b) { if (b.fields['Booking reference']) refs[b.fields['Booking reference']] = 1; });
+    dash.d.events.forEach(function (e) {
       var day = evDay(e);
-      if (day !== lastDay) { el.appendChild(h('h3', { class: 'dash-h', text: dayLabel(day) + (dayLabel(day).length < 10 ? ' · ' + new Date(day + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }) : '') })); lastDay = day; }
-      var r = invForEvent(e), isOpen = dash.open === e.id;
-      var title = String(e.summary || '(no title)').replace(/\s·\sVLP-[0-9]+$/, '');
-      var card = h('div', { class: 'card ev' + (isOpen ? ' open' : '') });
-      var head = h('button', { type: 'button', class: 'ev-head', 'aria-expanded': isOpen ? 'true' : 'false', onclick: function () { dash.open = isOpen ? '' : e.id; drawHome(); } }, [
-        h('span', { class: 'ev-row' }, [h('span', { class: 'ev-time', text: evTime(e) }), r ? pill(r.fields.Status) : null]),
+      if (day < today) return;
+      var r = invForEvent(e);
+      if (String(e.description || '').indexOf('Booking VLP-') >= 0 && !(r && !r.fields['Cancelled at'])) return;  // removed by the server on this load
+      var isGm = r ? r.fields['Business line'] === 'Good Medicine direct' : /good medicine/i.test(e.summary || '');
+      if (r && isGm && refs[r.fields['Bókun booking ID']]) return;  // shown once, as the Bókun booking
+      items.push({ key: 'e:' + e.id, day: day, sort: day + (e.start && e.start.dateTime ? new Date(e.start.dateTime).toISOString() : ' '), gm: isGm, ev: e, r: r });
+    });
+    gm.forEach(function (b) {
+      var f = b.fields, start = f['Activity date'];
+      if (!start) return;
+      var days = gmDays(f);
+      for (var i = 0; i < days; i++) {
+        var day = addDaysIso(start, i);
+        if (day < today) continue;
+        items.push({ key: 'g:' + b.id, day: day, sort: day + (i ? '~' : ' ') + gmTime(f), gm: true, b: b, part: days > 1 ? 'Day ' + (i + 1) + ' of ' + days : '' });
+      }
+    });
+    items.sort(function (a, b) { return a.sort < b.sort ? -1 : a.sort > b.sort ? 1 : 0; });
+    return items;
+  }
+  function dashCalendar(el) {
+    var all = calItems(), brand = dash.cal || 'all';
+    var counts = { all: all.length, vamos: all.filter(function (x) { return !x.gm; }).length, gm: all.filter(function (x) { return x.gm; }).length };
+    var seg = h('div', { class: 'seg tight', style: 'margin:0 0 4px' });
+    CAL_BRANDS.forEach(function (o) {
+      seg.appendChild(h('button', { type: 'button', class: brand === o[0] ? 'on' : '', 'aria-pressed': brand === o[0] ? 'true' : 'false', text: o[1] + ' ' + counts[o[0]], onclick: function () { dash.cal = o[0]; dash.open = ''; drawHome(); } }));
+    });
+    el.appendChild(seg);
+    var evs = all.filter(function (x) { return brand === 'all' || (brand === 'gm') === x.gm; });
+    if (!evs.length) {
+      el.appendChild(h('p', { class: 'hint', style: 'margin-top:12px', text: brand === 'gm' ? 'No Good Medicine bookings in Bókun for the next 4 months.' : brand === 'vamos' ? 'Nothing on the Vamos trips calendar in the next 4 months. Bookings appear here once the deposit is paid.' : 'Nothing booked in the next 4 months.' }));
+      return;
+    }
+    var lastDay = '';
+    evs.forEach(function (x) {
+      if (x.day !== lastDay) { var dl = dayLabel(x.day); el.appendChild(h('h3', { class: 'dash-h', text: dl + (dl.length < 10 ? ' · ' + new Date(x.day + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }) : '') })); lastDay = x.day; }
+      var openKey = x.key + '@' + x.day, isOpen = dash.open === openKey;
+      var time, title, st;
+      if (x.b) { time = x.part || gmTime(x.b.fields); title = gmTitle(x.b.fields); st = gmPill(x.b.fields); }
+      else { time = evTime(x.ev); title = String(x.ev.summary || '(no title)').replace(/\s·\sVLP-[0-9]+$/, ''); st = x.r ? pill(x.r.fields.Status) : null; }
+      var card = h('div', { class: 'card ev' + (isOpen ? ' open' : '') + (x.gm ? ' is-gm' : ' is-vamos') + (x.part && x.part.indexOf('Day 1 ') !== 0 ? ' cont' : '') });
+      card.appendChild(h('button', { type: 'button', class: 'ev-head', 'aria-expanded': isOpen ? 'true' : 'false', onclick: function () { dash.open = isOpen ? '' : openKey; drawHome(); } }, [
+        h('span', { class: 'ev-row' }, [h('span', { class: 'ev-time' }, [brand === 'all' ? brandTag(x.gm) : null, h('span', { text: time })]), st]),
         h('span', { class: 'ev-title', text: title })
-      ]);
-      card.appendChild(head);
-      if (isOpen) card.appendChild(eventDetail(e));
+      ]));
+      if (isOpen) card.appendChild(x.b ? gmDetail(x.b) : eventDetail(x.ev));
       el.appendChild(card);
     });
-    el.appendChild(h('p', { class: 'hint', text: 'From the Vamos trips Google calendar, next 4 months. Tap a trip for contacts.' }));
+    el.appendChild(h('p', { class: 'hint', text: 'Next 4 months. Vamos a La Paz: the Vamos trips Google calendar. Good Medicine: Bókun bookings (synced every 2 hours). Tap a trip for contacts and details.' }));
   }
 
   /* --- documents: owner booking confirmations and partner agreements (own Make call, only when this tab opens) --- */
