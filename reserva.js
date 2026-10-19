@@ -11,12 +11,15 @@
    v39: quick payments with several lines list each line above the total.
    v40: a cancelled quick payment says "Esta solicitud de pago fue cancelada" (not "reservación"); its WhatsApp
         question asks about the payment, not a booking.
-   v48: new master logo (new L photo). */
+   v48: new master logo (new L photo).
+   v50: Vamos a La Paz has its own WhatsApp (+52 612 290 3605) since Oct 19, 2026; Good Medicine payments keep
+        Good Medicine's WhatsApp (+52 612 219 4779). The "Questions?" and receipt buttons use waNum(). */
 (function () {
   'use strict';
 
   var HOOK = 'https://hook.us2.make.com/vrn9xcbptiqnnl1aniuccma1j8pxjtgx';
-  var VAMOS_WA = '526122194779';
+  var VAMOS_WA = '526122903605';  // Vamos a La Paz WhatsApp (from Oct 19, 2026)
+  var GM_WA = '526122194779';     // Good Medicine La Paz Charters WhatsApp
   var BRAND = '#B51E66', INK = '#061A2E';
   var C = { foam: '#F3EFE6', aqua: '#00C6C0', pacific: '#156AB3', gulf: '#0B4F6C', lima: '#B5C62E', orange: '#E65A37', gold: '#F3B53F' };
   var LOGO = 'https://s3.amazonaws.com/webflow-prod-assets/6a94d97df3061a3b48890971/6ace8f86b04cad21148d4d76_LA-PAZ-master-p-500.png';
@@ -210,6 +213,8 @@
   function eyebrowName() { return f()['Business line'] === 'Good Medicine direct' ? 'Good Medicine La Paz Charters · ' + L.via + ' Vamos a La Paz' : 'Vamos a La Paz'; }
 
   function f() { return inv.fields; }
+  // WhatsApp for questions/receipts: Good Medicine's own number on Good Medicine payments, otherwise Vamos.
+  function waNum() { return f()['Business line'] === 'Good Medicine direct' ? GM_WA : VAMOS_WA; }
   function isQuick() { return f().Kind === 'Quick payment'; }
   function depositPaid() { var x = f(); return x.Status === 'Deposit paid' || x.Status === 'Paid in full'; }
 
@@ -220,7 +225,7 @@
     root.appendChild(h('p', { class: 'eyebrow', text: eyebrowName() + ' · ' + L.booking + ' ' + (x['Invoice number'] || '') }));
     if (st === 'Cancelled') {
       root.appendChild(h('p', { class: 'msg warn', text: L.cancelled }));
-      root.appendChild(h('a', { class: 'btn wa', href: wa(VAMOS_WA, L.questionsMsg + (x['Invoice number'] || '')) }, [L.questions]));
+      root.appendChild(h('a', { class: 'btn wa', href: wa(waNum(), L.questionsMsg + (x['Invoice number'] || '')) }, [L.questions]));
       return;
     }
     var paid = depositPaid();
@@ -234,7 +239,7 @@
     root.appendChild(moneyCard(paid));
     if (!paid && !JUST_PAID) root.appendChild(payCard());
     root.appendChild(termsCard());
-    root.appendChild(h('a', { class: 'btn sec', href: wa(VAMOS_WA, L.questionsMsg + (x['Invoice number'] || '')) }, [L.questions]));
+    root.appendChild(h('a', { class: 'btn sec', href: wa(waNum(), L.questionsMsg + (x['Invoice number'] || '')) }, [L.questions]));
   }
 
   // Quick payment: one amount with a description (an extra hour, an add-on).
@@ -244,7 +249,7 @@
     root.appendChild(h('p', { class: 'eyebrow', text: eyebrowName() + ' · ' + L.payment + ' ' + num }));
     if (st === 'Cancelled') {
       root.appendChild(h('p', { class: 'msg warn', text: L.qCancelled }));
-      root.appendChild(h('a', { class: 'btn wa', href: wa(VAMOS_WA, L.qQuestionsMsg + num) }, [L.questions]));
+      root.appendChild(h('a', { class: 'btn wa', href: wa(waNum(), L.qQuestionsMsg + num) }, [L.questions]));
       return;
     }
     var paid = depositPaid();
@@ -277,11 +282,11 @@
           card.appendChild(h('div', { class: 'kv' }, [h('div', null, [h('span', { text: r[0] }), h('b', { text: r[1] })]), r[2] ? copyBtn(String(r[1]).replace(/\s/g, '')) : null]));
         });
         if (bank['Extra note']) card.appendChild(h('p', { class: 'muted', style: 'font-size:14px', text: bank['Extra note'] }));
-        card.appendChild(h('a', { class: 'btn wa', href: wa(VAMOS_WA, L.qReceipt + num) }, [L.receipt]));
+        card.appendChild(h('a', { class: 'btn wa', href: wa(waNum(), L.qReceipt + num) }, [L.receipt]));
       }
       root.appendChild(card);
     }
-    root.appendChild(h('a', { class: 'btn sec', href: wa(VAMOS_WA, L.qQuestionsMsg + num) }, [L.questions]));
+    root.appendChild(h('a', { class: 'btn sec', href: wa(waNum(), L.qQuestionsMsg + num) }, [L.questions]));
   }
 
   function tripCard() {
@@ -325,7 +330,7 @@
         card.appendChild(h('div', { class: 'kv' }, [h('div', null, [h('span', { text: r[0] }), h('b', { text: r[1] })]), r[2] ? copyBtn(String(r[1]).replace(/\s/g, '')) : null]));
       });
       if (bank['Extra note']) card.appendChild(h('p', { class: 'muted', style: 'font-size:14px', text: bank['Extra note'] }));
-      card.appendChild(h('a', { class: 'btn wa', href: wa(VAMOS_WA, L.receiptMsg + num) }, [L.receipt]));
+      card.appendChild(h('a', { class: 'btn wa', href: wa(waNum(), L.receiptMsg + num) }, [L.receipt]));
     }
     card.appendChild(h('p', { class: 'muted', style: 'font-size:14px;margin-top:10px', text: L.securedBy }));
     return card;

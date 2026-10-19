@@ -5,12 +5,13 @@
    v22: first release. v23: total trip price, Vamos logo and palette. v24: commission line without timing; ignore a Last day before the trip date.
    v25: once the owner has agreed and the customer's deposit is paid, shows the customer's name and WhatsApp with
    Save contact (vCard), Copy number and WhatsApp buttons. The number only ever arrives from the server after the deposit.
-   v48: new master logo (new L photo). */
+   v48: new master logo (new L photo).
+   v50: "Tell Peter" goes to the Vamos a La Paz WhatsApp (+52 612 290 3605, from Oct 19, 2026). */
 (function () {
   'use strict';
 
   var HOOK = 'https://hook.us2.make.com/5fjztbglh5n2romv2hd5hcj5flg43zg4';
-  var PETER_WA = '526122194779';
+  var PETER_WA = '526122903605';  // Vamos a La Paz WhatsApp (from Oct 19, 2026)
   var TERMS = 'conf-2026-10-09';
   var BRAND = '#B51E66', INK = '#061A2E';
   var C = { foam: '#F3EFE6', aqua: '#00C6C0', pacific: '#156AB3', gulf: '#0B4F6C', lima: '#B5C62E', orange: '#E65A37', gold: '#F3B53F' };
