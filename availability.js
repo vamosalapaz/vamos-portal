@@ -492,9 +492,12 @@
     }
     order.sort(function (a, b) { return (freeDays(groups[b]).length ? 1 : 0) - (freeDays(groups[a]).length ? 1 : 0); });
 
+    // Boats with a live calendar on another offer (Good Medicine): their inquiry-only offers show only when the boat is free
+    var liveBoats = {};
+    data.offers.forEach(function (x) { if (x.live && x.ok && x.boat_id) liveBoats[x.boat_id] = 1; });
     var rows = order.map(function (k) {
       var list = groups[k], o = list[0].o, free = freeDays(list);
-      var hasBoatCalendar = list.some(function (a) { return a.o.boat_free; });
+      var hasBoatCalendar = !!(o.boat_id && liveBoats[o.boat_id]);
       if (hasBoatCalendar && !free.length) return '';   // boat has a calendar and is booked on these dates
       var img = list[0].c.el.querySelector('img');
       var src = img ? (img.currentSrc || img.src) : '';
