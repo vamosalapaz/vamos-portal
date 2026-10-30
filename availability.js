@@ -158,7 +158,18 @@
     '.vlp-av-dates button{min-height:48px;display:flex;align-items:center;justify-content:space-between;border:1px solid #1C6B3A;border-radius:8px;padding:0 14px;background:#fff;font:inherit;font-size:15px;font-weight:600;color:#17202A;cursor:pointer}',
     '.vlp-av-dates button span{color:#1C6B3A;font-size:14px}',
     '.vlp-av-homewrap{position:relative;z-index:3;max-width:472px;margin:-96px auto 8px;padding:0 16px;box-sizing:border-box}',
-    '@media (min-width:768px){.vlp-av-homewrap{margin-top:-150px}}',
+    // Desktop: one-line search bar (approved mockup) — date (+ to) and guests | button, then flexible + browse link
+    '@media (min-width:768px){' +
+      '.vlp-av-homewrap{max-width:792px;margin-top:-90px}' +
+      '.vlp-av-home{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:10px;row-gap:8px;padding:14px 16px 12px;border-radius:14px}' +
+      '.vlp-av-home>h2{display:none}' +
+      '.vlp-av-home>.vlp-av-row{grid-column:1;grid-row:1;flex-wrap:nowrap}' +
+      '.vlp-av-home>.vlp-av-row>[role=group]{flex:0 0 200px}' +
+      '.vlp-av-home>.vlp-av-btn{grid-column:2;grid-row:1;align-self:end;width:210px;min-height:48px}' +
+      '.vlp-av-home>.vlp-av-check{grid-column:1;grid-row:2;font-size:14px;min-height:28px}' +
+      '.vlp-av-home>.vlp-av-check input{width:18px;height:18px}' +
+      '.vlp-av-home>.vlp-av-browse{grid-column:2;grid-row:2;justify-self:end;align-self:center;margin:0;white-space:nowrap;text-decoration:none}' +
+    '}',
     '.vlp-av-home{margin:0;text-align:left;width:100%;box-shadow:0 8px 24px rgba(23,32,42,.12)}',
     '.vlp-av-home .vlp-av-browse{align-self:center;text-decoration:underline}'
   ].join('');
