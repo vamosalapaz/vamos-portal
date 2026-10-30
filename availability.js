@@ -126,7 +126,7 @@
       '.vlp-av-off>.vlp-av-row{grid-column:1;grid-row:1;flex-wrap:nowrap}' +
       '.vlp-av-off>.vlp-av-row>[role=group]{flex:0 0 200px}' +
       '.vlp-av-off>.vlp-av-btn{grid-column:2;grid-row:1;align-self:end;width:210px;min-height:48px}' +
-      '.vlp-av-off>.vlp-av-moreopt{grid-column:1;grid-row:2}' +
+      '.vlp-av-off>.vlp-av-moreopt{grid-column:1;grid-row:2;justify-self:start}' +
       '.vlp-av-off>.vlp-av-clear{grid-column:2;grid-row:2;justify-self:end}' +
       '.vlp-av-off>.vlp-av-opts{grid-column:1/-1;grid-row:3}' +
     '}',
