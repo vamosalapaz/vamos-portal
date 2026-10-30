@@ -24,7 +24,7 @@
   if (!isOfferings && !isHome) return;
 
   var T = ES ? {
-    heading: 'Quién tiene lugar en tu día?', date: 'FECHA', to: 'HASTA', guests: 'PERSONAS', flexible: 'Mis fechas son flexibles (hasta 14 días)',
+    heading: '¿Qué hay disponible en tu día?', date: 'FECHA', to: 'HASTA', guests: 'PERSONAS', flexible: 'Mis fechas son flexibles (hasta 14 días)',
     check: 'Consultar disponibilidad', browse: 'O ver todos los tours y actividades', after: 'SALIDA DESPUÉS DE', anyTime: 'Cualquier hora',
     clear: 'Quitar fecha', choose: 'Elige una fecha', fewer: 'Menos personas', more: 'Más personas',
     guest: function (n) { return n + (n === 1 ? ' persona' : ' personas'); },
@@ -51,7 +51,7 @@
     onDay: function (d) { return 'el ' + d; }, between: function (a, b) { return 'entre el ' + a + ' y el ' + b; },
     locale: 'es-MX'
   } : {
-    heading: 'Who has space on your day?', date: 'DATE', to: 'TO', guests: 'GUESTS', flexible: 'My dates are flexible (up to 14 days)',
+    heading: "What's available on your day?", date: 'DATE', to: 'TO', guests: 'GUESTS', flexible: 'My dates are flexible (up to 14 days)',
     check: 'Check availability', browse: 'Or browse all tours & activities', after: 'DEPARTING AFTER', anyTime: 'Any time',
     clear: 'Clear date', choose: 'Choose a date', fewer: 'Fewer guests', more: 'More guests',
     guest: function (n) { return n + (n === 1 ? ' guest' : ' guests'); },
@@ -156,6 +156,7 @@
     '.vlp-av-dates button{min-height:48px;display:flex;align-items:center;justify-content:space-between;border:1px solid #1C6B3A;border-radius:8px;padding:0 14px;background:#fff;font:inherit;font-size:15px;font-weight:600;color:#17202A;cursor:pointer}',
     '.vlp-av-dates button span{color:#1C6B3A;font-size:14px}',
     '.vlp-av-homewrap{position:relative;z-index:3;max-width:472px;margin:-96px auto 8px;padding:0 16px;box-sizing:border-box}',
+    '@media (min-width:768px){.vlp-av-homewrap{margin-top:-150px}}',
     '.vlp-av-home{margin:0;text-align:left;width:100%;box-shadow:0 8px 24px rgba(23,32,42,.12)}',
     '.vlp-av-home .vlp-av-browse{align-self:center;text-decoration:underline}'
   ].join('');
