@@ -29,7 +29,9 @@
     clear: 'Quitar fecha', choose: 'Elige una fecha', fewer: 'Menos personas', more: 'Más personas',
     guest: function (n) { return n + (n === 1 ? ' persona' : ' personas'); },
     checking: function (d) { return 'Consultando disponibilidad en vivo para ' + d + '…'; },
-    openOn: function (d, n) { return n + (n === 1 ? ' experiencia disponible ' : ' experiencias disponibles ') + d; },
+    openOn: function (d, n) { return n + (n === 1 ? ' experiencia disponible' : ' experiencias disponibles'); },
+    moreOpts: 'Más opciones de búsqueda', moreOptsHint: '(fechas flexibles, hora de salida)', edit: 'Editar búsqueda', after2: function (t) { return 'después de las ' + t; },
+    perGroup: 'por grupo', perPerson: 'por persona', privTour: 'Tour privado', sharedTour: 'Tour compartido',
     sub: function (g) { return 'En vivo desde los calendarios de reserva de cada operador, para ' + T.guest(g) + '.'; },
     hidden: function (n, d) { return n + (n === 1 ? ' experiencia está llena o no sale ' : ' experiencias están llenas o no salen ') + d + '.'; },
     showAnyway: 'Mostrarlas de todos modos', hideFull: 'Ocultar las llenas', fullOn: function (d) { return 'Lleno ' + d; },
@@ -56,7 +58,9 @@
     clear: 'Clear date', choose: 'Choose a date', fewer: 'Fewer guests', more: 'More guests',
     guest: function (n) { return n + (n === 1 ? ' guest' : ' guests'); },
     checking: function (d) { return 'Checking live availability for ' + d + '…'; },
-    openOn: function (d, n) { return n + (n === 1 ? ' experience open ' : ' experiences open ') + d; },
+    openOn: function (d, n) { return n + (n === 1 ? ' experience available' : ' experiences available'); },
+    moreOpts: 'More search options', moreOptsHint: '(flexible dates, departure time)', edit: 'Edit search', after2: function (t) { return 'after ' + t; },
+    perGroup: 'per group', perPerson: 'per person', privTour: 'Private tour', sharedTour: 'Shared tour',
     sub: function (g) { return "Live from the operators' booking calendars, for " + T.guest(g) + '.'; },
     hidden: function (n, d) { return n + (n === 1 ? ' experience is' : ' experiences are') + ' full or not running ' + d + '.'; },
     showAnyway: 'Show them anyway', hideFull: 'Hide full ones', fullOn: function (d) { return 'Full ' + d; },
@@ -105,12 +109,33 @@
     '.vlp-av-link{font-size:14px;font-weight:600;color:#B51E66;background:none;border:none;padding:4px 0;font-family:inherit;cursor:pointer;text-decoration:underline;align-self:flex-start}',
     '.vlp-av-box h2{margin:0;font-size:18px;font-weight:700;line-height:1.25;color:#17202A}',
     '.vlp-av-box .offerings-select-wrap{margin:0}',
+    '.vlp-av-moreopt{text-decoration:none;font-size:14px}.vlp-av-moreopt span{font-weight:400;color:#46525C}',
+    '.vlp-av-opts{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:flex-end}.vlp-av-opts>.vlp-av-lbl{flex:0 1 220px}',
+    '.vlp-av-sum{border:1px solid #E5DFD1;border-radius:14px;padding:10px 10px 10px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin:0 0 18px;font-family:"DM Sans",sans-serif;color:#17202A;background:#fff}',
+    '.vlp-av-sumtxt{display:flex;align-items:center;gap:10px;font-size:17px;min-width:0}.vlp-av-sumtxt svg{flex:none}.vlp-av-sumtxt b{font-weight:700}.vlp-av-sumtxt span span{color:#46525C}',
+    '.vlp-av-sumnav{display:flex;gap:6px}',
+    '.vlp-av-sumnav button{border:1px solid #E5DFD1;border-radius:999px;padding:7px 12px;font:inherit;font-size:14px;font-weight:600;color:#46525C;background:#fff;cursor:pointer;min-height:38px}',
+    '.vlp-av-sumnav button:hover{border-color:#B51E66;color:#B51E66}',
+    '.vlp-av-edit{margin-left:auto;min-height:44px;padding:0 20px;border:1.5px solid #B51E66;border-radius:999px;background:#fff;color:#B51E66;font:inherit;font-size:15px;font-weight:700;cursor:pointer}',
+    '@media (max-width:767px){.vlp-av-sum{padding:12px}.vlp-av-sumtxt{flex:1 1 60%;font-size:16px}.vlp-av-sumtxt>span{display:flex;flex-direction:column}.vlp-av-sumtxt span span{font-size:14px}.vlp-av-sumnav{order:3;flex:1 1 100%}.vlp-av-sumnav button{flex:1 1 0}}',
+    '.offering-card-price-wrap{display:flex!important;flex-wrap:wrap;align-items:baseline;column-gap:6px}',
+    '.offering-card-price-wrap>*{margin-top:0!important;margin-bottom:0!important}',
+    '[data-offerings-count]{font-size:22px!important;font-weight:700!important;color:#17202A!important;font-family:"DM Sans",sans-serif}',
+    '@media (min-width:768px){' +
+      '.vlp-av-off{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:10px;row-gap:6px;padding:12px 14px;border-radius:14px}' +
+      '.vlp-av-off>.vlp-av-row{grid-column:1;grid-row:1;flex-wrap:nowrap}' +
+      '.vlp-av-off>.vlp-av-row>[role=group]{flex:0 0 200px}' +
+      '.vlp-av-off>.vlp-av-btn{grid-column:2;grid-row:1;align-self:end;width:210px;min-height:48px}' +
+      '.vlp-av-off>.vlp-av-moreopt{grid-column:1;grid-row:2}' +
+      '.vlp-av-off>.vlp-av-clear{grid-column:2;grid-row:2;justify-self:end}' +
+      '.vlp-av-off>.vlp-av-opts{grid-column:1/-1;grid-row:3}' +
+    '}',
     '.vlp-av-slot{display:flex;flex-direction:column}.vlp-av-slot .offerings-select-wrap,.vlp-av-slot select{width:100%}',
     '.vlp-av-home .vlp-av-browse{margin-top:-4px;padding:0}',
     '.vlp-av-on [data-offerings-count]{display:none!important}',
     '.vlp-av-hide{display:none!important}',
     '.vlp-av-head{display:flex;flex-direction:column;gap:4px;margin:4px 0 14px;font-family:"DM Sans",sans-serif}',
-    '.vlp-av-head h2{margin:0;font-size:21px;font-weight:700;color:#17202A;line-height:1.25}',
+    '.vlp-av-head h2{margin:0;font-size:24px;font-weight:700;color:#17202A;line-height:1.25}',
     '.vlp-av-head p{margin:0;font-size:14px;color:#46525C}',
     '.vlp-av-msg{border:1px solid #E5DFD1;border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:12px;margin:0 0 16px;font-family:"DM Sans",sans-serif;color:#17202A}',
     '.vlp-av-msg h2{margin:0;font-size:20px;font-weight:700;line-height:1.25}',
@@ -249,7 +274,7 @@
   function buildBox(opts) {
     var today = todayLaPaz();
     var q = opts.q || { from: '', to: '', guests: 2, after: '' };
-    var box = el('form', { class: 'vlp-av-box' + (opts.home ? ' vlp-av-home' : ''), 'aria-label': T.check, novalidate: '' });
+    var box = el('form', { class: 'vlp-av-box' + (opts.home ? ' vlp-av-home' : ' vlp-av-off'), 'aria-label': T.check, novalidate: '' });
     var html = '';
     if (opts.home) html += '<h2>' + esc(T.heading) + '</h2>';
     // Row 1: date (+ "to" when flexible) and guests side by side; row 2 (offerings only): departing after + tour type
@@ -257,13 +282,18 @@
     html += '<div class="vlp-av-row">' +
       '<label class="vlp-av-lbl">' + esc(T.date) + '<span class="vlp-av-field"><input class="vlp-av-input" type="date" name="from" min="' + today + '" value="' + (q.from || '') + '"><span class="vlp-av-ph">' + esc(T.choose) + '</span></span></label>' +
       '<label class="vlp-av-lbl vlp-av-tolbl"' + (q.to && q.to !== q.from ? '' : ' hidden') + '>' + esc(T.to) + '<span class="vlp-av-field"><input class="vlp-av-input" type="date" name="to" min="' + today + '" value="' + (q.to && q.to !== q.from ? q.to : '') + '"><span class="vlp-av-ph">' + esc(T.choose) + '</span></span></label>' +
-      guestsHtml + '</div>' +
-      '<label class="vlp-av-check"><input type="checkbox" name="flex"' + (q.to && q.to !== q.from ? ' checked' : '') + '>' + esc(T.flexible) + '</label>';
-    if (!opts.home) {
-      html += '<div class="vlp-av-row"><label class="vlp-av-lbl">' + esc(T.after) + '<select class="vlp-av-input" name="after" style="font-weight:500;color:#46525C">' +
+      guestsHtml + '</div>';
+    var checkHtml = '<label class="vlp-av-check"><input type="checkbox" name="flex"' + (q.to && q.to !== q.from ? ' checked' : '') + '>' + esc(T.flexible) + '</label>';
+    if (opts.home) html += checkHtml;
+    else {
+      // Offerings: flexible dates and departure time sit behind "More search options"
+      var openOpts = !!(q.after || (q.to && q.to !== q.from));
+      html += '<button type="button" class="vlp-av-link vlp-av-moreopt" aria-expanded="' + openOpts + '">' + esc(T.moreOpts) + ' ▾ <span>' + esc(T.moreOptsHint) + '</span></button>' +
+        '<div class="vlp-av-opts"' + (openOpts ? '' : ' hidden') + '>' + checkHtml +
+        '<label class="vlp-av-lbl">' + esc(T.after) + '<select class="vlp-av-input" name="after" style="font-weight:500;color:#46525C">' +
         ['', '07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '14:00', '16:00'].map(function (t) {
           return '<option value="' + t + '"' + (q.after === t ? ' selected' : '') + '>' + esc(t ? fmtTime(t) : T.anyTime) + '</option>';
-        }).join('') + '</select></label><div class="vlp-av-slot"></div></div>';
+        }).join('') + '</select></label></div>';
     }
     html += '<button type="submit" class="vlp-av-btn">' + esc(T.check) + '</button>';
     if (!opts.home) html += '<button type="button" class="vlp-av-link vlp-av-clear"' + (opts.q ? '' : ' hidden') + '>' + esc(T.clear) + '</button>';
@@ -302,6 +332,14 @@
       clearBtn.hidden = true; opts.onClear();
     });
     box._showClear = function () { if (clearBtn) clearBtn.hidden = false; };
+    var moreBtn = box.querySelector('.vlp-av-moreopt'), optsEl = box.querySelector('.vlp-av-opts');
+    if (moreBtn) moreBtn.addEventListener('click', function () { optsEl.hidden = !optsEl.hidden; moreBtn.setAttribute('aria-expanded', String(!optsEl.hidden)); });
+    // Put a query back into the form (used after the previous/next day buttons)
+    box._set = function (nq) {
+      fromIn.value = nq.from; syncPh(fromIn);
+      var range = nq.to !== nq.from; flex.checked = range; toLbl.hidden = !range; toIn.value = range ? nq.to : ''; syncPh(toIn);
+      guests = nq.guests; gLbl.textContent = T.guest(guests);
+    };
     return box;
   }
 
@@ -332,7 +370,7 @@
   }
 
   // ---------------------------------------------------------------- OFFERINGS
-  var cards = [], grid, listWrap, box, headEl, msgEl, moreEl, askEl;
+  var cards = [], grid, listWrap, box, sumEl, headEl, msgEl, moreEl, askEl;
   var data = null, q = null, showFull = false, pending = 0;
 
   function slugOf(item) {
@@ -351,14 +389,14 @@
     for (var i = 0; i < items.length; i++) cards.push({ el: items[i], slug: slugOf(items[i]) });
 
     q = readQuery();
-    box = buildBox({ q: q, onSearch: function (nq) { q = nq; writeQuery(q); box._showClear(); track('availability_search', { search_from: q.from, search_to: q.to, guests: q.guests, search_page: 'offerings' }); run(); }, onClear: clearAll });
+    box = buildBox({ q: q, onSearch: function (nq) { q = nq; writeQuery(q); box._showClear(); track('availability_search', { search_from: q.from, search_to: q.to, guests: q.guests, search_page: 'offerings' }); showSummary(); run(); }, onClear: clearAll });
     var root = document.querySelector('.offerings-filter-root');
     var chips = document.querySelector('[data-offerings-chips]');
     if (root && chips && chips.parentNode === root) root.insertBefore(box, chips); else listWrap.parentNode.insertBefore(box, listWrap);
-    // Move the existing Tour type dropdown (handled by the filter script) into the box, next to "departing after"
-    var typeSel = document.querySelector('[data-offerings-tourtype]');
-    var typeWrap = typeSel && typeSel.closest('.offerings-select-wrap');
-    if (typeWrap) box.querySelector('.vlp-av-slot').appendChild(typeWrap);
+    // Search summary shown instead of the form whenever a date is set (arriving from home, a shared link, or after a search)
+    sumEl = el('section', { class: 'vlp-av-sum', hidden: '', 'aria-label': T.check });
+    box.parentNode.insertBefore(sumEl, box);
+    relabelCards();
     var afterSel = box.querySelector('[name=after]');
     afterSel.addEventListener('change', function () { if (q) { q.after = afterSel.value; writeQuery(q); render(); } });
 
@@ -376,11 +414,57 @@
     var mo = new MutationObserver(function () { if (!data) return; cancelAnimationFrame(raf); raf = requestAnimationFrame(render); });
     cards.forEach(function (c) { mo.observe(c.el, { attributes: true, attributeFilter: ['style'] }); });
 
-    if (q) run();
+    if (q) { showSummary(); run(); }
+  }
+
+  function showSummary() {
+    var single = q.from === q.to, today = todayLaPaz();
+    var when = single ? fmt(q.from, { weekday: 'long', month: 'long', day: 'numeric' }) : rangeShort(q);
+    var extra = ' · ' + T.guest(q.guests) + (q.after ? ' · ' + T.after2(fmtTime(q.after)) : '');
+    var nav = '';
+    if (single) {
+      var prev = addDays(q.from, -1), next = addDays(q.from, 1);
+      nav = '<div class="vlp-av-sumnav">' + (prev >= today ? '<button type="button" data-d="' + prev + '">← ' + esc(dayWd(prev)) + '</button>' : '') +
+        '<button type="button" data-d="' + next + '">' + esc(dayWd(next)) + ' →</button></div>';
+    }
+    sumEl.innerHTML = '<div class="vlp-av-sumtxt"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B51E66" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>' +
+      '<span><b>' + esc(when) + '</b><span>' + esc(extra) + '</span></span></div>' + nav +
+      '<button type="button" class="vlp-av-edit">' + esc(T.edit) + '</button>';
+    sumEl.querySelectorAll('[data-d]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var d = b.getAttribute('data-d');
+        q = { from: d, to: d, guests: q.guests, after: q.after };
+        box._set(q); writeQuery(q);
+        track('availability_search', { search_from: q.from, search_to: q.to, guests: q.guests, search_page: 'offerings-daynav' });
+        showSummary(); run();
+      });
+    });
+    sumEl.querySelector('.vlp-av-edit').addEventListener('click', function () {
+      sumEl.hidden = true; box.hidden = false;
+      var f = box.querySelector('[name=from]'); if (f) f.focus();
+    });
+    sumEl.hidden = false; box.hidden = true;
+  }
+
+  // Price unit next to the price, "per tour" → "per group" (shown text only; the CMS field is unchanged), Spanish labels on /es
+  function relabelCards() {
+    cards.forEach(function (c) {
+      var suf = c.el.querySelector('.offering-card-price-suffix');
+      if (suf) {
+        var t = suf.textContent.trim().toLowerCase();
+        if (t === 'per tour') suf.textContent = T.perGroup;
+        else if (t === 'per person') suf.textContent = T.perPerson;
+      }
+      if (ES) c.el.querySelectorAll('.offering-card-meta').forEach(function (m) {
+        var t = m.textContent.trim();
+        if (t === 'Private Tour') m.textContent = T.privTour; else if (t === 'Shared Tour') m.textContent = T.sharedTour;
+      });
+    });
   }
 
   function clearAll() {
     q = null; data = null; showFull = false; writeQuery(null);
+    if (sumEl) { sumEl.hidden = true; sumEl.innerHTML = ''; } box.hidden = false;
     document.body.classList.remove('vlp-av-on');
     cards.forEach(function (c) {
       c.el.classList.remove('vlp-av-hide', 'vlp-av-full');
@@ -486,7 +570,7 @@
     });
 
     headEl.hidden = !open;
-    headEl.innerHTML = '<h2>' + esc(T.openOn(rangeHead(q), open)) + '</h2><p>' + esc(T.sub(q.guests)) + '</p>';
+    headEl.innerHTML = '<h2>' + esc(T.openOn('', open)) + '</h2><p>' + esc(T.sub(q.guests)) + '</p>';
 
     moreEl.hidden = !full;
     moreEl.innerHTML = esc(T.hidden(full, rangeHead(q))) + ' <button type="button" class="vlp-av-link" style="display:inline;padding:0">' + esc(showFull ? T.hideFull : T.showAnyway) + '</button>';
