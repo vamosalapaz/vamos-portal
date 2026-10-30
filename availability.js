@@ -185,7 +185,7 @@
   function rangeHead(q) { return q.from === q.to ? (ES ? 'el ' : 'on ') + dayShort(q.from) : rangeShort(q); }
   function rangeWa(q) { return q.from === q.to ? T.onDay(dayLong(q.from)) : T.between(dayLong(q.from), dayLong(q.to)); }
   function fmtTime(t) {
-    if (!t) return T.anyDeparture;
+    if (!t || t === '00:00') return T.anyDeparture; // Bókun day-only products (Good Medicine) report 00:00
     var p = t.split(':'), h = +p[0], m = p[1] || '00';
     if (ES) return h + ':' + m;
     return ((h + 11) % 12 + 1) + ':' + m + (h < 12 ? ' am' : ' pm');
@@ -403,7 +403,7 @@
       var list = o.days[d].filter(function (s) {
         if (s.s != null && s.s < g) return false;
         if (s.s == null && o.type === 'shared' && o.cap && o.cap < g) return false;
-        if (q.after && s.t && !o.tsdb && s.t < q.after) return false;
+        if (q.after && s.t && s.t !== '00:00' && !o.tsdb && s.t < q.after) return false;
         return true;
       });
       if (list.length) { out[d] = list; n++; }
