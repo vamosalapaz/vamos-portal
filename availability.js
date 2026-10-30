@@ -112,12 +112,12 @@
     '.vlp-av-moreopt{text-decoration:none;font-size:14px}.vlp-av-moreopt span{font-weight:400;color:#46525C}',
     '.vlp-av-opts{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:flex-end}.vlp-av-opts>.vlp-av-lbl{flex:0 1 220px}',
     '.vlp-av-sum{border:1px solid #E5DFD1;border-radius:14px;padding:10px 10px 10px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin:0 0 18px;font-family:"DM Sans",sans-serif;color:#17202A;background:#fff}',
-    '.vlp-av-sumtxt{display:flex;align-items:center;gap:10px;font-size:17px;min-width:0}.vlp-av-sumtxt svg{flex:none}.vlp-av-sumtxt b{font-weight:700}.vlp-av-sumtxt span span{color:#46525C}.vlp-av-dot{font-style:normal;color:#46525C;white-space:pre}',
+    '.vlp-av-sumtxt{display:flex;align-items:center;gap:10px;font-size:17px;min-width:0}.vlp-av-sumtxt svg{flex:none}.vlp-av-sumtxt b{font-weight:700}.vlp-av-sumtxt span span{color:#46525C}.vlp-av-dot{font-style:normal;color:#46525C;white-space:pre}.vlp-av-short{display:none}',
     '.vlp-av-sumnav{display:flex;gap:6px}',
     '.vlp-av-sumnav button{border:1px solid #E5DFD1;border-radius:999px;padding:7px 12px;font:inherit;font-size:14px;font-weight:600;color:#46525C;background:#fff;cursor:pointer;min-height:38px}',
     '.vlp-av-sumnav button:hover{border-color:#B51E66;color:#B51E66}',
     '.vlp-av-edit{margin-left:auto;min-height:44px;padding:0 20px;border:1.5px solid #B51E66;border-radius:999px;background:#fff;color:#B51E66;font:inherit;font-size:15px;font-weight:700;cursor:pointer}',
-    '@media (max-width:767px){.vlp-av-sum{padding:12px}.vlp-av-sumtxt{flex:1 1 0;min-width:0;font-size:16px}.vlp-av-sumtxt>span{display:flex;flex-direction:column}.vlp-av-sumtxt span span{font-size:14px}.vlp-av-dot{display:none}.vlp-av-edit{order:2;padding:0 14px}.vlp-av-sumnav{order:3;flex:1 1 100%}.vlp-av-sumnav button{flex:1 1 0}}',
+    '@media (max-width:767px){.vlp-av-sum{padding:12px}.vlp-av-sumtxt{flex:1 1 0;min-width:0;font-size:16px}.vlp-av-sumtxt>span{display:flex;flex-direction:column}.vlp-av-sumtxt span span{font-size:14px}.vlp-av-dot,.vlp-av-long{display:none}.vlp-av-short{display:inline}.vlp-av-edit{order:2;padding:0 14px}.vlp-av-sumnav{order:3;flex:1 1 100%}.vlp-av-sumnav button{flex:1 1 0}}',
     '.offering-card-price-wrap{display:flex!important;flex-direction:row!important;flex-wrap:wrap;align-items:baseline;column-gap:6px;row-gap:0!important;height:auto!important;min-height:0!important}',
     '.offering-card-price-wrap>*{margin-top:0!important;margin-bottom:0!important}',
     '[data-offerings-count]{font-size:22px!important;font-weight:700!important;color:#17202A!important;font-family:"DM Sans",sans-serif}',
@@ -428,7 +428,7 @@
         '<button type="button" data-d="' + next + '">' + esc(dayWd(next)) + ' →</button></div>';
     }
     sumEl.innerHTML = '<div class="vlp-av-sumtxt"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B51E66" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>' +
-      '<span><b>' + esc(when) + '</b><i class="vlp-av-dot"> · </i><span>' + esc(extra) + '</span></span></div>' + nav +
+      '<span><b class="vlp-av-long">' + esc(when) + '</b><b class="vlp-av-short">' + esc(single ? dayShort(q.from) : rangeShort(q)) + '</b><i class="vlp-av-dot"> · </i><span>' + esc(extra) + '</span></span></div>' + nav +
       '<button type="button" class="vlp-av-edit">' + esc(T.edit) + '</button>';
     sumEl.querySelectorAll('[data-d]').forEach(function (b) {
       b.addEventListener('click', function () {
