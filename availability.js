@@ -149,6 +149,7 @@
     '.vlp-av-chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}',
     '.vlp-av-chip{border:1px solid #1C6B3A;color:#1C6B3A;border-radius:999px;padding:5px 11px;font-size:14px;font-weight:600;line-height:1.3;white-space:nowrap}',
     '.vlp-av-note{color:#46525C;font-size:14px}',
+    '.vlp-av-wa{display:block;flex-basis:100%;font-weight:600;color:#1C6B3A}',
     '.vlp-av-tsdb{background:#FFF4E0;border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}',
     '.vlp-av-tsdb b{font-size:14px;color:#7A4A00}',
     '.vlp-av-tsdb span{font-size:13px;color:#6A4300;line-height:1.35}',
@@ -507,7 +508,7 @@
       var list = o.days[d].filter(function (s) {
         if (s.s != null && s.s < g) return false;
         if (s.s == null && o.type === 'shared' && o.cap && o.cap < g) return false;
-        if (q.after && s.t && s.t !== '00:00' && !o.tsdb && s.t < q.after) return false;
+        if (q.after && s.t && s.t !== '00:00' && !o.tsdb && !o.inquiry && s.t < q.after) return false;
         return true;
       });
       if (list.length) { out[d] = list; n++; }
@@ -527,7 +528,8 @@
     }
     function chips(list) {
       // Day-only trips (no departure time, e.g. Good Medicine): no chip — the "AVAILABLE" caption already says it
-      list = list.filter(function (s) { return s.t && s.t !== '00:00'; });
+      // Inquiry offers (calendar read, booked on WhatsApp, e.g. Miko): the calendar's start time is a placeholder
+      list = list.filter(function (s) { return s.t && s.t !== '00:00' && !o.inquiry; });
       if (!list.length) return single ? '' : '<span class="vlp-av-chip">' + esc(T.anyDeparture) + '</span>';
       return list.map(function (s) {
         var t = fmtTime(s.t);
@@ -536,6 +538,7 @@
       }).join('');
     }
     var priv = o.type === 'private' ? '<span class="vlp-av-note">' + esc(T.privateNote) + '</span>' : '';
+    if (o.inquiry) priv += '<span class="vlp-av-note vlp-av-wa">' + esc(T.bookWa) + '</span>';
     if (single) {
       return '<span class="vlp-av-cap">' + esc(o.type === 'shared' ? T.departures : T.available) + '</span><div class="vlp-av-chips">' + chips(od.days[dates[0]]) + priv + '</div>';
     }
