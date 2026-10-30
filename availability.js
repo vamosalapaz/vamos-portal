@@ -118,7 +118,7 @@
     '.vlp-av-sumnav button:hover{border-color:#B51E66;color:#B51E66}',
     '.vlp-av-edit{margin-left:auto;min-height:44px;padding:0 20px;border:1.5px solid #B51E66;border-radius:999px;background:#fff;color:#B51E66;font:inherit;font-size:15px;font-weight:700;cursor:pointer}',
     '@media (max-width:767px){.vlp-av-sum{padding:12px}.vlp-av-sumtxt{flex:1 1 60%;font-size:16px}.vlp-av-sumtxt>span{display:flex;flex-direction:column}.vlp-av-sumtxt span span{font-size:14px}.vlp-av-sumnav{order:3;flex:1 1 100%}.vlp-av-sumnav button{flex:1 1 0}}',
-    '.offering-card-price-wrap{display:flex!important;flex-wrap:wrap;align-items:baseline;column-gap:6px}',
+    '.offering-card-price-wrap{display:flex!important;flex-direction:row!important;flex-wrap:wrap;align-items:baseline;column-gap:6px;row-gap:0!important;height:auto!important;min-height:0!important}',
     '.offering-card-price-wrap>*{margin-top:0!important;margin-bottom:0!important}',
     '[data-offerings-count]{font-size:22px!important;font-weight:700!important;color:#17202A!important;font-family:"DM Sans",sans-serif}',
     '@media (min-width:768px){' +
@@ -219,7 +219,7 @@
   function fmt(iso, opts) { return new Date(iso + 'T12:00:00Z').toLocaleDateString(T.locale, Object.assign({ timeZone: 'UTC' }, opts)); }
   function dayShort(iso) { return fmt(iso, { weekday: 'short', month: 'short', day: 'numeric' }); } // Sat, Nov 21 / sáb, 21 nov
   function dayNum(iso) { return fmt(iso, { month: 'short', day: 'numeric' }); } // Nov 21 / 21 nov
-  function dayWd(iso) { return fmt(iso, { weekday: 'short', day: 'numeric' }); } // Sat 21 / sáb 21
+  function dayWd(iso) { return fmt(iso, { weekday: 'short' }).replace('.', '') + ' ' + +iso.slice(8, 10); } // Sat 21 / sáb 21
   function dayLong(iso) { return fmt(iso, { weekday: 'long', month: 'long', day: 'numeric' }); } // Saturday, November 21
   function rangeShort(q) { return q.from === q.to ? dayNum(q.from) : dayNum(q.from) + ' – ' + dayNum(q.to); }
   function rangeHead(q) { return q.from === q.to ? (ES ? 'el ' : 'on ') + dayShort(q.from) : rangeShort(q); }
