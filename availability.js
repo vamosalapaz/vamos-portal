@@ -98,13 +98,15 @@
     '.vlp-av-step{display:flex;align-items:center;justify-content:space-between;border:1px solid #E5DFD1;border-radius:8px;padding:2px;min-height:48px}',
     '.vlp-av-step button{width:38px;height:42px;flex:none;border:none;border-radius:6px;background:#F4EFE6;font:inherit;font-size:22px;font-weight:600;color:#17202A;cursor:pointer;line-height:1;padding:0}',
     '.vlp-av-step span{font-size:15px;font-weight:600;letter-spacing:0;color:#17202A;white-space:nowrap;padding:0 4px}',
-    '.vlp-av-check{display:flex;align-items:center;gap:10px;font-size:15px;color:#17202A;min-height:40px;font-weight:400;letter-spacing:0;cursor:pointer;margin:0}',
+    '.vlp-av-check{display:flex;align-items:center;gap:10px;font-size:15px;color:#17202A;min-height:32px;font-weight:400;letter-spacing:0;cursor:pointer;margin:0}',
     '.vlp-av-check input{width:22px;height:22px;accent-color:#B51E66;margin:0}',
-    '.vlp-av-btn{min-height:50px;display:flex;align-items:center;justify-content:center;background:#B51E66;color:#fff!important;border:none;border-radius:999px;font:inherit;font-size:16px;font-weight:700;cursor:pointer;text-decoration:none;width:100%}',
+    '.vlp-av-btn{min-height:48px;display:flex;align-items:center;justify-content:center;background:#B51E66;color:#fff!important;border:none;border-radius:999px;font:inherit;font-size:16px;font-weight:700;cursor:pointer;text-decoration:none;width:100%}',
     '.vlp-av-btn:hover{background:#9C1958}',
     '.vlp-av-link{font-size:14px;font-weight:600;color:#B51E66;background:none;border:none;padding:4px 0;font-family:inherit;cursor:pointer;text-decoration:underline;align-self:flex-start}',
     '.vlp-av-box h2{margin:0;font-size:18px;font-weight:700;line-height:1.25;color:#17202A}',
     '.vlp-av-box .offerings-select-wrap{margin:0}',
+    '.vlp-av-slot{display:flex;flex-direction:column}.vlp-av-slot .offerings-select-wrap,.vlp-av-slot select{width:100%}',
+    '.vlp-av-home .vlp-av-browse{margin-top:-4px;padding:0}',
     '.vlp-av-on [data-offerings-count]{display:none!important}',
     '.vlp-av-hide{display:none!important}',
     '.vlp-av-head{display:flex;flex-direction:column;gap:4px;margin:4px 0 14px;font-family:"DM Sans",sans-serif}',
@@ -239,20 +241,19 @@
     var box = el('form', { class: 'vlp-av-box' + (opts.home ? ' vlp-av-home' : ''), 'aria-label': T.check, novalidate: '' });
     var html = '';
     if (opts.home) html += '<h2>' + esc(T.heading) + '</h2>';
+    // Row 1: date (+ "to" when flexible) and guests side by side; row 2 (offerings only): departing after + tour type
+    var guestsHtml = '<div class="vlp-av-lbl" role="group" aria-label="' + esc(T.guests) + '">' + esc(T.guests) + '<div class="vlp-av-step"><button type="button" data-step="-1" aria-label="' + esc(T.fewer) + '">−</button><span aria-live="polite">' + esc(T.guest(q.guests)) + '</span><button type="button" data-step="1" aria-label="' + esc(T.more) + '">+</button></div></div>';
     html += '<div class="vlp-av-row">' +
       '<label class="vlp-av-lbl">' + esc(T.date) + '<span class="vlp-av-field"><input class="vlp-av-input" type="date" name="from" min="' + today + '" value="' + (q.from || '') + '"><span class="vlp-av-ph">' + esc(T.choose) + '</span></span></label>' +
       '<label class="vlp-av-lbl vlp-av-tolbl"' + (q.to && q.to !== q.from ? '' : ' hidden') + '>' + esc(T.to) + '<span class="vlp-av-field"><input class="vlp-av-input" type="date" name="to" min="' + today + '" value="' + (q.to && q.to !== q.from ? q.to : '') + '"><span class="vlp-av-ph">' + esc(T.choose) + '</span></span></label>' +
-      '</div>' +
-      '<label class="vlp-av-check"><input type="checkbox" name="flex"' + (q.to && q.to !== q.from ? ' checked' : '') + '>' + esc(T.flexible) + '</label>' +
-      '<div class="vlp-av-row">' +
-      '<div class="vlp-av-lbl" role="group" aria-label="' + esc(T.guests) + '">' + esc(T.guests) + '<div class="vlp-av-step"><button type="button" data-step="-1" aria-label="' + esc(T.fewer) + '">−</button><span aria-live="polite">' + esc(T.guest(q.guests)) + '</span><button type="button" data-step="1" aria-label="' + esc(T.more) + '">+</button></div></div>';
+      guestsHtml + '</div>' +
+      '<label class="vlp-av-check"><input type="checkbox" name="flex"' + (q.to && q.to !== q.from ? ' checked' : '') + '>' + esc(T.flexible) + '</label>';
     if (!opts.home) {
-      html += '<label class="vlp-av-lbl">' + esc(T.after) + '<select class="vlp-av-input" name="after" style="font-weight:500;color:#46525C">' +
+      html += '<div class="vlp-av-row"><label class="vlp-av-lbl">' + esc(T.after) + '<select class="vlp-av-input" name="after" style="font-weight:500;color:#46525C">' +
         ['', '07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '14:00', '16:00'].map(function (t) {
           return '<option value="' + t + '"' + (q.after === t ? ' selected' : '') + '>' + esc(t ? fmtTime(t) : T.anyTime) + '</option>';
-        }).join('') + '</select></label>';
+        }).join('') + '</select></label><div class="vlp-av-slot"></div></div>';
     }
-    html += '</div><div class="vlp-av-slot"></div>' +
       '<button type="submit" class="vlp-av-btn">' + esc(T.check) + '</button>';
     if (!opts.home) html += '<button type="button" class="vlp-av-link vlp-av-clear"' + (opts.q ? '' : ' hidden') + '>' + esc(T.clear) + '</button>';
     box.innerHTML = html;
