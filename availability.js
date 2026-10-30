@@ -254,7 +254,7 @@
           return '<option value="' + t + '"' + (q.after === t ? ' selected' : '') + '>' + esc(t ? fmtTime(t) : T.anyTime) + '</option>';
         }).join('') + '</select></label><div class="vlp-av-slot"></div></div>';
     }
-      '<button type="submit" class="vlp-av-btn">' + esc(T.check) + '</button>';
+    html += '<button type="submit" class="vlp-av-btn">' + esc(T.check) + '</button>';
     if (!opts.home) html += '<button type="button" class="vlp-av-link vlp-av-clear"' + (opts.q ? '' : ' hidden') + '>' + esc(T.clear) + '</button>';
     box.innerHTML = html;
 
