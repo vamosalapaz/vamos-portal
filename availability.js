@@ -154,7 +154,8 @@
     '.vlp-av-dates{display:flex;flex-direction:column;gap:8px}',
     '.vlp-av-dates button{min-height:48px;display:flex;align-items:center;justify-content:space-between;border:1px solid #1C6B3A;border-radius:8px;padding:0 14px;background:#fff;font:inherit;font-size:15px;font-weight:600;color:#17202A;cursor:pointer}',
     '.vlp-av-dates button span{color:#1C6B3A;font-size:14px}',
-    '.vlp-av-home{margin:18px 0 6px;text-align:left;max-width:440px;width:100%}',
+    '.vlp-av-homewrap{position:relative;z-index:3;max-width:472px;margin:-96px auto 8px;padding:0 16px;box-sizing:border-box}',
+    '.vlp-av-home{margin:0;text-align:left;width:100%;box-shadow:0 8px 24px rgba(23,32,42,.12)}',
     '.vlp-av-home .vlp-av-browse{align-self:center;text-decoration:underline}'
   ].join('');
 
@@ -301,9 +302,12 @@
         location.href = (ES ? '/es' : '') + '/offerings?' + p.toString();
       }
     });
-    var sub = content.querySelector('.home-hero-subtitle');
+    // The hero has a fixed height, so the box goes right below it, overlapping its bottom edge (as in the mockup)
+    var hero = content.closest('.home-hero-full-bleed') || content.closest('.home-hero-card') || content;
+    var wrap = el('div', { class: 'vlp-av-homewrap' });
+    wrap.appendChild(box);
+    hero.parentNode.insertBefore(wrap, hero.nextSibling);
     var cta = content.querySelector('.home-hero-cta');
-    if (sub && sub.nextSibling) content.insertBefore(box, sub.nextSibling); else content.appendChild(box);
     if (cta) { cta.classList.add('vlp-av-link', 'vlp-av-browse'); cta.classList.remove('home-hero-cta'); cta.textContent = T.browse; box.appendChild(cta); }
   }
 
