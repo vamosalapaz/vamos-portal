@@ -29,7 +29,7 @@
     clear: 'Quitar fecha', choose: 'Elige una fecha', fewer: 'Menos personas', more: 'Más personas',
     guest: function (n) { return n + (n === 1 ? ' persona' : ' personas'); },
     checking: function (d) { return 'Consultando disponibilidad en vivo para ' + d + '…'; },
-    openOn: function (d, n) { return 'Disponibles ' + d + ' · ' + n; },
+    openOn: function (d, n) { return n + (n === 1 ? ' experiencia disponible ' : ' experiencias disponibles ') + d; },
     sub: function (g) { return 'En vivo desde los calendarios de reserva de cada operador, para ' + T.guest(g) + '.'; },
     hidden: function (n, d) { return n + (n === 1 ? ' experiencia está llena o no sale ' : ' experiencias están llenas o no salen ') + d + '.'; },
     showAnyway: 'Mostrarlas de todos modos', hideFull: 'Ocultar las llenas', fullOn: function (d) { return 'Lleno ' + d; },
@@ -56,7 +56,7 @@
     clear: 'Clear date', choose: 'Choose a date', fewer: 'Fewer guests', more: 'More guests',
     guest: function (n) { return n + (n === 1 ? ' guest' : ' guests'); },
     checking: function (d) { return 'Checking live availability for ' + d + '…'; },
-    openOn: function (d, n) { return 'Open ' + d + ' · ' + n; },
+    openOn: function (d, n) { return n + (n === 1 ? ' experience open ' : ' experiences open ') + d; },
     sub: function (g) { return "Live from the operators' booking calendars, for " + T.guest(g) + '.'; },
     hidden: function (n, d) { return n + (n === 1 ? ' experience is' : ' experiences are') + ' full or not running ' + d + '.'; },
     showAnyway: 'Show them anyway', hideFull: 'Hide full ones', fullOn: function (d) { return 'Full ' + d; },
@@ -91,7 +91,8 @@
     '.vlp-av-input{width:100%;min-height:48px;border:1px solid #E5DFD1;border-radius:8px;padding:0 12px;font:inherit;font-size:16px;font-weight:600;color:#17202A;background:#fff;-webkit-appearance:none;appearance:none;letter-spacing:0;margin:0}',
     '.vlp-av-input:focus,.vlp-av-step button:focus-visible,.vlp-av-btn:focus-visible{outline:2px solid #B51E66;outline-offset:2px}',
     '.vlp-av-ph{position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:16px;font-weight:500;color:#6B7680;pointer-events:none;letter-spacing:0}',
-    '.vlp-av-field.has-val .vlp-av-ph{display:none}',
+    '.vlp-av-field.has-val .vlp-av-ph,.vlp-av-field:focus-within .vlp-av-ph{display:none}',
+    '.vlp-av-input[type=date]{cursor:pointer}',
     '.vlp-av-field:not(.has-val) .vlp-av-input{color:transparent}',
     '.vlp-av-field:not(.has-val) .vlp-av-input:focus{color:#17202A}',
     '.vlp-av-step{display:flex;align-items:center;justify-content:space-between;border:1px solid #E5DFD1;border-radius:8px;padding:2px;min-height:48px}',
@@ -259,7 +260,13 @@
     var fromIn = box.querySelector('[name=from]'), toIn = box.querySelector('[name=to]'), flex = box.querySelector('[name=flex]');
     var toLbl = box.querySelector('.vlp-av-tolbl'), gLbl = box.querySelector('.vlp-av-step span');
     function syncPh(inp) { inp.parentNode.classList.toggle('has-val', !!inp.value); }
-    [fromIn, toIn].forEach(function (inp) { syncPh(inp); inp.addEventListener('input', function () { syncPh(inp); }); inp.addEventListener('change', function () { syncPh(inp); }); });
+    [fromIn, toIn].forEach(function (inp) {
+      syncPh(inp);
+      inp.addEventListener('input', function () { syncPh(inp); });
+      inp.addEventListener('change', function () { syncPh(inp); });
+      // Open the calendar wherever the field is clicked, not only on the calendar icon
+      inp.addEventListener('click', function () { try { inp.showPicker(); } catch (e) {} });
+    });
     fromIn.addEventListener('change', function () {
       if (fromIn.value) { toIn.min = fromIn.value; toIn.max = addDays(fromIn.value, MAX_RANGE - 1); if (toIn.value && toIn.value < fromIn.value) { toIn.value = ''; syncPh(toIn); } }
     });
@@ -422,6 +429,9 @@
         '<span class="vlp-av-note" style="font-size:13px;color:#6A4300">' + esc(T.tsdbNote) + '</span>';
     }
     function chips(list) {
+      // Day-only trips (no departure time, e.g. Good Medicine): no chip — the "AVAILABLE" caption already says it
+      list = list.filter(function (s) { return s.t && s.t !== '00:00'; });
+      if (!list.length) return single ? '' : '<span class="vlp-av-chip">' + esc(T.anyDeparture) + '</span>';
       return list.map(function (s) {
         var t = fmtTime(s.t);
         if (o.type === 'shared' && s.s != null && s.s <= 5) t += ' · ' + T.left(s.s);
