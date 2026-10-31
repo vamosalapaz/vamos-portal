@@ -564,10 +564,10 @@
   function RQ() {
     return ES ? { req: 'Solicitar reserva', askWa: 'Preguntar por WhatsApp', reqShort: 'Retenemos el 20% de depósito, sin cobrar. Se cobra solo si el dueño confirma.',
         waShort: 'No estás seguro? Pregúntanos antes de comprometerte.', waQ: 'Dudas primero? Pregunta por WhatsApp',
-        cardHelp: 'Tu tarjeta se retiene, no se cobra. El dueño confirma en 6 horas o se libera.' }
+        cardHelp: 'Tu tarjeta se retiene, no se cobra. El dueño confirma en 6 horas o se libera. Puedes cancelar la retención cuando quieras.' }
       : { req: 'Request to book', askWa: 'Ask on WhatsApp', reqShort: 'Pay a 20% deposit hold now. Charged only if the owner confirms.',
         waShort: 'Not sure yet? Chat with us before committing.', waQ: 'Questions first? Ask on WhatsApp',
-        cardHelp: 'Your card is held, not charged. The owner confirms within 6 hours, or the hold is released.' };
+        cardHelp: 'Your card is held, not charged. The owner confirms within 6 hours, or the hold is released. You can cancel your hold at any time.' };
   }
   function rqButtons(slug, date, onCard) {
     var o = (data && data.offers || []).filter(function (x) { return x.slug === slug; })[0] || {};

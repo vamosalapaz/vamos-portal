@@ -11,8 +11,8 @@
   var ES = /^\/es(\/|$)/.test(location.pathname) || (document.documentElement.lang || '').slice(0, 2) === 'es';
   var PINK = '#B51E66', INK = '#17202A', MUTED = '#46525C', LINE = '#E5DFD1', SAND = '#F4EFE6';
   var T = ES ? {
-    req: 'Solicitar reserva', cardT: 'Reserva directo con el dueño', reqHelp: 'Retenemos el 20% de depósito en tu tarjeta, sin cobrarlo. El dueño confirma en 6 horas o se libera.',
-    reqHelpN: function (p) { return 'Retenemos el ' + p + '% de depósito en tu tarjeta, sin cobrarlo. El dueño confirma en 6 horas o se libera.'; },
+    req: 'Solicitar reserva', cardT: 'Reserva directo con el dueño', reqHelp: 'Retenemos el 20% de depósito en tu tarjeta, sin cobrarlo. El dueño confirma en 6 horas o se libera. Puedes cancelar la retención cuando quieras.',
+    reqHelpN: function (p) { return 'Retenemos el ' + p + '% de depósito en tu tarjeta, sin cobrarlo. El dueño confirma en 6 horas o se libera. Puedes cancelar la retención cuando quieras.'; },
     waHelp: '¿Dudas? Escríbenos antes de comprometerte.'.replace(/[¿¡]/g, ''),
     title: 'Solicitar reserva', sub: 'barco privado, solo tu grupo', trip: 'VIAJE', date: 'FECHA', guests: 'PERSONAS', nights: 'NOCHES',
     name: 'TU NOMBRE', namePh: 'Nombre completo', wa: 'NÚMERO DE WHATSAPP', waHint: 'Te escribimos aquí en cuanto el dueño responda.',
@@ -28,8 +28,8 @@
       off: 'Las solicitudes en línea están pausadas. Escríbenos por WhatsApp.', other: 'No se pudo enviar. Revisa tu conexión e inténtalo otra vez.' },
     waMsg: function (t, d, g) { return 'Hola! Me interesa ' + t + (d ? ' el ' + d : '') + (g ? ' para ' + g + ' personas' : '') + '. Lo vi en vamosalapaz.com'; },
   } : {
-    req: 'Request to book', cardT: 'Book directly with the owner', reqHelp: 'We hold a 20% deposit on your card, not charged. The owner confirms within 6 hours, or the hold is released.',
-    reqHelpN: function (p) { return 'We hold a ' + p + '% deposit on your card, not charged. The owner confirms within 6 hours, or the hold is released.'; },
+    req: 'Request to book', cardT: 'Book directly with the owner', reqHelp: 'We hold a 20% deposit on your card, not charged. The owner confirms within 6 hours, or the hold is released. You can cancel your hold at any time.',
+    reqHelpN: function (p) { return 'We hold a ' + p + '% deposit on your card, not charged. The owner confirms within 6 hours, or the hold is released. You can cancel your hold at any time.'; },
     waHelp: 'Questions first? Chat with us before committing.',
     title: 'Request to book', sub: 'private boat, just your group', trip: 'TRIP', date: 'DATE', guests: 'GUESTS', nights: 'NIGHTS',
     name: 'YOUR NAME', namePh: 'Full name', wa: 'WHATSAPP NUMBER', waHint: "We'll message you here as soon as the owner answers.",
