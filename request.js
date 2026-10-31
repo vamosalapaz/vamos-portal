@@ -216,7 +216,8 @@
   function offerPage() {
     var m = /^\/(?:es\/)?offerings\/([^\/?#]+)/.exec(location.pathname);
     if (!m || !bySlug[m[1]] || document.querySelector('.vlp-rq-block')) return;
-    var wa = document.querySelector('a.whatsapp-link[data-wa-source^="offer"]') || document.querySelector('main a.whatsapp-link, .offering a.whatsapp-link, a.whatsapp-link');
+    var wa = document.querySelector('a.offering-detail-whatsapp-btn, a.whatsapp-link[data-wa-source^="offer"]') ||
+      [].filter.call(document.querySelectorAll('a[href*="wa.me/"]'), function (a) { return !a.closest('.sticky-whatsapp-btn') && !/sticky/.test(a.className); })[0];
     if (!wa) return;
     css();
     var p = new URLSearchParams(location.search);
