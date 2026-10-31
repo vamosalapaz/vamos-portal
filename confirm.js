@@ -6,9 +6,27 @@
    v25: once the owner has agreed and the customer's deposit is paid, shows the customer's name and WhatsApp with
    Save contact (vCard), Copy number and WhatsApp buttons. The number only ever arrives from the server after the deposit.
    v48: new master logo (new L photo).
-   v50: "Tell Peter" goes to the Vamos a La Paz WhatsApp (+52 612 290 3605, from Oct 19, 2026). */
+   v50: "Tell Peter" goes to the Vamos a La Paz WhatsApp (+52 612 290 3605, from Oct 19, 2026).
+   v51: request to book (Oct 30, 2026): when the booking came from "Request to book" (the customer's deposit is already
+        held on their card), shows the deadline, replaces "ask for a change" with "No puedo ese día" (releases the hold),
+        tells the vamos-requests Worker right after the owner signs (so the deposit is captured at once), and says so
+        when the request was cancelled or ran out of time. */
 (function () {
   'use strict';
+  var RQ_API = 'https://vamos-requests.solitary-wind-dfb8.workers.dev';
+  var rq = null; // request-to-book state when this confirmation belongs to one
+  var RQT = {
+    es: { left: function (t, m) { return 'Responde antes de las ' + t + (m ? ' · quedan ' + m : ''); }, held: 'El depósito del cliente ya está retenido en su tarjeta.',
+      decline: 'No puedo ese día', declineNote: 'Si no puedes, el cliente no paga nada y le ofrecemos otro barco.',
+      declineAsk: 'Motivo (opcional, solo lo vemos nosotros)', declineSure: 'Confirmas que no puedes ese día? Liberamos la retención del cliente.',
+      declined: 'Gracias por avisar. Liberamos la retención del cliente y le ofrecemos otro barco.', gone: 'Esta solicitud ya no está activa: se canceló o pasó la hora límite. No necesitas hacer nada.',
+      err: 'No se pudo guardar. Revisa tu conexión e inténtalo otra vez.' },
+    en: { left: function (t, m) { return 'Answer before ' + t + (m ? ' · ' + m + ' left' : ''); }, held: "The customer's deposit is already held on their card.",
+      decline: "I can't that day", declineNote: "If you can't, the customer pays nothing and we offer them another boat.",
+      declineAsk: 'Reason (optional, only we see it)', declineSure: "Confirm you can't that day? We'll release the customer's hold.",
+      declined: "Thanks for letting us know. We've released the customer's hold and will offer them another boat.", gone: 'This request is no longer active: it was cancelled or ran out of time. Nothing for you to do.',
+      err: "Couldn't save. Check your connection and try again." }
+  };
 
   var HOOK = 'https://hook.us2.make.com/5fjztbglh5n2romv2hd5hcj5flg43zg4';
   var PETER_WA = '526122903605';  // Vamos a La Paz WhatsApp (from Oct 19, 2026)
@@ -149,7 +167,9 @@
     shell.appendChild(root);
     root.appendChild(h('p', { class: 'muted', text: L.loading }));
     if (!TOKEN) return fail();
-    post({ action: 'get', t: TOKEN }).then(function (r) {
+    var rqp = fetch(RQ_API + '/owner?t=' + encodeURIComponent(TOKEN)).then(function (x) { return x.json(); }).catch(function () { return null; });
+    Promise.all([post({ action: 'get', t: TOKEN }), rqp]).then(function (both) {
+      var r = both[0]; rq = both[1] && both[1].ok && both[1].request ? both[1] : null;
       conf = r && r.ok && r.conf && r.conf[0];
       if (!conf) return fail();
       lang = conf.fields.Language === 'English' ? 'en' : 'es'; L = T[lang];
@@ -231,7 +251,14 @@
       root.appendChild(details());
       return;
     }
+    var R = RQT[lang];
+    if (rq && rq.status !== 'Waiting for owner' && rq.status !== 'Accepted') { header(); root.appendChild(h('p', { class: 'msg warn', text: R.gone })); return; }
     header(L.hi + ' ' + first(f['Owner name']) + ', ' + L.ask);
+    if (rq && rq.deadline) {
+      var ms = Date.parse(rq.deadline) - Date.now(), left = ms > 0 ? Math.floor(ms / 3600e3) + ' h ' + Math.floor(ms % 3600e3 / 60e3) + ' min' : '';
+      var t = new Date(rq.deadline).toLocaleTimeString(lang === 'en' ? 'en-US' : 'es-MX', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Mazatlan' });
+      root.appendChild(h('p', { class: 'msg warn', style: 'font-weight:600' }, [R.left(t, left), h('br'), h('span', { style: 'font-weight:400', text: R.held })]));
+    }
     root.appendChild(h('p', { class: 'intro', text: L.intro }));
     root.appendChild(details());
 
@@ -248,13 +275,42 @@
       if (!cb.checked || nm.value.trim().split(/\s+/).length < 2) { err.appendChild(h('p', { class: 'msg err', text: L.needAgree })); return; }
       btn.disabled = true; btn.textContent = L.saving;
       post({ action: 'agree', t: TOKEN, name: nm.value.trim(), terms: TERMS, ua: navigator.userAgent }).then(function (r) {
-        if (r.ok) { conf.fields.Status = 'Agreed'; conf.fields['Signed by'] = nm.value.trim(); conf.fields['Responded at'] = new Date().toISOString(); return agreedScreen(); }
+        if (r.ok) {
+          conf.fields.Status = 'Agreed'; conf.fields['Signed by'] = nm.value.trim(); conf.fields['Responded at'] = new Date().toISOString();
+          // Request to book: capture the held deposit right away (the Worker's 5-minute timer would catch it anyway).
+          if (rq) fetch(RQ_API + '/owner/agreed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ t: TOKEN }), keepalive: true }).catch(function () {});
+          return agreedScreen();
+        }
         if (r.error === 'state') return mount();
         btn.disabled = false; btn.textContent = L.confirm; err.appendChild(h('p', { class: 'msg err', text: L.error }));
       }, function () { btn.disabled = false; btn.textContent = L.confirm; err.appendChild(h('p', { class: 'msg err', text: L.error })); });
     } }, [L.confirm]);
     box.appendChild(btn);
     root.appendChild(box);
+    if (rq && rq.status === 'Waiting for owner') {
+      var dbox = h('div', { class: 'card' });
+      var reason = h('textarea', { id: 'vc-why', style: 'min-height:70px' });
+      var derr = h('div');
+      var dbtn = h('button', { class: 'btn sec', type: 'button', onclick: function () {
+        derr.innerHTML = '';
+        if (!window.confirm(R.declineSure)) return;
+        dbtn.disabled = true; dbtn.textContent = L.saving;
+        fetch(RQ_API + '/owner/decline', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ t: TOKEN, note: reason.value.trim() }) })
+          .then(function (x) { return x.json(); })
+          .then(function (j) {
+            if (j && j.ok) { header(); root.appendChild(h('p', { class: 'msg ok', text: R.declined })); window.scrollTo(0, 0); return; }
+            if (j && j.error === 'too_late') { header(); root.appendChild(h('p', { class: 'msg warn', text: R.gone })); return; }
+            dbtn.disabled = false; dbtn.textContent = R.decline; derr.appendChild(h('p', { class: 'msg err', text: R.err }));
+          }, function () { dbtn.disabled = false; dbtn.textContent = R.decline; derr.appendChild(h('p', { class: 'msg err', text: R.err })); });
+      } }, [R.decline]);
+      dbox.appendChild(h('label', { class: 'small', for: 'vc-why', text: R.declineAsk }));
+      dbox.appendChild(reason);
+      dbox.appendChild(derr);
+      dbox.appendChild(dbtn);
+      dbox.appendChild(h('p', { class: 'muted', style: 'font-size:14px;text-align:center;margin-top:8px', text: R.declineNote }));
+      root.appendChild(dbox);
+      return;
+    }
     root.appendChild(h('button', { class: 'link', type: 'button', onclick: changeScreen }, [L.change]));
   }
 

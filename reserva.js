@@ -13,11 +13,16 @@
         question asks about the payment, not a booking.
    v48: new master logo (new L photo).
    v50: Vamos a La Paz has its own WhatsApp (+52 612 290 3605) since Oct 19, 2026; Good Medicine payments keep
-        Good Medicine's WhatsApp (+52 612 219 4779). The "Questions?" and receipt buttons use waNum(). */
+        Good Medicine's WhatsApp (+52 612 219 4779). The "Questions?" and receipt buttons use waNum().
+   v51: request to book (Oct 30, 2026): bookings made with "Request to book" show a waiting view while the owner
+        decides (deposit held, deadline, Cancel my request) and a clear message if it was declined, expired or
+        cancelled. State comes from the vamos-requests Worker (/status, /cancel). Accepted requests show the normal page. */
 (function () {
   'use strict';
 
   var HOOK = 'https://hook.us2.make.com/vrn9xcbptiqnnl1aniuccma1j8pxjtgx';
+  var RQ_API = 'https://vamos-requests.solitary-wind-dfb8.workers.dev';
+  var rq = null; // request-to-book state, when this booking came from one
   var VAMOS_WA = '526122903605';  // Vamos a La Paz WhatsApp (from Oct 19, 2026)
   var GM_WA = '526122194779';     // Good Medicine La Paz Charters WhatsApp
   var BRAND = '#B51E66', INK = '#061A2E';
@@ -180,8 +185,12 @@
     if (!TOKEN) return fail();
     load();
   }
+  function getRq() {
+    return fetch(RQ_API + '/status?t=' + encodeURIComponent(TOKEN)).then(function (r) { return r.json(); }).catch(function () { return null; });
+  }
   function load() {
-    get().then(function (r) {
+    Promise.all([get(), getRq()]).then(function (both) {
+      var r = both[0]; rq = both[1] && both[1].ok && both[1].request ? both[1] : null;
       inv = r && r.ok && r.inv;
       if (!inv || !inv.fields) return fail();
       bank = r.bank || {};
@@ -221,6 +230,7 @@
   function render() {
     var x = f(), st = x.Status;
     if (isQuick()) return renderQuick();
+    if (rq && rq.status !== 'Accepted' && rq.status !== 'Capture failed') return renderRequest();
     root.innerHTML = '';
     root.appendChild(h('p', { class: 'eyebrow', text: eyebrowName() + ' · ' + L.booking + ' ' + (x['Invoice number'] || '') }));
     if (st === 'Cancelled') {
@@ -240,6 +250,88 @@
     if (!paid && !JUST_PAID) root.appendChild(payCard());
     root.appendChild(termsCard());
     root.appendChild(h('a', { class: 'btn sec', href: wa(waNum(), L.questionsMsg + (x['Invoice number'] || '')) }, [L.questions]));
+  }
+
+  // Request to book: waiting for the owner (deposit held), or closed without a booking.
+  var RT = {
+    es: { waitT: 'Esperando al dueño', waitP: function (t) { return 'Enviamos tu solicitud. Te escribimos por WhatsApp a más tardar a las ' + t + '.'; },
+      held: 'Depósito retenido', heldNote: function (c) { return 'Retenido en tu tarjeta' + (c ? ' ' + c : '') + ', sin cobrar. Solo se cobra si el dueño confirma.'; },
+      next: 'Qué sigue', yes: 'El dueño confirma:', yesT: ' cobramos el depósito y recibes tu reservación con el nombre y WhatsApp del capitán.',
+      no: function (t) { return 'Si no puede o no responde antes de las ' + t + ':'; }, noT: ' liberamos la retención y te mandamos otros barcos libres ese día.',
+      found: 'Encontraste otra opción?', foundP: 'Puedes cancelar mientras esperas. La retención se libera de inmediato y no se cobra nada. Tu banco puede tardar unos días en reflejarlo.',
+      cancel: 'Cancelar mi solicitud', sure: 'Cancelar y liberar la retención?', cancelling: 'Cancelando…',
+      cancelErr: 'No se pudo cancelar. Escríbenos por WhatsApp.', tooLate: 'El dueño ya respondió. Recarga la página.',
+      declinedT: 'Este barco no está disponible', declinedP: 'El dueño no puede ese día. Liberamos la retención de tu tarjeta, no se cobró nada.',
+      expiredT: 'No tuvimos respuesta a tiempo', expiredP: 'El dueño no confirmó a tiempo. Liberamos la retención de tu tarjeta, no se cobró nada.',
+      cancelledT: 'Cancelaste tu solicitud', cancelledP: 'Liberamos la retención de tu tarjeta, no se cobró nada.',
+      cardT: 'Falta la retención con tarjeta', cardP: 'Tu solicitud aún no tiene la retención del depósito, así que el dueño todavía no la recibe.',
+      others: 'Ver barcos libres ese día', q: 'Dudas? Escríbenos por WhatsApp', guests: 'personas' },
+    en: { waitT: 'Waiting for the owner', waitP: function (t) { return "We've sent your request. You'll hear from us on WhatsApp by " + t + ' at the latest.'; },
+      held: 'Deposit on hold', heldNote: function (c) { return 'Held on your card' + (c ? ' (' + c + ')' : '') + ', not charged. It\'s charged only if the owner confirms.'; },
+      next: 'What happens next', yes: 'Owner confirms:', yesT: " the deposit is charged and you get your booking with the captain's name and WhatsApp.",
+      no: function (t) { return "Owner can't, or no answer by " + t + ':'; }, noT: ' the hold is released and we send you other boats free that day.',
+      found: 'Found something else?', foundP: "You can cancel while you're waiting. The hold is released right away and nothing is charged. Your bank may take a few days to show it.",
+      cancel: 'Cancel my request', sure: 'Cancel and release your hold?', cancelling: 'Cancelling…',
+      cancelErr: "Couldn't cancel. Please message us on WhatsApp.", tooLate: 'The owner has just answered. Reload the page.',
+      declinedT: "This boat isn't available", declinedP: "The owner can't make that day. We've released the hold on your card, so nothing was charged.",
+      expiredT: "We didn't hear back in time", expiredP: "The owner didn't confirm in time. We've released the hold on your card, so nothing was charged.",
+      cancelledT: 'You cancelled your request', cancelledP: "We've released the hold on your card, so nothing was charged.",
+      cardT: 'The card hold is missing', cardP: "This request doesn't have the deposit hold yet, so the owner hasn't received it.",
+      others: 'See boats free that day', q: 'Questions? WhatsApp us', guests: 'guests' }
+  };
+  function hm(iso) {
+    if (!iso) return '';
+    return new Date(iso).toLocaleTimeString(lang === 'en' ? 'en-US' : 'es-MX', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Mazatlan' }) +
+      (new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/Mazatlan' }) !== new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mazatlan' })
+        ? ' (' + new Date(iso).toLocaleDateString(lang === 'en' ? 'en-US' : 'es-MX', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'America/Mazatlan' }) + ')' : '');
+  }
+  function renderRequest() {
+    var x = f(), R = RT[lang], st = rq.status, num = x['Invoice number'] || '';
+    root.innerHTML = '';
+    root.appendChild(h('p', { class: 'eyebrow', text: 'Vamos a La Paz · ' + (lang === 'en' ? 'Request ' : 'Solicitud ') + num }));
+    var trip = h('div', { class: 'card trip-card' }, [
+      h('p', { class: 'trip', text: x.Trip || '' }),
+      h('p', { class: 'muted', text: [rq.boat, day(x['Trip date']), (x.Guests || '') + ' ' + R.guests].filter(Boolean).join(' · ') })
+    ]);
+    var others = (lang === 'en' ? '' : '/es') + '/offerings?date=' + (x['Trip date'] || '') + '&guests=' + (x.Guests || 2);
+    var ask = h('a', { class: 'btn sec', href: wa(VAMOS_WA, (lang === 'en' ? 'Hi! About my request ' : 'Hola! Sobre mi solicitud ') + num) }, [R.q]);
+    if (st === 'Waiting for owner') {
+      root.appendChild(h('div', { class: 'msg warn' }, [h('b', { style: 'display:block;font-size:20px;margin:0 0 4px', text: R.waitT }), R.waitP(hm(rq.deadline))]));
+      root.appendChild(trip);
+      root.appendChild(h('div', { class: 'card money-card' }, [
+        h('div', { class: 'money' }, [h('span', { text: R.held }), h('b', { text: money(x.Deposit) })]),
+        h('p', { class: 'muted', style: 'font-size:14px', text: R.heldNote(rq.card) })
+      ]));
+      root.appendChild(h('div', { class: 'card' }, [
+        h('p', { style: 'font-weight:600;margin:0 0 6px', text: R.next }),
+        h('p', { style: 'margin:0 0 6px;font-size:15px' }, [h('b', { text: R.yes }), R.yesT]),
+        h('p', { style: 'margin:0;font-size:15px' }, [h('b', { text: R.no(hm(rq.deadline)) }), R.noT])
+      ]));
+      var cancelBox = h('div', { class: 'card' }, [h('p', { style: 'font-weight:600;margin:0 0 6px', text: R.found }), h('p', { class: 'muted', style: 'font-size:15px;margin:0 0 4px', text: R.foundP })]);
+      var btn = h('button', { class: 'btn sec', type: 'button', style: 'color:#9B1C1C;border-color:#9B1C1C', onclick: function () {
+        if (!window.confirm(R.sure)) return;
+        btn.disabled = true; btn.textContent = R.cancelling;
+        fetch(RQ_API + '/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ t: TOKEN }) })
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            if (j && j.ok) { rq.status = 'Cancelled by customer'; renderRequest(); return; }
+            btn.disabled = false; btn.textContent = R.cancel;
+            cancelBox.appendChild(h('p', { class: 'msg warn', style: 'margin:12px 0 0', text: j && j.error === 'too_late' ? R.tooLate : R.cancelErr }));
+          }, function () { btn.disabled = false; btn.textContent = R.cancel; cancelBox.appendChild(h('p', { class: 'msg warn', style: 'margin:12px 0 0', text: R.cancelErr })); });
+      } }, [R.cancel]);
+      cancelBox.appendChild(btn);
+      root.appendChild(cancelBox);
+      root.appendChild(ask);
+      // The owner may answer while the page is open: check again every minute.
+      setTimeout(function () { if (rq && rq.status === 'Waiting for owner') load(); }, 60000);
+      return;
+    }
+    var title = st === 'Declined' ? R.declinedT : st === 'Expired' ? R.expiredT : st === 'Cancelled by customer' ? R.cancelledT : R.cardT;
+    var text = st === 'Declined' ? R.declinedP : st === 'Expired' ? R.expiredP : st === 'Cancelled by customer' ? R.cancelledP : R.cardP;
+    root.appendChild(h('div', { class: 'msg warn' }, [h('b', { style: 'display:block;font-size:20px;margin:0 0 4px', text: title }), text]));
+    root.appendChild(trip);
+    if (st !== 'Cancelled by customer') root.appendChild(h('a', { class: 'btn pri', href: others }, [R.others]));
+    root.appendChild(ask);
   }
 
   // Quick payment: one amount with a description (an extra hour, an add-on).

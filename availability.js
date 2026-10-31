@@ -180,6 +180,14 @@
     '.vlp-av-wa{min-height:46px;display:flex;align-items:center;justify-content:center;gap:8px;background:#0F7A3F;color:#fff!important;border-radius:999px;font-size:15px;font-weight:600;text-decoration:none!important}',
     '.vlp-av-wa:hover{background:#0B6533}',
     '.vlp-av-wa svg{flex:none}',
+    '.vlp-av-rqbtn{min-height:46px;display:flex;align-items:center;justify-content:center;border:0;border-radius:999px;background:#B51E66;color:#fff;font:inherit;font-size:15px;font-weight:600;cursor:pointer;padding:0 14px}',
+    '.vlp-av-rqbtn:hover{background:#8E1550}',
+    'a.vlp-av-waout{background:#fff;color:#0F7A3F!important;border:1.5px solid #0F7A3F}',
+    'a.vlp-av-waout svg{stroke:#0F7A3F}',
+    '.vlp-av-rq2{display:flex;gap:8px}.vlp-av-rq2>*{flex:1 1 0;min-width:0}',
+    '.vlp-av-rqhelp{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;font-size:12.5px;line-height:1.35;color:#46525C}',
+    '.vlp-av-rqcard{display:flex;flex-direction:column;gap:8px;margin-top:8px}',
+    '.vlp-av-rqnote{font-size:13px;line-height:1.4;color:#46525C;text-align:center}',
     '.vlp-av-dates{display:flex;flex-direction:column;gap:8px}',
     '.vlp-av-dates button{min-height:48px;display:flex;align-items:center;justify-content:space-between;border:1px solid #1C6B3A;border-radius:8px;padding:0 14px;background:#fff;font:inherit;font-size:15px;font-weight:600;color:#17202A;cursor:pointer}',
     '.vlp-av-dates button span{color:#1C6B3A;font-size:14px}',
@@ -414,6 +422,7 @@
     var raf = 0;
     var mo = new MutationObserver(function () { if (!data) return; cancelAnimationFrame(raf); raf = requestAnimationFrame(render); });
     cards.forEach(function (c) { mo.observe(c.el, { attributes: true, attributeFilter: ['style'] }); });
+    document.addEventListener('vlp-request-ready', function () { if (data) render(); });
 
     if (q) { showSummary(); run(); }
   }
@@ -538,13 +547,37 @@
       }).join('');
     }
     var priv = o.type === 'private' ? '<span class="vlp-av-note">' + esc(T.privateNote) + '</span>' : '';
-    if (o.inquiry) priv += '<span class="vlp-av-note vlp-av-wa">' + esc(T.bookWa) + '</span>';
+    if (o.inquiry && !rqOk(o.slug)) priv += '<span class="vlp-av-note vlp-av-wa">' + esc(T.bookWa) + '</span>';
+    if (single && o.inquiry && rqOk(o.slug)) {
+      return '<span class="vlp-av-cap">' + esc(T.available) + '</span><div class="vlp-av-chips">' + priv + '</div>' + rqButtons(o.slug, dates[0], true);
+    }
     if (single) {
       return '<span class="vlp-av-cap">' + esc(o.type === 'shared' ? T.departures : T.available) + '</span><div class="vlp-av-chips">' + chips(od.days[dates[0]]) + priv + '</div>';
     }
     return '<div class="vlp-av-days">' + dates.slice(0, 6).map(function (d) {
       return '<div class="vlp-av-day"><b>' + esc(dayWd(d)) + '</b><div class="vlp-av-chips">' + chips(od.days[d]) + '</div></div>';
     }).join('') + '</div>' + (dates.length > 6 ? '<span class="vlp-av-note">' + esc(T.moreDays(dates.length - 6)) + '</span>' : '') + priv;
+  }
+
+  // Request to book (request.js, loaded separately): which offers allow it, and its texts
+  function rqOk(slug) { return !!(window.VamosRequest && window.VamosRequest.isEligible(slug)); }
+  function RQ() {
+    return ES ? { req: 'Solicitar reserva', askWa: 'Preguntar por WhatsApp', reqShort: 'Retenemos el 20% de depósito, sin cobrar. Se cobra solo si el dueño confirma.',
+        waShort: 'No estás seguro? Pregúntanos antes de comprometerte.', waQ: 'Dudas primero? Pregunta por WhatsApp',
+        cardHelp: 'Tu tarjeta se retiene, no se cobra. El dueño confirma en 6 horas o se libera.' }
+      : { req: 'Request to book', askWa: 'Ask on WhatsApp', reqShort: 'Pay a 20% deposit hold now. Charged only if the owner confirms.',
+        waShort: 'Not sure yet? Chat with us before committing.', waQ: 'Questions first? Ask on WhatsApp',
+        cardHelp: 'Your card is held, not charged. The owner confirms within 6 hours, or the hold is released.' };
+  }
+  function rqButtons(slug, date, onCard) {
+    var o = (data && data.offers || []).filter(function (x) { return x.slug === slug; })[0] || {};
+    var name = ES ? (o.name_es || o.name) : o.name;
+    var msg = T.waOne((ES ? 'el ' : 'the ') + name + (o.boat ? ' (' + o.boat + ')' : ''), rangeWa(q), q.guests);
+    return '<div class="vlp-av-rqcard">' +
+      '<button type="button" class="vlp-av-rqbtn" data-vlp-request="' + esc(slug) + '" data-vlp-date="' + esc(date || '') + '" data-vlp-guests="' + q.guests + '">' + esc(RQ().req) + '</button>' +
+      '<span class="vlp-av-rqnote">' + esc(RQ().cardHelp) + '</span>' +
+      '<a class="vlp-av-wa vlp-av-waout whatsapp-link" data-wa-source="availability-card" target="_blank" rel="noopener" href="' + esc(waLink(msg, o.boat ? o.boat.replace(/\s+/g, '-') : slug)) + '">' + WA_ICON + esc(RQ().waQ) + '</a>' +
+      '</div>';
   }
 
   function render() {
@@ -632,6 +665,19 @@
       var what = list.length === 1 ? (ES ? 'el ' : 'the ') + name(o) + (o.boat && o.boat !== name(o) ? (ES ? ' (' + o.boat + ')' : ' (' + o.boat + ')') : '') : (ES ? 'el ' : 'the ') + title;
       var msg = T.waOne(what, rangeWa(q), q.guests);
       var btn = free.length ? T.bookWa : T.askBtn(rangeShort(q));
+      var rqSlug = null;
+      list.forEach(function (a) { if (!rqSlug && rqOk(a.o.slug)) rqSlug = a.o.slug; });
+      if (rqSlug) {
+        return '<div class="vlp-av-askrow">' +
+          '<div class="vlp-av-askrow-top">' + (src ? '<img src="' + esc(src) + '" alt="" loading="lazy">' : '') +
+          '<div class="vlp-av-askrow-txt"><b>' + esc(title) + '</b><span>' + esc(line2) + '</span>' + line3 + '</div></div>' +
+          tripsHtml +
+          '<div class="vlp-av-rq2">' +
+          '<button type="button" class="vlp-av-rqbtn" data-vlp-request="' + esc(rqSlug) + '" data-vlp-date="' + (q.from === q.to ? q.from : '') + '" data-vlp-guests="' + q.guests + '">' + esc(RQ().req) + '</button>' +
+          '<a class="vlp-av-wa vlp-av-waout whatsapp-link" data-wa-source="availability-ask" target="_blank" rel="noopener" href="' + esc(waLink(msg, o.boat ? o.boat.replace(/\s+/g, '-') : o.slug)) + '">' + WA_ICON + esc(RQ().askWa) + '</a>' +
+          '</div><div class="vlp-av-rqhelp"><span>' + esc(RQ().reqShort) + '</span><span>' + esc(RQ().waShort) + '</span></div>' +
+          '</div>';
+      }
       return '<div class="vlp-av-askrow">' +
         '<div class="vlp-av-askrow-top">' + (src ? '<img src="' + esc(src) + '" alt="" loading="lazy">' : '') +
         '<div class="vlp-av-askrow-txt"><b>' + esc(title) + '</b><span>' + esc(line2) + '</span>' + line3 + '</div></div>' +
