@@ -11,7 +11,7 @@
   var ES = /^\/es(\/|$)/.test(location.pathname) || (document.documentElement.lang || '').slice(0, 2) === 'es';
   var PINK = '#B51E66', INK = '#17202A', MUTED = '#46525C', LINE = '#E5DFD1', SAND = '#F4EFE6';
   var T = ES ? {
-    req: 'Solicitar reserva', reqHelp: 'Retenemos el 20% de depósito en tu tarjeta, sin cobrarlo. El dueño confirma en 6 horas o se libera.',
+    req: 'Solicitar reserva', cardT: 'Reserva directo con el dueño', reqHelp: 'Retenemos el 20% de depósito en tu tarjeta, sin cobrarlo. El dueño confirma en 6 horas o se libera.',
     reqHelpN: function (p) { return 'Retenemos el ' + p + '% de depósito en tu tarjeta, sin cobrarlo. El dueño confirma en 6 horas o se libera.'; },
     waHelp: '¿Dudas? Escríbenos antes de comprometerte.'.replace(/[¿¡]/g, ''),
     title: 'Solicitar reserva', sub: 'barco privado, solo tu grupo', trip: 'VIAJE', date: 'FECHA', guests: 'PERSONAS', nights: 'NOCHES',
@@ -28,7 +28,7 @@
       off: 'Las solicitudes en línea están pausadas. Escríbenos por WhatsApp.', other: 'No se pudo enviar. Revisa tu conexión e inténtalo otra vez.' },
     waMsg: function (t, d, g) { return 'Hola! Me interesa ' + t + (d ? ' el ' + d : '') + (g ? ' para ' + g + ' personas' : '') + '. Lo vi en vamosalapaz.com'; },
   } : {
-    req: 'Request to book', reqHelp: 'We hold a 20% deposit on your card, not charged. The owner confirms within 6 hours, or the hold is released.',
+    req: 'Request to book', cardT: 'Book directly with the owner', reqHelp: 'We hold a 20% deposit on your card, not charged. The owner confirms within 6 hours, or the hold is released.',
     reqHelpN: function (p) { return 'We hold a ' + p + '% deposit on your card, not charged. The owner confirms within 6 hours, or the hold is released.'; },
     waHelp: 'Questions first? Chat with us before committing.',
     title: 'Request to book', sub: 'private boat, just your group', trip: 'TRIP', date: 'DATE', guests: 'GUESTS', nights: 'NIGHTS',
@@ -86,6 +86,13 @@
       '.vlp-rq-btn:hover{background:#8E1550;color:#fff}',
       '.vlp-rq-help{display:block;font-size:13px;line-height:1.4;color:' + MUTED + ';margin:6px 0 0}',
       '.vlp-rq-block{display:flex;flex-direction:column;gap:6px;margin:0 0 14px}',
+      '.vlp-rq-btn.alt{background:transparent;color:' + PINK + ';border:2px solid ' + PINK + '}',
+      '.vlp-rq-btn.alt:hover{background:' + PINK + ';color:#fff}',
+      '.vlp-rq-card{display:flex;align-items:center;gap:16px;justify-content:space-between;background:' + SAND + ';border:1px solid ' + LINE + ';border-left:4px solid ' + PINK + ';border-radius:12px;padding:14px 16px;margin:18px 0}',
+      '.vlp-rq-card strong{display:block;font-size:16px;color:' + INK + ';margin:0 0 2px}',
+      '.vlp-rq-card .vlp-rq-help{margin:0}',
+      '.vlp-rq-card .vlp-rq-btn{flex:0 0 auto;min-width:170px}',
+      '@media (max-width:600px){.vlp-rq-card{flex-direction:column;align-items:stretch}.vlp-rq-card .vlp-rq-btn{width:100%}}',
       '.vlp-rq-ov{position:fixed;inset:0;background:rgba(23,32,42,.5);z-index:99999;display:flex;align-items:flex-end;justify-content:center}',
       '@media(min-width:640px){.vlp-rq-ov{align-items:center}}',
       '.vlp-rq{background:#fff;width:100%;max-width:480px;max-height:92vh;overflow:auto;border-radius:16px 16px 0 0;padding:18px 16px 24px;box-sizing:border-box;font-family:"DM Sans",system-ui,sans-serif;color:' + INK + '}',
@@ -221,8 +228,15 @@
     if (!wa) return;
     css();
     var p = new URLSearchParams(location.search);
-    var btn = el('button', { type: 'button', class: 'vlp-rq-btn', 'data-vlp-request': m[1], 'data-vlp-date': p.get('date') || '', 'data-vlp-guests': p.get('guests') || '', text: T.req });
-    var block = el('div', { class: 'vlp-rq-block' }, [btn, el('span', { class: 'vlp-rq-help', text: T.reqHelp })]);
+    function mk(cls) { return el('button', { type: 'button', class: cls, 'data-vlp-request': m[1], 'data-vlp-date': p.get('date') || '', 'data-vlp-guests': p.get('guests') || '', text: T.req }); }
+    // Top: card under the trip facts (duration, boat, capacity, price).
+    var facts = document.querySelector('.offering-detail-facts-row');
+    if (facts) {
+      var card = el('div', { class: 'vlp-rq-card' }, [el('div', null, [el('strong', { text: T.cardT }), el('span', { class: 'vlp-rq-help', text: T.reqHelp })]), mk('vlp-rq-btn')]);
+      facts.parentNode.insertBefore(card, facts.nextSibling);
+    }
+    // Bottom: outlined button above the WhatsApp button.
+    var block = el('div', { class: 'vlp-rq-block' }, facts ? [mk('vlp-rq-btn alt')] : [mk('vlp-rq-btn'), el('span', { class: 'vlp-rq-help', text: T.reqHelp })]);
     wa.parentNode.insertBefore(block, wa);
     var helpWa = el('span', { class: 'vlp-rq-help', style: 'text-align:center', text: T.waHelp });
     if (wa.nextSibling) wa.parentNode.insertBefore(helpWa, wa.nextSibling); else wa.parentNode.appendChild(helpWa);
