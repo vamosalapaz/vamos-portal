@@ -406,9 +406,9 @@
     var wrap = el('div', { class: 'vlp-av-actwrap' });
     wrap.innerHTML = '<h2 class="vlp-av-acth">' + esc(title) + '</h2><p class="vlp-av-actnote">' + esc(note) + '</p>';
     wrap.appendChild(box);
-    hero.parentNode.insertBefore(wrap, hero.nextSibling);
+    hero.appendChild(wrap);
     var s = el('style', { id: 'vlp-av-actcss' });
-    s.textContent = '.vlp-av-actwrap{max-width:792px;margin:8px 0 28px;box-sizing:border-box}' +
+    s.textContent = '.vlp-av-actwrap{max-width:792px;margin:20px 0 8px;box-sizing:border-box;font-family:"DM Sans",sans-serif}' +
       '.vlp-av-acth{font-size:20px;line-height:1.25;margin:0 0 4px;font-weight:600}' +
       '.vlp-av-actnote{margin:0 0 12px;font-size:15px;opacity:.75}' +
       '.vlp-av-actwrap .vlp-av-home{box-shadow:0 4px 16px rgba(23,32,42,.10)}';
