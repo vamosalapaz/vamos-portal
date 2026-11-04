@@ -9,7 +9,7 @@
    tour type / booking), which keeps hiding cards with inline display:none; this script uses its own class.
    URL: /offerings?date=2026-11-21&guests=2[&after=10:00]  or  ?from=2026-11-19&to=2026-11-22&guests=4
    Home (/ and /es): adds the same date + guests box to the hero; it sends people to /offerings with those parameters.
-   v51: first release (Oct 29, 2026). v52 (Nov 4, 2026): whale shark landing copy for ?activity=swimming-with-the-whale-sharks. */
+   v51: first release (Oct 29, 2026). v52 (Nov 4, 2026): whale shark landing copy for ?activity=swimming-with-the-whale-sharks. v53: date box on /activities/<slug> pages. */
 (function () {
   'use strict';
   var API = 'https://vamos-availability.solitary-wind-dfb8.workers.dev/search';
@@ -21,7 +21,9 @@
   var base = path.replace(/^\/es(?=\/|$)/, '') || '/';
   var isOfferings = base === '/offerings';
   var isHome = base === '/';
-  if (!isOfferings && !isHome) return;
+  var actM = /^\/activities\/([a-z0-9-]+)$/.exec(base);
+  var actSlug = actM ? actM[1] : '';
+  if (!isOfferings && !isHome && !actSlug) return;
 
   var T = ES ? {
     heading: '¿Qué hay disponible en tu día?', date: 'FECHA', to: 'HASTA', guests: 'PERSONAS', flexible: 'Mis fechas son flexibles (hasta 14 días)',
@@ -376,6 +378,41 @@
     hero.parentNode.insertBefore(wrap, hero.nextSibling);
     var cta = content.querySelector('.home-hero-cta');
     if (cta) { cta.classList.add('vlp-av-link', 'vlp-av-browse'); cta.classList.remove('home-hero-cta'); cta.textContent = T.browse; box.appendChild(cta); }
+  }
+
+  // ---------------------------------------------------------------- ACTIVITY PAGES (v53, Nov 4 2026)
+  // /activities/<slug> and /es/activities/<slug>: a date + guests box under the title that sends people to
+  // /offerings?activity=<slug>&date=…&guests=… (the activity's offers with live availability). The activity slugs
+  // are the same as the /offerings activity chips.
+  function initActivity() {
+    var hero = document.querySelector('.detail-hero');
+    if (!hero || !actSlug) return;
+    addCss();
+    var whale = actSlug === 'swimming-with-the-whale-sharks';
+    var title = whale ? (ES ? 'Qué tours de tiburón ballena tienen lugar en tu día?' : 'Which whale shark tours have space on your day?') : T.heading;
+    var note = ES ? 'En vivo desde los calendarios de reserva de cada operador.' : "Live from the operators' booking calendars.";
+    var box = buildBox({
+      home: true,
+      onSearch: function (q) {
+        track('availability_search', { search_from: q.from, search_to: q.to, guests: q.guests, search_page: 'activity-' + actSlug });
+        var p = new URLSearchParams();
+        p.set('activity', actSlug);
+        if (q.from === q.to) p.set('date', q.from); else { p.set('from', q.from); p.set('to', q.to); }
+        p.set('guests', q.guests);
+        location.href = (ES ? '/es' : '') + '/offerings?' + p.toString();
+      }
+    });
+    var bh = box.querySelector('h2'); if (bh) bh.parentNode.removeChild(bh);
+    var wrap = el('div', { class: 'vlp-av-actwrap' });
+    wrap.innerHTML = '<h2 class="vlp-av-acth">' + esc(title) + '</h2><p class="vlp-av-actnote">' + esc(note) + '</p>';
+    wrap.appendChild(box);
+    hero.parentNode.insertBefore(wrap, hero.nextSibling);
+    var s = el('style', { id: 'vlp-av-actcss' });
+    s.textContent = '.vlp-av-actwrap{max-width:792px;margin:8px 0 28px;box-sizing:border-box}' +
+      '.vlp-av-acth{font-size:20px;line-height:1.25;margin:0 0 4px;font-weight:600}' +
+      '.vlp-av-actnote{margin:0 0 12px;font-size:15px;opacity:.75}' +
+      '.vlp-av-actwrap .vlp-av-home{box-shadow:0 4px 16px rgba(23,32,42,.10)}';
+    document.head.appendChild(s);
   }
 
   // ---------------------------------------------------------------- OFFERINGS
@@ -757,6 +794,6 @@
     }).catch(function () {});
   }
 
-  function init() { if (isOfferings) initOfferings(); else initHome(); }
+  function init() { if (isOfferings) initOfferings(); else if (actSlug) initActivity(); else initHome(); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
