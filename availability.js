@@ -9,7 +9,7 @@
    tour type / booking), which keeps hiding cards with inline display:none; this script uses its own class.
    URL: /offerings?date=2026-11-21&guests=2[&after=10:00]  or  ?from=2026-11-19&to=2026-11-22&guests=4
    Home (/ and /es): adds the same date + guests box to the hero; it sends people to /offerings with those parameters.
-   v51: first release (Oct 29, 2026). */
+   v51: first release (Oct 29, 2026). v52 (Nov 4, 2026): whale shark landing copy for ?activity=swimming-with-the-whale-sharks. */
 (function () {
   'use strict';
   var API = 'https://vamos-availability.solitary-wind-dfb8.workers.dev/search';
@@ -397,6 +397,7 @@
     listWrap = grid.parentElement;
     for (var i = 0; i < items.length; i++) cards.push({ el: items[i], slug: slugOf(items[i]) });
 
+    landingCopy();
     q = readQuery();
     box = buildBox({ q: q, onSearch: function (nq) { q = nq; writeQuery(q); box._showClear(); track('availability_search', { search_from: q.from, search_to: q.to, guests: q.guests, search_page: 'offerings' }); showSummary(); run(); }, onClear: clearAll });
     var root = document.querySelector('.offerings-filter-root');
@@ -425,6 +426,26 @@
     document.addEventListener('vlp-request-ready', function () { if (data) render(); });
 
     if (q) { showSummary(); run(); }
+  }
+
+  // Whale shark landing (v52, Nov 4 2026): /offerings?activity=swimming-with-the-whale-sharks (ads link here) gets its own
+  // heading and intro, so the page reads as "live whale shark availability across operators". Other filters unchanged.
+  function landingCopy() {
+    var act = ''; try { act = new URLSearchParams(location.search).get('activity') || ''; } catch (e) {}
+    if (act !== 'swimming-with-the-whale-sharks') return;
+    var L = ES ? {
+      h1: 'Nado con tiburón ballena en La Paz: disponibilidad en vivo',
+      p: 'Elige tu fecha y cuántas personas son. Revisamos en vivo los calendarios de varios operadores locales de tiburón ballena y te mostramos qué salidas tienen lugar y a qué precio.',
+      title: 'Tiburón ballena en La Paz: disponibilidad en vivo | Vamos a La Paz'
+    } : {
+      h1: 'Whale shark tours in La Paz: live availability',
+      p: 'Pick your date and party size. We check the booking calendars of several local whale shark operators live and show you which departures have space, and the price.',
+      title: 'Whale shark tours in La Paz: live availability | Vamos a La Paz'
+    };
+    var h = document.querySelector('.offerings-heading'), p = document.querySelector('.offerings-intro');
+    if (h) h.textContent = L.h1;
+    if (p) p.textContent = L.p;
+    document.title = L.title;
   }
 
   function showSummary() {
