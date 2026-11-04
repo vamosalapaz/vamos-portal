@@ -1,4 +1,4 @@
-/* Vamos a La Paz — Request to book (Oct 30, 2026)
+/* Vamos a La Paz — Request to book (Oct 30, 2026; Nov 4: live boat calendar on the offer page and in the form)
    Card-hold booking requests for private-owner boats (approved mockup "Vamos request to book").
    - Loads the offers that allow it from the vamos-requests Worker (/eligible).
    - Offer pages (/offerings/<slug>, /es/offerings/<slug>): adds "Request to book" + helper text beside the WhatsApp button.
@@ -8,6 +8,7 @@
 (function () {
   if (window.VamosRequest) return;
   var API = 'https://vamos-requests.solitary-wind-dfb8.workers.dev';
+  var AV = 'https://vamos-availability.solitary-wind-dfb8.workers.dev';
   var ES = /^\/es(\/|$)/.test(location.pathname) || (document.documentElement.lang || '').slice(0, 2) === 'es';
   var PINK = '#B51E66', INK = '#17202A', MUTED = '#46525C', LINE = '#E5DFD1', SAND = '#F4EFE6';
   var T = ES ? {
@@ -17,6 +18,9 @@
     title: 'Solicitar reserva', sub: 'barco privado, solo tu grupo', trip: 'VIAJE', date: 'FECHA', guests: 'PERSONAS', nights: 'NOCHES',
     name: 'TU NOMBRE', namePh: 'Nombre completo', wa: 'NÚMERO DE WHATSAPP', waHint: 'Te escribimos aquí en cuanto el dueño responda.',
     note: 'ALGO QUE DEBA SABER EL DUEÑO (OPCIONAL)', notePh: 'Niños a bordo, un cumpleaños, hora de salida preferida…',
+    calT: 'Elige tu fecha', calHelp: 'Calendario del barco en vivo. Los días ocupados no se pueden elegir.', calFree: 'Libre', calBooked: 'Ocupado',
+    calPick: function (d) { return 'Solicitar reserva · ' + d; }, calErr: 'No pudimos cargar el calendario. Elige una fecha y el dueño la confirma.', calNone: 'Sin fechas libres en este mes.',
+    prevM: 'Mes anterior', nextM: 'Mes siguiente', reqHelpG: 'Retenemos un depósito en tu tarjeta, sin cobrarlo. El dueño confirma en 6 horas o se libera. Puedes cancelar la retención cuando quieras.', depG: 'Depósito que retenemos hoy',
     price: 'Precio del viaje', dep: function (p) { return 'Depósito que retenemos hoy (' + p + '%)'; }, bal: 'Saldo, se paga al capitán el día del viaje',
     how: 'Cómo funciona', h1: 'Retenemos el depósito en tu tarjeta. Todavía no se cobra.', h2: 'El dueño confirma tu fecha en un máximo de 6 horas.',
     h3: 'Si confirma, cobramos el depósito y tu viaje queda reservado. Si no, liberamos la retención y te mandamos otros barcos libres ese día.',
@@ -34,6 +38,9 @@
     title: 'Request to book', sub: 'private boat, just your group', trip: 'TRIP', date: 'DATE', guests: 'GUESTS', nights: 'NIGHTS',
     name: 'YOUR NAME', namePh: 'Full name', wa: 'WHATSAPP NUMBER', waHint: "We'll message you here as soon as the owner answers.",
     note: 'ANYTHING THE OWNER SHOULD KNOW? (OPTIONAL)', notePh: 'Kids on board, a birthday, preferred start time…',
+    calT: 'Pick your date', calHelp: "The boat's live calendar. Booked days can't be picked.", calFree: 'Free', calBooked: 'Booked',
+    calPick: function (d) { return 'Request to book · ' + d; }, calErr: "Couldn't load the calendar. Pick a date and the owner will confirm it.", calNone: 'No free dates this month.',
+    prevM: 'Previous month', nextM: 'Next month', reqHelpG: 'We hold a deposit on your card, not charged. The owner confirms within 6 hours, or the hold is released. You can cancel your hold at any time.', depG: 'Deposit to hold today',
     price: 'Trip price', dep: function (p) { return 'Deposit to hold today (' + p + '%)'; }, bal: 'Balance, paid to the captain on the day',
     how: 'How it works', h1: "We place a hold for the deposit on your card. You're not charged yet.", h2: 'The owner confirms your date within 6 hours.',
     h3: "Confirmed: the deposit is charged and your trip is booked. Not confirmed: the hold is released and we send you other boats free that day.",
@@ -77,6 +84,55 @@
     return quotes[id];
   }
 
+  // ---------- live boat calendar (Nov 4, 2026) ----------
+  // vamos-availability /calendar?slug= → { live, open: [YYYY-MM-DD], from, to }. Offers with their own calendar (Miko's
+  // FareHarbor) or a boat calendar (Whale Shark After Hours on Good Medicine's Bókun days) get a month view where booked
+  // days can't be picked. Offers without one keep the plain date field.
+  var cals = {};
+  function calendarFor(slug) {
+    if (!cals[slug]) cals[slug] = fetch(AV + '/calendar?slug=' + encodeURIComponent(slug)).then(function (r) { return r.json(); })
+      .then(function (j) { return j && j.live ? { open: new Set(j.open || []), from: j.from, to: j.to } : null; })
+      .catch(function () { return null; });
+    return cals[slug];
+  }
+  function dayShort(iso) { return new Date(iso + 'T12:00:00Z').toLocaleDateString(ES ? 'es-MX' : 'en-US', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }); }
+  // Month grid. cal = {open:Set, from, to}; picked = YYYY-MM-DD or ''; onPick(iso).
+  function calWidget(cal, picked, onPick) {
+    var wrap = el('div', { class: 'vlp-cal' });
+    var first = picked && cal.open.has(picked) ? picked : (Array.from(cal.open).sort()[0] || cal.from);
+    var ym = first.slice(0, 7);
+    var minYm = cal.from.slice(0, 7), maxYm = cal.to.slice(0, 7);
+    var monStart = ES; // lunes first on /es, Sunday first in English
+    function shiftYm(v, n) { var y = +v.slice(0, 4), m = +v.slice(5, 7) - 1 + n; y += Math.floor(m / 12); m = ((m % 12) + 12) % 12; return y + '-' + String(m + 1).padStart(2, '0'); }
+    function draw() {
+      wrap.innerHTML = '';
+      var title = new Date(ym + '-15T12:00:00Z').toLocaleDateString(ES ? 'es-MX' : 'en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+      var prev = el('button', { type: 'button', class: 'nav', 'aria-label': T.prevM, text: '‹', disabled: ym <= minYm ? 'disabled' : null, onclick: function () { ym = shiftYm(ym, -1); draw(); } });
+      var next = el('button', { type: 'button', class: 'nav', 'aria-label': T.nextM, text: '›', disabled: ym >= maxYm ? 'disabled' : null, onclick: function () { ym = shiftYm(ym, 1); draw(); } });
+      wrap.appendChild(el('div', { class: 'hd' }, [prev, el('strong', { text: title.charAt(0).toUpperCase() + title.slice(1) }), next]));
+      var grid = el('div', { class: 'gr', role: 'grid' });
+      var wd = monStart ? ['L', 'M', 'M', 'J', 'V', 'S', 'D'] : ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+      wd.forEach(function (w) { grid.appendChild(el('span', { class: 'wd', text: w })); });
+      var d1 = new Date(ym + '-01T12:00:00Z'), lead = d1.getUTCDay(); if (monStart) lead = (lead + 6) % 7;
+      for (var i = 0; i < lead; i++) grid.appendChild(el('span'));
+      var any = false;
+      for (var d = new Date(d1); d.toISOString().slice(0, 7) === ym; d.setUTCDate(d.getUTCDate() + 1)) {
+        var iso = d.toISOString().slice(0, 10), inRange = iso >= cal.from && iso <= cal.to, free = inRange && cal.open.has(iso);
+        if (free) any = true;
+        (function (iso, free, inRange) {
+          grid.appendChild(el('button', { type: 'button', class: 'dy' + (free ? ' free' : inRange ? ' booked' : ' out') + (iso === picked ? ' on' : ''),
+            disabled: free ? null : 'disabled', 'aria-label': dayLong(iso) + (free ? '' : ' · ' + T.calBooked), 'aria-pressed': iso === picked ? 'true' : 'false',
+            text: String(+iso.slice(8)), onclick: function () { picked = iso; draw(); onPick(iso); } }));
+        })(iso, free, inRange);
+      }
+      wrap.appendChild(grid);
+      if (!any) wrap.appendChild(el('p', { class: 'none', text: T.calNone }));
+      wrap.appendChild(el('div', { class: 'lg' }, [el('span', { class: 'k free' }), T.calFree, el('span', { class: 'k booked' }), T.calBooked]));
+    }
+    draw();
+    return wrap;
+  }
+
   // ---------- styles ----------
   function css() {
     if (document.getElementById('vlp-rq-css')) return;
@@ -110,6 +166,22 @@
       '.vlp-rq .go{width:100%;min-height:52px;font-size:16px;font-weight:700;margin-top:8px}.vlp-rq .go[disabled]{opacity:.6}',
       '.vlp-rq .foot{font-size:13px;color:' + MUTED + ';text-align:center;line-height:1.4;margin:10px 0 0}.vlp-rq .foot a{color:' + PINK + ';font-weight:600}',
       '.vlp-rq .err{background:#FDE8EC;color:#8A1C33;border-radius:10px;padding:10px 12px;font-size:14px;margin:0 0 12px}',
+      '.vlp-cal{background:#fff;border:1px solid ' + LINE + ';border-radius:12px;padding:10px 10px 8px;max-width:360px;font-family:"DM Sans",system-ui,sans-serif;color:' + INK + '}',
+      '.vlp-cal .hd{display:flex;align-items:center;justify-content:space-between;margin:0 0 6px}.vlp-cal .hd strong{font-size:16px}',
+      '.vlp-cal .nav{width:44px;height:44px;border:0;background:none;font-size:26px;line-height:1;color:' + PINK + ';cursor:pointer;border-radius:999px}.vlp-cal .nav[disabled]{color:#C9C1AE;cursor:default}',
+      '.vlp-cal .gr{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}',
+      '.vlp-cal .wd{font-size:12px;font-weight:600;color:' + MUTED + ';text-align:center;padding:2px 0}',
+      '.vlp-cal .dy{height:42px;border:0;border-radius:8px;font:inherit;font-size:15px;cursor:pointer;padding:0}',
+      '.vlp-cal .dy.free{background:#EAF6EE;color:#1E6B3A;font-weight:600}.vlp-cal .dy.free:hover{background:#D3EEDC}',
+      '.vlp-cal .dy.booked{background:transparent;color:#B8B0A0;text-decoration:line-through;cursor:not-allowed}',
+      '.vlp-cal .dy.out{background:transparent;color:#D8D2C4;cursor:default}',
+      '.vlp-cal .dy.on{background:' + PINK + ';color:#fff}',
+      '.vlp-cal .lg{display:flex;align-items:center;gap:6px;font-size:12px;color:' + MUTED + ';margin:8px 2px 0}.vlp-cal .k{width:12px;height:12px;border-radius:3px;display:inline-block;margin-left:6px}.vlp-cal .k:first-child{margin-left:0}',
+      '.vlp-cal .k.free{background:#EAF6EE;border:1px solid #9FD3B1}.vlp-cal .k.booked{background:#fff;border:1px solid #D8D2C4}',
+      '.vlp-cal .none{font-size:13px;color:' + MUTED + ';margin:6px 2px 0}',
+      '.vlp-rq-card.has-cal{flex-direction:column;align-items:stretch}.vlp-rq-card.has-cal .vlp-cal{margin:4px 0 2px}',
+      '.vlp-rq-card.has-cal .vlp-rq-btn{align-self:flex-start;min-width:240px}@media (max-width:600px){.vlp-rq-card.has-cal .vlp-rq-btn{align-self:stretch}.vlp-cal{max-width:none}}',
+      '.vlp-rq .vlp-cal{margin:0 0 14px;max-width:none}',
       '.vlp-rq .x{float:right;background:none;border:0;font-size:28px;line-height:1;color:' + MUTED + ';cursor:pointer;padding:0 4px;min-width:44px;min-height:44px}',
     ].join('');
     document.head.appendChild(s);
@@ -124,7 +196,7 @@
     track('request_to_book_open', { offering: slug });
     var siblings = offers.filter(function (o) { return o.boat && o.boat === first.boat; });
     if (!siblings.length) siblings = [first];
-    var cur = first, q = null;
+    var cur = first, q = null, curCal = null;
     var ov = el('div', { class: 'vlp-rq-ov', onclick: function (e) { if (e.target === ov) shut(); } });
     var box = el('div', { class: 'vlp-rq', role: 'dialog', 'aria-modal': 'true', 'aria-label': T.title });
     function shut() { ov.remove(); document.removeEventListener('keydown', onKey); }
@@ -142,12 +214,15 @@
     var phoneIn = el('input', { type: 'tel', autocomplete: 'tel', placeholder: ES ? '+52 612 123 4567' : '+1 206 555 0100' });
     var noteIn = el('textarea', { rows: '3', placeholder: T.notePh });
     var sum = el('div', { class: 'sum' });
+    var dateLbl = el('label', null, [T.date, dateIn]);
+    var calSlot = el('div');
     var err = el('div');
     var go = el('button', { type: 'submit', class: 'vlp-rq-btn go', text: T.go });
     var foot = el('p', { class: 'foot' }, [T.foot, el('a', { class: 'whatsapp-link', 'data-wa-source': 'request-form', target: '_blank', rel: 'noopener', href: waHref(T.waMsg(ES ? cur.nameEs : cur.name, '', '')), text: T.footWa })]);
     var form = el('form', { onsubmit: submit }, [
       siblings.length > 1 ? el('label', null, [T.trip, tripSel]) : null,
-      el('div', { class: 'row' }, [el('label', null, [T.date, dateIn]), el('label', { class: 'sm' }, [T.guests, guestsIn]), nightsLbl]),
+      calSlot,
+      el('div', { class: 'row' }, [dateLbl, el('label', { class: 'sm' }, [T.guests, guestsIn]), nightsLbl]),
       el('label', null, [T.name, nameIn]),
       el('label', null, [T.wa, phoneIn, el('span', { class: 'hint', text: T.waHint })]),
       el('label', null, [T.note, noteIn]),
@@ -171,6 +246,16 @@
       nightsLbl.style.display = cur.perNight ? '' : 'none';
       guestsIn.max = String(cur.capacity || 40);
       sum.innerHTML = ''; sum.appendChild(el('div', { class: 'mut', text: T.sending }));
+      calSlot.innerHTML = '';
+      calendarFor(cur.slug).then(function (cal) {
+        curCal = cal;
+        calSlot.innerHTML = '';
+        dateLbl.style.display = cal ? 'none' : '';
+        if (!cal) return;
+        if (dateIn.value && !cal.open.has(dateIn.value)) dateIn.value = '';
+        calSlot.appendChild(el('label', { style: 'margin:0 0 6px' }, [T.date]));
+        calSlot.appendChild(calWidget(cal, dateIn.value, function (iso) { dateIn.value = iso; calc(); }));
+      });
       quote(cur.id).then(function (j) { if (j && j.ok) { q = j; calc(); } else { q = null; err.innerHTML = ''; err.appendChild(el('p', { class: 'err', text: T.errs.not_available })); go.disabled = true; } });
     }
     function calc() {
@@ -178,11 +263,11 @@
       var g = Math.max(1, Math.min(q.capacity, Math.round(+guestsIn.value || 1)));
       var n = q.perNight ? Math.max(1, Math.min(14, Math.round(+nightsIn.value || 1))) : 1;
       var extraN = q.included && q.extraEach && g > q.included ? g - q.included : 0;
-      var price = q.base * n + extraN * q.extraEach, dep = Math.round(price * q.depositPct), pct = Math.round(q.depositPct * 100);
+      var price = q.base * n + extraN * q.extraEach, dep = q.depositFixed ? Math.min(price, q.depositFixed) : Math.round(price * q.depositPct), pct = Math.round(q.depositPct * 100);
       sum.innerHTML = '';
       var rows = [[T.price + (q.perNight ? ' (' + T.perNight(n) + ')' : ''), money(price), '']];
       if (extraN) rows.push([T.perGuest(extraN, money(q.extraEach)), '', 'mut']);
-      rows.push([T.dep(pct), money(dep), 'b']);
+      rows.push([q.depositFixed ? T.depG : T.dep(pct), money(dep), 'b']);
       rows.push([T.bal, money(price - dep), 'mut']);
       rows.forEach(function (r) { sum.appendChild(el('div', { class: r[2] === 'mut' ? 'mut' : '' }, [el('span', { text: r[0] }), el(r[2] === 'b' ? 'b' : 'span', { text: r[1] })])); });
       foot.querySelector('a').href = waHref(T.waMsg(ES ? cur.nameEs : cur.name, dayLong(dateIn.value), g));
@@ -193,6 +278,7 @@
       var body = { offeringId: cur.id, date: dateIn.value, guests: +guestsIn.value, nights: cur.perNight ? +nightsIn.value : '',
         name: nameIn.value.trim(), phone: phoneIn.value.trim(), note: noteIn.value.trim(), lang: ES ? 'es' : 'en', page: location.href.split('#')[0] };
       if (!body.date || body.date < minDate) return fail('date');
+      if (curCal && !curCal.open.has(body.date)) return fail('booked');
       if (!(body.guests >= 1 && body.guests <= (cur.capacity || 40))) return fail('guests');
       if (!body.name || body.phone.replace(/\D/g, '').length < 10) return fail('contact');
       go.disabled = true; go.textContent = T.sending;
@@ -234,6 +320,20 @@
     if (facts) {
       var card = el('div', { class: 'vlp-rq-card' }, [el('div', null, [el('strong', { text: T.cardT }), el('span', { class: 'vlp-rq-help', text: T.reqHelp })]), mk('vlp-rq-btn')]);
       facts.parentNode.insertBefore(card, facts.nextSibling);
+      var topBtn = card.querySelector('.vlp-rq-btn');
+      calendarFor(m[1]).then(function (cal) {
+        if (!cal) return;
+        var want = p.get('date') && cal.open.has(p.get('date')) ? p.get('date') : '';
+        function pick(iso) {
+          document.querySelectorAll('[data-vlp-request="' + m[1] + '"]').forEach(function (b) { b.setAttribute('data-vlp-date', iso); });
+          topBtn.textContent = T.calPick(dayShort(iso));
+        }
+        card.classList.add('has-cal');
+        card.insertBefore(el('div', null, [el('strong', { text: T.calT }), el('span', { class: 'vlp-rq-help', text: T.calHelp })]), topBtn);
+        card.insertBefore(calWidget(cal, want, pick), topBtn);
+        if (want) pick(want);
+      });
+      quote(bySlug[m[1]].id).then(function (j) { if (j && j.ok && j.depositFixed) [].forEach.call(document.querySelectorAll('.vlp-rq-help'), function (h) { if (h.textContent === T.reqHelp) h.textContent = T.reqHelpG; }); });
     }
     // Bottom: outlined button above the WhatsApp button.
     var block = el('div', { class: 'vlp-rq-block' }, facts ? [mk('vlp-rq-btn alt')] : [mk('vlp-rq-btn'), el('span', { class: 'vlp-rq-help', text: T.reqHelp })]);
