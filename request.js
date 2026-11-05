@@ -1,4 +1,6 @@
-/* Vamos a La Paz — Request to book (Oct 30, 2026; Nov 4: live boat calendar on the offer page and in the form)
+/* Vamos a La Paz — Request to book (Oct 30, 2026; Nov 4: live boat calendar on the offer page and in the form;
+   Nov 5: Book Now offers (deposit charged at checkout, confirmed instantly; "Preview" ones only with ?booknow=1), large-group
+   and extra-night pricing, multi-day trips need every day free, and the Bókun widget is hidden on Book Now offer pages)
    Card-hold booking requests for private-owner boats (approved mockup "Vamos request to book").
    - Loads the offers that allow it from the vamos-requests Worker (/eligible).
    - Offer pages (/offerings/<slug>, /es/offerings/<slug>): adds "Request to book" + helper text beside the WhatsApp button.
@@ -31,6 +33,13 @@
       booked: 'Ese día ya está ocupado. Prueba otra fecha o escríbenos.', not_available: 'Esta experiencia ya no acepta solicitudes en línea. Escríbenos por WhatsApp.',
       off: 'Las solicitudes en línea están pausadas. Escríbenos por WhatsApp.', other: 'No se pudo enviar. Revisa tu conexión e inténtalo otra vez.' },
     waMsg: function (t, d, g) { return 'Hola! Me interesa ' + t + (d ? ' el ' + d : '') + (g ? ' para ' + g + ' personas' : '') + '. Lo vi en vamosalapaz.com'; },
+    bn: { req: 'Reservar ahora', cardT: 'Reserva en línea, confirmación inmediata', reqHelp: 'Paga un depósito del 20% y tu fecha queda confirmada al instante. El saldo se paga el día del viaje.',
+      reqHelpN: function (p) { return 'Paga un depósito del ' + p + '% y tu fecha queda confirmada al instante. El saldo se paga el día del viaje.'; },
+      title: 'Reservar ahora', waHint: 'Te mandamos tu confirmación aquí.', note: 'ALGO QUE DEBAMOS SABER (OPCIONAL)',
+      calPick: function (d) { return 'Reservar · ' + d; }, calErr: 'No pudimos cargar el calendario. Escríbenos por WhatsApp para reservar.',
+      dep: function (p) { return 'Depósito a pagar hoy (' + p + '%)'; }, depG: 'Depósito a pagar hoy', bal: 'Saldo, se paga el día del viaje',
+      h1: 'Pagas el depósito con tarjeta en la página segura de Stripe.', h2: 'Tu fecha queda confirmada al instante y te mandamos tu reservación por WhatsApp.',
+      h3: 'El saldo se paga el día del viaje, antes de zarpar.', h4: '', go: 'Continuar al pago', nightsErr: 'Uno de los días de tu viaje ya está ocupado. Prueba otra fecha o menos noches.' },
   } : {
     req: 'Request to book', cardT: 'Book directly with the owner', reqHelp: 'We hold a 20% deposit on your card, not charged. The owner confirms within 6 hours, or the hold is released. You can cancel your hold at any time.',
     reqHelpN: function (p) { return 'We hold a ' + p + '% deposit on your card, not charged. The owner confirms within 6 hours, or the hold is released. You can cancel your hold at any time.'; },
@@ -51,7 +60,19 @@
       booked: 'That day is already booked. Try another date or message us.', not_available: "This experience no longer takes online requests. Message us on WhatsApp.",
       off: 'Online requests are paused right now. Message us on WhatsApp.', other: "Couldn't send. Check your connection and try again." },
     waMsg: function (t, d, g) { return 'Hi! I\'m interested in ' + t + (d ? ' on ' + d : '') + (g ? ' for ' + g + ' guests' : '') + '. I saw it on vamosalapaz.com'; },
+    bn: { req: 'Book now', cardT: 'Book online, confirmed instantly', reqHelp: 'Pay a 20% deposit now and your date is confirmed right away. The balance is paid on the day.',
+      reqHelpN: function (p) { return 'Pay a ' + p + '% deposit now and your date is confirmed right away. The balance is paid on the day.'; },
+      title: 'Book now', waHint: "We'll send your confirmation here.", note: 'ANYTHING WE SHOULD KNOW? (OPTIONAL)',
+      calPick: function (d) { return 'Book now · ' + d; }, calErr: "Couldn't load the calendar. Message us on WhatsApp to book.",
+      dep: function (p) { return 'Deposit due today (' + p + '%)'; }, depG: 'Deposit due today', bal: 'Balance, paid on the day of your trip',
+      h1: "You pay the deposit by card on Stripe's secure page.", h2: 'Your date is confirmed instantly and we send your booking on WhatsApp.',
+      h3: 'The balance is paid on the day, before departure.', h4: '', go: 'Continue to payment', nightsErr: 'One of the days of your trip is already booked. Try another date or fewer nights.' },
   };
+  // Book Now offers set to "Preview" only show with ?booknow=1 (remembered for the visit).
+  var PREVIEW = false;
+  try { if (/[?&]booknow=1/.test(location.search)) sessionStorage.setItem('vlp-booknow', '1'); PREVIEW = sessionStorage.getItem('vlp-booknow') === '1'; } catch (e) { PREVIEW = /[?&]booknow=1/.test(location.search); }
+  function isBN(o) { return !!o && (o.bookNow === 'Live' || (o.bookNow === 'Preview' && PREVIEW)); }
+  function tx(o, k) { return isBN(o) && T.bn[k] !== undefined ? T.bn[k] : T[k]; }
   var offers = [], bySlug = {}, quotes = {};
 
   function el(tag, attrs, kids) {
@@ -72,7 +93,7 @@
   function waHref(text) { return 'https://wa.me/526122903605?text=' + encodeURIComponent(text.replace(/[¿¡]/g, '') + ' [web-request]'); }
 
   var ready = fetch(API + '/eligible').then(function (r) { return r.json(); }).then(function (j) {
-    offers = (j && j.offers) || [];
+    offers = ((j && j.offers) || []).filter(function (o) { return o.bookNow !== 'Preview' || PREVIEW; });
     offers.forEach(function (o) { bySlug[o.slug] = o; });
   }).catch(function () { offers = []; }).then(function () {
     try { document.dispatchEvent(new CustomEvent('vlp-request-ready')); } catch (e) {}
@@ -193,7 +214,7 @@
     var first = bySlug[slug];
     if (!first) return;
     css();
-    track('request_to_book_open', { offering: slug });
+    track(isBN(first) ? 'book_now_open' : 'request_to_book_open', { offering: slug });
     var siblings = offers.filter(function (o) { return o.boat && o.boat === first.boat; });
     if (!siblings.length) siblings = [first];
     var cur = first, q = null, curCal = null;
@@ -213,6 +234,8 @@
     var nameIn = el('input', { autocomplete: 'name', placeholder: T.namePh });
     var phoneIn = el('input', { type: 'tel', autocomplete: 'tel', placeholder: ES ? '+52 612 123 4567' : '+1 206 555 0100' });
     var noteIn = el('textarea', { rows: '3', placeholder: T.notePh });
+    var waHintEl = el('span', { class: 'hint', text: T.waHint }), noteLblText = document.createTextNode(T.note);
+    var h1El = el('span', { text: T.h1 }), h2El = el('span', { text: T.h2 }), h3El = el('span', { text: T.h3 }), h4El = el('p', { class: 'hint', style: 'font-size:13px;color:' + MUTED + ';margin:0 0 8px', text: T.h4 });
     var sum = el('div', { class: 'sum' });
     var dateLbl = el('label', null, [T.date, dateIn]);
     var calSlot = el('div');
@@ -224,14 +247,14 @@
       calSlot,
       el('div', { class: 'row' }, [dateLbl, el('label', { class: 'sm' }, [T.guests, guestsIn]), nightsLbl]),
       el('label', null, [T.name, nameIn]),
-      el('label', null, [T.wa, phoneIn, el('span', { class: 'hint', text: T.waHint })]),
-      el('label', null, [T.note, noteIn]),
+      el('label', null, [T.wa, phoneIn, waHintEl]),
+      el('label', null, [noteLblText, noteIn]),
       sum,
       el('h3', { text: T.how }),
-      el('div', { class: 'st' }, [el('i', { text: '1' }), el('span', { text: T.h1 })]),
-      el('div', { class: 'st' }, [el('i', { text: '2' }), el('span', { text: T.h2 })]),
-      el('div', { class: 'st' }, [el('i', { text: '3' }), el('span', { text: T.h3 })]),
-      el('p', { class: 'hint', style: 'font-size:13px;color:' + MUTED + ';margin:0 0 8px', text: T.h4 }),
+      el('div', { class: 'st' }, [el('i', { text: '1' }), h1El]),
+      el('div', { class: 'st' }, [el('i', { text: '2' }), h2El]),
+      el('div', { class: 'st' }, [el('i', { text: '3' }), h3El]),
+      h4El,
       err, go, foot,
     ]);
     var head = el('h2', { text: T.title });
@@ -243,6 +266,9 @@
 
     function load() {
       sub.textContent = (cur.boat ? cur.boat + ' · ' : '') + T.sub;
+      head.textContent = tx(cur, 'title'); go.textContent = tx(cur, 'go'); box.setAttribute('aria-label', tx(cur, 'title'));
+      waHintEl.textContent = tx(cur, 'waHint'); noteLblText.textContent = tx(cur, 'note');
+      h1El.textContent = tx(cur, 'h1'); h2El.textContent = tx(cur, 'h2'); h3El.textContent = tx(cur, 'h3'); h4El.textContent = tx(cur, 'h4');
       nightsLbl.style.display = cur.perNight ? '' : 'none';
       guestsIn.max = String(cur.capacity || 40);
       sum.innerHTML = ''; sum.appendChild(el('div', { class: 'mut', text: T.sending }));
@@ -256,19 +282,21 @@
         calSlot.appendChild(el('label', { style: 'margin:0 0 6px' }, [T.date]));
         calSlot.appendChild(calWidget(cal, dateIn.value, function (iso) { dateIn.value = iso; calc(); }));
       });
-      quote(cur.id).then(function (j) { if (j && j.ok) { q = j; calc(); } else { q = null; err.innerHTML = ''; err.appendChild(el('p', { class: 'err', text: T.errs.not_available })); go.disabled = true; } });
+      quote(cur.id).then(function (j) { if (j && j.ok) { q = j; if (isBN(cur)) h4El.textContent = ES ? j.cancellation || '' : j.cancellationEn || ''; calc(); } else { q = null; err.innerHTML = ''; err.appendChild(el('p', { class: 'err', text: T.errs.not_available })); go.disabled = true; } });
     }
     function calc() {
       if (!q) return;
       var g = Math.max(1, Math.min(q.capacity, Math.round(+guestsIn.value || 1)));
       var n = q.perNight ? Math.max(1, Math.min(14, Math.round(+nightsIn.value || 1))) : 1;
-      var extraN = q.included && q.extraEach && g > q.included ? g - q.included : 0;
-      var price = q.base * n + extraN * q.extraEach, dep = q.depositFixed ? Math.min(price, q.depositFixed) : Math.round(price * q.depositPct), pct = Math.round(q.depositPct * 100);
+      var extraN = q.extraEach && g > (q.included || 0) ? g - (q.included || 0) : 0;
+      var tierBase = q.largeFrom && q.largePrice && g >= q.largeFrom ? q.largePrice : q.base;
+      var nightsTotal = q.perNight && q.extraNight ? tierBase + (n - 1) * q.extraNight : tierBase * n;
+      var price = nightsTotal + extraN * q.extraEach, dep = q.depositFixed ? Math.min(price, q.depositFixed) : Math.round(price * q.depositPct), pct = Math.round(q.depositPct * 100);
       sum.innerHTML = '';
       var rows = [[T.price + (q.perNight ? ' (' + T.perNight(n) + ')' : ''), money(price), '']];
       if (extraN) rows.push([T.perGuest(extraN, money(q.extraEach)), '', 'mut']);
-      rows.push([q.depositFixed ? T.depG : T.dep(pct), money(dep), 'b']);
-      rows.push([T.bal, money(price - dep), 'mut']);
+      rows.push([q.depositFixed ? tx(cur, 'depG') : tx(cur, 'dep')(pct), money(dep), 'b']);
+      rows.push([tx(cur, 'bal'), money(price - dep), 'mut']);
       rows.forEach(function (r) { sum.appendChild(el('div', { class: r[2] === 'mut' ? 'mut' : '' }, [el('span', { text: r[0] }), el(r[2] === 'b' ? 'b' : 'span', { text: r[1] })])); });
       foot.querySelector('a').href = waHref(T.waMsg(ES ? cur.nameEs : cur.name, dayLong(dateIn.value), g));
     }
@@ -279,19 +307,20 @@
         name: nameIn.value.trim(), phone: phoneIn.value.trim(), note: noteIn.value.trim(), lang: ES ? 'es' : 'en', page: location.href.split('#')[0] };
       if (!body.date || body.date < minDate) return fail('date');
       if (curCal && !curCal.open.has(body.date)) return fail('booked');
+      if (curCal && cur.perNight) for (var dd = body.date, k = 0; k <= (+body.nights || 1); k++, dd = addDays(dd, 1)) if (!curCal.open.has(dd) && dd <= curCal.to) return fail('nights');
       if (!(body.guests >= 1 && body.guests <= (cur.capacity || 40))) return fail('guests');
       if (!body.name || body.phone.replace(/\D/g, '').length < 10) return fail('contact');
       go.disabled = true; go.textContent = T.sending;
-      track('request_to_book_submit', { offering: cur.slug, guests: body.guests, trip_date: body.date });
+      track(isBN(cur) ? 'book_now_submit' : 'request_to_book_submit', { offering: cur.slug, guests: body.guests, trip_date: body.date });
       fetch(API + '/request', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
         .then(function (r) { return r.json(); })
         .then(function (j) { if (j && j.ok && j.url) location.href = j.url; else fail((j && j.error) || 'other'); })
         .catch(function () { fail('other'); });
     }
     function fail(code) {
-      go.disabled = false; go.textContent = T.go;
+      go.disabled = false; go.textContent = tx(cur, 'go');
       err.innerHTML = '';
-      err.appendChild(el('p', { class: 'err', text: T.errs[code] || T.errs.other }));
+      err.appendChild(el('p', { class: 'err', text: code === 'nights' ? T.bn.nightsErr : T.errs[code] || T.errs.other }));
       err.scrollIntoView({ block: 'nearest' });
     }
     load();
@@ -314,11 +343,14 @@
     if (!wa) return;
     css();
     var p = new URLSearchParams(location.search);
-    function mk(cls) { return el('button', { type: 'button', class: cls, 'data-vlp-request': m[1], 'data-vlp-date': p.get('date') || '', 'data-vlp-guests': p.get('guests') || '', text: T.req }); }
+    var me = bySlug[m[1]];
+    function mk(cls) { return el('button', { type: 'button', class: cls, 'data-vlp-request': m[1], 'data-vlp-date': p.get('date') || '', 'data-vlp-guests': p.get('guests') || '', text: tx(me, 'req') }); }
+    // Book Now replaces the Bókun widget on this page (the widget stays in the CMS, so switching back is one field).
+    if (isBN(me)) [].forEach.call(document.querySelectorAll('.bokunWidget, .vlp-book-note'), function (w) { var box = w.closest('.w-embed') || w; box.style.display = 'none'; });
     // Top: card under the trip facts (duration, boat, capacity, price).
     var facts = document.querySelector('.offering-detail-facts-row');
     if (facts) {
-      var card = el('div', { class: 'vlp-rq-card' }, [el('div', null, [el('strong', { text: T.cardT }), el('span', { class: 'vlp-rq-help', text: T.reqHelp })]), mk('vlp-rq-btn')]);
+      var card = el('div', { class: 'vlp-rq-card' }, [el('div', null, [el('strong', { text: tx(me, 'cardT') }), el('span', { class: 'vlp-rq-help', text: tx(me, 'reqHelp') })]), mk('vlp-rq-btn')]);
       facts.parentNode.insertBefore(card, facts.nextSibling);
       var topBtn = card.querySelector('.vlp-rq-btn');
       calendarFor(m[1]).then(function (cal) {
@@ -326,7 +358,7 @@
         var want = p.get('date') && cal.open.has(p.get('date')) ? p.get('date') : '';
         function pick(iso) {
           document.querySelectorAll('[data-vlp-request="' + m[1] + '"]').forEach(function (b) { b.setAttribute('data-vlp-date', iso); });
-          topBtn.textContent = T.calPick(dayShort(iso));
+          topBtn.textContent = tx(me, 'calPick')(dayShort(iso));
         }
         card.classList.add('has-cal');
         card.insertBefore(el('div', null, [el('strong', { text: T.calT }), el('span', { class: 'vlp-rq-help', text: T.calHelp })]), topBtn);
@@ -336,11 +368,11 @@
       quote(bySlug[m[1]].id).then(function (j) { if (j && j.ok && j.depositFixed) [].forEach.call(document.querySelectorAll('.vlp-rq-help'), function (h) { if (h.textContent === T.reqHelp) h.textContent = T.reqHelpG; }); });
     }
     // Bottom: outlined button above the WhatsApp button.
-    var block = el('div', { class: 'vlp-rq-block' }, facts ? [mk('vlp-rq-btn alt')] : [mk('vlp-rq-btn'), el('span', { class: 'vlp-rq-help', text: T.reqHelp })]);
+    var block = el('div', { class: 'vlp-rq-block' }, facts ? [mk('vlp-rq-btn alt')] : [mk('vlp-rq-btn'), el('span', { class: 'vlp-rq-help', text: tx(me, 'reqHelp') })]);
     wa.parentNode.insertBefore(block, wa);
     var helpWa = el('span', { class: 'vlp-rq-help', style: 'text-align:center', text: T.waHelp });
     if (wa.nextSibling) wa.parentNode.insertBefore(helpWa, wa.nextSibling); else wa.parentNode.appendChild(helpWa);
   }
 
-  window.VamosRequest = { ready: ready, isEligible: function (slug) { return !!bySlug[slug]; }, open: open, T: T };
+  window.VamosRequest = { ready: ready, isEligible: function (slug) { return !!bySlug[slug]; }, isBookNow: function (slug) { return isBN(bySlug[slug]); }, open: open, T: T };
 })();

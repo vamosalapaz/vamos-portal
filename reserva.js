@@ -16,7 +16,10 @@
         Good Medicine's WhatsApp (+52 612 219 4779). The "Questions?" and receipt buttons use waNum().
    v51: request to book (Oct 30, 2026): bookings made with "Request to book" show a waiting view while the owner
         decides (deposit held, deadline, Cancel my request) and a clear message if it was declined, expired or
-        cancelled. State comes from the vamos-requests Worker (/status, /cancel). Accepted requests show the normal page. */
+        cancelled. State comes from the vamos-requests Worker (/status, /cancel). Accepted requests show the normal page.
+   v53: Book Now (Nov 5, 2026): back from Stripe the page shows "confirming" until the booking is "Booked", a date taken during
+        payment shows "Someone just booked that date", and a confirmed booking pushes one "vamos_purchase" event (value = trip
+        price, transaction_id = booking number) for GA4 / Google Ads / Meta through GTM. */
 (function () {
   'use strict';
 
@@ -200,7 +203,8 @@
       render();
       footer();
       // Coming back from Stripe: the payment webhook can lag a few seconds behind the redirect.
-      if (JUST_PAID && !depositPaid() && tries < 6) { tries++; setTimeout(load, 4000); }
+      if (JUST_PAID && !depositPaid() && tries < (rq && rq.bookNow ? 12 : 6) && !(rq && rq.status === 'Unavailable')) { tries++; setTimeout(load, 4000); }
+      purchased();
     }, fail);
   }
   function fail() { root.innerHTML = ''; root.appendChild(h('p', { class: 'msg warn', text: T.es.invalid + ' / ' + T.en.invalid })); footer(); }
@@ -230,7 +234,9 @@
   function render() {
     var x = f(), st = x.Status;
     if (isQuick()) return renderQuick();
-    if (rq && rq.status !== 'Accepted' && rq.status !== 'Capture failed') return renderRequest();
+    // Book Now: back from Stripe while we check the calendar and take the deposit, show the normal "confirming" view.
+    var bnPending = rq && rq.bookNow && rq.status === 'Awaiting card' && JUST_PAID;
+    if (rq && rq.status !== 'Accepted' && rq.status !== 'Capture failed' && rq.status !== 'Booked' && !bnPending) return renderRequest();
     root.innerHTML = '';
     root.appendChild(h('p', { class: 'eyebrow', text: eyebrowName() + ' · ' + L.booking + ' ' + (x['Invoice number'] || '') }));
     if (st === 'Cancelled') {
@@ -264,6 +270,7 @@
       declinedT: 'Este barco no está disponible', declinedP: 'El dueño no puede ese día. Liberamos la retención de tu tarjeta, no se cobró nada.',
       expiredT: 'No tuvimos respuesta a tiempo', expiredP: 'El dueño no confirmó a tiempo. Liberamos la retención de tu tarjeta, no se cobró nada.',
       cancelledT: 'Cancelaste tu solicitud', cancelledP: 'Liberamos la retención de tu tarjeta, no se cobró nada.',
+      unavailT: 'Alguien reservó esa fecha justo antes', unavailP: 'Mientras pagabas, esa fecha se reservó. Liberamos la autorización de tu tarjeta, no se cobró nada.',
       cardT: 'Falta la retención con tarjeta', cardP: 'Tu solicitud aún no tiene la retención del depósito, así que el dueño todavía no la recibe.',
       others: 'Ver barcos libres ese día', q: 'Dudas? Escríbenos por WhatsApp', guests: 'personas' },
     en: { waitT: 'Waiting for the owner', waitP: function (t) { return "We've sent your request. You'll hear from us on WhatsApp by " + t + ' at the latest.'; },
@@ -276,6 +283,7 @@
       declinedT: "This boat isn't available", declinedP: "The owner can't make that day. We've released the hold on your card, so nothing was charged.",
       expiredT: "We didn't hear back in time", expiredP: "The owner didn't confirm in time. We've released the hold on your card, so nothing was charged.",
       cancelledT: 'You cancelled your request', cancelledP: "We've released the hold on your card, so nothing was charged.",
+      unavailT: 'Someone just booked that date', unavailP: "While you were paying, that date was booked. We've released the authorisation on your card, so nothing was charged.",
       cardT: 'The card hold is missing', cardP: "This request doesn't have the deposit hold yet, so the owner hasn't received it.",
       others: 'See boats free that day', q: 'Questions? WhatsApp us', guests: 'guests' }
   };
@@ -284,6 +292,19 @@
     return new Date(iso).toLocaleTimeString(lang === 'en' ? 'en-US' : 'es-MX', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Mazatlan' }) +
       (new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/Mazatlan' }) !== new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mazatlan' })
         ? ' (' + new Date(iso).toLocaleDateString(lang === 'en' ? 'en-US' : 'es-MX', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'America/Mazatlan' }) + ')' : '');
+  }
+  // Ads and analytics: one "purchase" per booking, when a Book Now or request-to-book booking is confirmed (Nov 5, 2026).
+  function purchased() {
+    try {
+      if (!rq || (rq.status !== 'Booked' && rq.status !== 'Accepted') || !depositPaid()) return;
+      var x = f(), id = x['Invoice number'] || '';
+      if (!id || localStorage.getItem('vlp-purchase-' + id)) return;
+      localStorage.setItem('vlp-purchase-' + id, '1');
+      (window.dataLayer = window.dataLayer || []).push({ ecommerce: null });
+      window.dataLayer.push({ event: 'vamos_purchase', booking_type: rq.bookNow ? 'book_now' : 'request_to_book',
+        ecommerce: { transaction_id: id, value: Number(x['Trip price']) || 0, currency: 'MXN', deposit: Number(x.Deposit) || 0,
+          items: [{ item_name: x.Trip || '', price: Number(x['Trip price']) || 0, quantity: 1 }] } });
+    } catch (e) {}
   }
   function renderRequest() {
     var x = f(), R = RT[lang], st = rq.status, num = x['Invoice number'] || '';
@@ -326,8 +347,8 @@
       setTimeout(function () { if (rq && rq.status === 'Waiting for owner') load(); }, 60000);
       return;
     }
-    var title = st === 'Declined' ? R.declinedT : st === 'Expired' ? R.expiredT : st === 'Cancelled by customer' ? R.cancelledT : R.cardT;
-    var text = st === 'Declined' ? R.declinedP : st === 'Expired' ? R.expiredP : st === 'Cancelled by customer' ? R.cancelledP : R.cardP;
+    var title = st === 'Declined' ? R.declinedT : st === 'Expired' ? R.expiredT : st === 'Cancelled by customer' ? R.cancelledT : st === 'Unavailable' ? R.unavailT : R.cardT;
+    var text = st === 'Declined' ? R.declinedP : st === 'Expired' ? R.expiredP : st === 'Cancelled by customer' ? R.cancelledP : st === 'Unavailable' ? R.unavailP : R.cardP;
     root.appendChild(h('div', { class: 'msg warn' }, [h('b', { style: 'display:block;font-size:20px;margin:0 0 4px', text: title }), text]));
     root.appendChild(trip);
     if (st !== 'Cancelled by customer') root.appendChild(h('a', { class: 'btn pri', href: others }, [R.others]));
