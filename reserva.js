@@ -66,7 +66,14 @@
       payMp: 'Pagar con Mercado Pago', mpSub: 'Tarjeta, saldo de Mercado Pago y más', via: 'vía',
       mpPending: 'Tu pago con Mercado Pago está pendiente. Si elegiste OXXO, paga en la tienda antes de que venza tu ficha; se acredita en 1 a 2 días hábiles y lo verás aquí.',
       mpBack: 'Recibimos tu solicitud de pago. Si elegiste OXXO, paga en la tienda antes de que venza tu ficha; te avisaremos por WhatsApp cuando se acredite.',
-      explore: 'Descubre más tours y barcos en La Paz', site: 'https://vamosalapaz.com/es', siteLabel: 'vamosalapaz.com/es'
+      explore: 'Descubre más tours y barcos en La Paz', site: 'https://vamosalapaz.com/es', siteLabel: 'vamosalapaz.com/es',
+      rcpt: 'Recibo', rcptTitle: 'Recibo de pago', issued: 'Emitido', billed: 'Cliente', operated: 'Operado por', tripL: 'Viaje', descL: 'Concepto', amtL: 'Importe',
+      payments: 'Pagos', whenHow: 'Fecha · método', balanceZero: 'Saldo', balanceWhen: 'se paga el día del viaje', pdf: 'Guardar como PDF',
+      notFactura: 'Este es un recibo de pago, no una factura (CFDI). Si necesitas factura, pídela por WhatsApp.',
+      m: { 'Card (Stripe)': 'Tarjeta', 'Mercado Pago': 'Mercado Pago', 'Bank transfer': 'Transferencia', Cash: 'Efectivo', Other: 'Otro' },
+      depositL: 'Anticipo', balanceL: 'Saldo', paymentL: 'Pago',
+      payBal: 'Paga tu saldo', payBalCard: 'Pagar saldo con tarjeta', payBalNote: 'También puedes pagar en efectivo a bordo.',
+      balReceipt: 'Hola, te envío el comprobante de la transferencia del saldo de la reservación ', confirming: 'Confirmando tu pago…', payErr: 'No pudimos abrir el pago con tarjeta. Intenta de nuevo o escríbenos por WhatsApp.'
     },
     en: {
       booking: 'Booking', hi: 'Hi', ready: 'your trip is ready to book',
@@ -94,10 +101,17 @@
       payMp: 'Pay with Mercado Pago', mpSub: 'Card, Mercado Pago balance and more', via: 'via',
       mpPending: 'Your Mercado Pago payment is pending. If you chose OXXO, pay at the store before your voucher expires; it takes 1 to 2 business days to show here.',
       mpBack: 'We got your payment request. If you chose OXXO, pay at the store before your voucher expires; we\'ll message you on WhatsApp once it\'s confirmed.',
-      explore: 'Explore more tours and boats in La Paz', site: 'https://vamosalapaz.com', siteLabel: 'vamosalapaz.com'
+      explore: 'Explore more tours and boats in La Paz', site: 'https://vamosalapaz.com', siteLabel: 'vamosalapaz.com',
+      rcpt: 'Receipt', rcptTitle: 'Payment receipt', issued: 'Issued', billed: 'Billed to', operated: 'Operated by', tripL: 'Trip', descL: 'Description', amtL: 'Amount',
+      payments: 'Payments', whenHow: 'Date · method', balanceZero: 'Balance', balanceWhen: 'paid on the day', pdf: 'Save as PDF',
+      notFactura: 'This is a payment receipt, not a factura (CFDI). If you need a factura, ask us on WhatsApp.',
+      m: { 'Card (Stripe)': 'Card', 'Mercado Pago': 'Mercado Pago', 'Bank transfer': 'Bank transfer', Cash: 'Cash', Other: 'Other' },
+      depositL: 'Deposit', balanceL: 'Balance', paymentL: 'Payment',
+      payBal: 'Pay your balance', payBalCard: 'Pay balance by card', payBalNote: 'You can also pay in cash on board.',
+      balReceipt: 'Hi, here is the transfer receipt for the balance on booking ', confirming: 'Confirming your payment…', payErr: "We couldn't open the card payment. Please try again or message us on WhatsApp."
     }
   };
-  var L = T.es, lang = 'es', inv = null, bank = {}, root, top, foot, tries = 0;
+  var L = T.es, lang = 'es', inv = null, bank = {}, root, top, foot, tries = 0, rcpt = null;
 
   function h(tag, attrs, kids) {
     var el = document.createElement(tag);
@@ -165,6 +179,21 @@
       '.vr-top.gm{flex-direction:column;align-items:center;gap:8px}.vr-top .gm-logo{height:auto;width:100%;max-width:300px;border-radius:12px}',
       '.vr-top .via{display:flex;align-items:center;gap:6px;font-size:13px;color:#5b6772}.vr-top .via img{height:24px}',
       '.vr-foot{text-align:center;margin:28px 0 0;padding:18px 0 0;border-top:1px solid #e3ddd2}',
+      '.vr .rc-h{display:flex;justify-content:space-between;align-items:baseline}.vr .rc-h span{font-size:13px;color:#5b6772;font-weight:400}',
+      '.vr .money small{display:block;color:#5b6772;font-size:13px;font-weight:400}.vr .paidrow b{color:#1d7a46}',
+      '.vr .sec-t{font-size:12.5px;letter-spacing:.05em;text-transform:uppercase;color:#5b6772;margin:12px 0 2px}',
+      '.vr .due{display:flex;justify-content:space-between;gap:10px;background:#fdf1e1;border-radius:10px;padding:9px 11px;margin-top:8px;color:#7a4b00;font-weight:600}.vr .due.zero{background:#dcf6f5;color:' + C.gulf + '}',
+      '.vr .pdf{background:#fff;color:' + INK + ';border:1px solid #c9c1b4}.vr .fine{font-size:12.5px;color:#5b6772;margin:8px 0 0}',
+      '.vr .print-only{display:none}',
+      '.sheet{font-size:13px;line-height:1.45;color:' + INK + '}.sh-top{display:flex;justify-content:space-between;gap:16px;border-bottom:3px solid ' + INK + ';padding-bottom:12px;margin-bottom:6px}',
+      '.sh-logo{height:46px}.sh-gm{width:190px;border-radius:8px}.sh-via{display:flex;align-items:center;gap:6px;margin-top:6px;color:#5b6772;font-size:11.5px}.sh-via img{height:18px}',
+      '.sh-r{text-align:right;color:#5b6772}.sh-t{font-size:20px;font-weight:700;color:' + C.gulf + '}',
+      '.sh-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px 24px;margin:16px 0}.sh-grid h4{margin:0 0 3px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#5b6772}.sh-grid p{margin:0;white-space:pre-line}',
+      '.sheet table{width:100%;border-collapse:collapse;margin:8px 0}.sheet th{text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#5b6772;border-bottom:1px solid #ddd;padding:6px 0}',
+      '.sheet th:last-child,.sheet td:last-child{text-align:right;white-space:nowrap}.sheet td{font-size:13px}.sheet td,.sheet th{padding:6px 10px 6px 0}.sheet td{border-bottom:1px solid #f0ebe3}.sheet tr.tot td{font-weight:700;border-bottom:2px solid ' + INK + '}',
+      '.sh-iva{font-weight:400;color:#5b6772;font-size:11px}.sh-m{color:#5b6772}.sheet .due{display:flex;justify-content:space-between;background:#fdf1e1;border-radius:8px;padding:8px 11px;font-weight:700;color:#7a4b00}.sheet .due.zero{background:#dcf6f5;color:' + C.gulf + '}',
+      '.sh-fine{margin-top:14px;font-size:11px;color:#5b6772}.sh-fine p{margin:0 0 4px}.sh-foot{margin-top:14px;padding-top:8px;border-top:1px solid #ddd;display:flex;justify-content:space-between;font-size:11px;color:#5b6772}',
+      '@media print{@page{margin:14mm}body *{visibility:hidden}.vr .print-only,.vr .print-only *{visibility:visible}.vr .print-only{display:block;position:absolute;left:0;top:0;width:100%}}',
       '.vr-foot p{margin:0;color:#5b6772;font-size:15px}.vr-foot a{display:inline-block;margin-top:4px;color:' + C.pacific + ';font-weight:600;text-decoration:none;font-size:17px}'
     ].join('');
     document.head.appendChild(s);
@@ -194,7 +223,7 @@
   }
   function load() {
     Promise.all([get(), getRq()]).then(function (both) {
-      var r = both[0]; rq = both[1] && both[1].ok && both[1].request ? both[1] : null;
+      var r = both[0]; rq = both[1] && both[1].ok && both[1].request ? both[1] : null; rcpt = both[1] && both[1].ok && both[1].receipt ? both[1].receipt : null;
       inv = r && r.ok && r.inv;
       if (!inv || !inv.fields) return fail();
       bank = r.bank || {};
@@ -205,6 +234,7 @@
       footer();
       // Coming back from Stripe: the payment webhook can lag a few seconds behind the redirect.
       if (JUST_PAID && !depositPaid() && tries < (rq && rq.bookNow ? 12 : 6) && !(rq && rq.status === 'Unavailable')) { tries++; setTimeout(load, 4000); }
+      else if (JUST_PAID && balanceJustPaid() && tries < 8) { tries++; setTimeout(load, 4000); }
       purchased();
     }, fail);
   }
@@ -252,10 +282,13 @@
 
     if (paid) root.appendChild(h('p', { class: 'msg ok', text: st === 'Paid in full' ? L.paidFull : L.paidDeposit }));
     if (paid) { var cap = captainCard(); if (cap) root.appendChild(cap); }
+    if (paid && JUST_PAID && balanceJustPaid()) root.appendChild(h('p', { class: 'msg ok', text: L.confirming }));
     root.appendChild(tripCard());
-    root.appendChild(moneyCard(paid));
+    if (paid && rcpt) { root.appendChild(receiptCard()); var pb = balanceCard(); if (pb) root.appendChild(pb); }
+    else root.appendChild(moneyCard(paid));
     if (!paid && !JUST_PAID) root.appendChild(payCard());
     root.appendChild(termsCard());
+    if (paid && rcpt) root.appendChild(printSheet());
     root.appendChild(h('a', { class: 'btn sec', href: wa(waNum(), L.questionsMsg + (x['Invoice number'] || '')) }, [L.questions]));
   }
 
@@ -384,7 +417,14 @@
     });
     m.appendChild(h('div', { class: 'money total' }, [h('span', { text: paid ? L.paid : L.qTotal }), h('b', { text: money(amount) })]));
     m.appendChild(h('p', { class: 'iva', text: L.iva }));
+    if (paid && rcpt && rcpt.payments.length) {
+      m.appendChild(h('p', { class: 'sec-t', text: L.payments }));
+      rcpt.payments.forEach(function (p) { m.appendChild(h('div', { class: 'money' }, [h('span', null, [L.paymentL, h('small', { text: payDesc(p) })]), h('b', { text: money(p.amount) })])); });
+      m.appendChild(pdfBtn());
+      m.appendChild(h('p', { class: 'fine', text: L.notFactura }));
+    }
     root.appendChild(m);
+    if (paid && rcpt) root.appendChild(printSheet());
     if (!paid && !JUST_PAID) {
       var card = h('div', { class: 'card pay-card' });
       card.appendChild(h('h2', { text: L.qPay + ' · ' + money(amount) }));
@@ -401,6 +441,121 @@
       root.appendChild(card);
     }
     root.appendChild(h('a', { class: 'btn sec', href: wa(waNum(), L.qQuestionsMsg + num) }, [L.questions]));
+  }
+
+  // ---- Receipt (Nov 5, 2026): payments, extras/changes/discounts, balance, Save as PDF. Data: vamos-requests /status. ----
+  function balanceJustPaid() { return rcpt && rcpt.balance > 0 && !rcpt.ownerCollects && !isQuick(); }
+  function shortDate(iso) {
+    if (!iso) return '';
+    var d = new Date(String(iso).slice(0, 10) + 'T12:00:00Z');
+    return d.toLocaleDateString(lang === 'es' ? 'es-MX' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+  }
+  function cardText(pw) {
+    var s = String(pw || '').trim();
+    if (!s) return '';
+    var mm = s.match(/^([a-z_ ]*?)\s*(\d{4})$/i);
+    if (mm) return cap(mm[1].replace(/_/g, ' ')) + ' ···· ' + mm[2];
+    var last = s.split(/\s+/).pop();
+    return /^(visa|master|mastercard|amex|debvisa|debmaster)$/i.test(last) ? cap(last.replace(/^deb/i, '')) : '';
+  }
+  function cap(w) { w = String(w || '').trim(); return w ? w.charAt(0).toUpperCase() + w.slice(1) : ''; }
+  function payDesc(p) { return [shortDate(p.on), cardText(p.paidWith) || L.m[p.method] || p.method].filter(Boolean).join(' · '); }
+  function payLabel(p, i) {
+    if (isQuick()) return L.paymentL;
+    var dep = Number(f().Deposit) || 0;
+    return i === 0 && Math.abs(p.amount - dep) < 1 ? L.depositL : (i === rcpt.payments.length - 1 && rcpt.balance <= 0 ? L.balanceL : L.paymentL);
+  }
+  function itemLines() {
+    var x = f(), out = [];
+    out.push([x.Trip || L.tripL, [x.Guests ? x.Guests + ' ' + L.guests : '', x.Duration].filter(Boolean).join(' · '), rcpt.original]);
+    (rcpt.adjustments || []).forEach(function (a) { out.push([a.d, a.on ? shortDate(a.on) : '', Number(a.a)]); });
+    return out;
+  }
+  function pdfBtn() {
+    return h('button', { class: 'btn pdf no-print', type: 'button', onclick: function () { window.print(); } }, ['⤓ ' + L.pdf]);
+  }
+  function balRow() {
+    var b = rcpt.balance;
+    if (b <= 0) return h('div', { class: 'due zero' }, [h('span', { text: L.balanceZero }), h('span', { text: money(0) })]);
+    return h('div', { class: 'due' }, [h('span', { text: (rcpt.ownerCollects ? L.balanceOwner : L.balanceLeft + ' · ' + L.balanceWhen) }), h('span', { text: money(b) })]);
+  }
+  function receiptCard() {
+    var c = h('div', { class: 'card money-card rc' });
+    c.appendChild(h('h2', { class: 'rc-h' }, [L.rcpt, h('span', { text: rcpt.number })]));
+    itemLines().forEach(function (l) {
+      c.appendChild(h('div', { class: 'money' }, [h('span', null, [l[0], l[1] ? h('small', { text: l[1] }) : null]), h('b', { text: (l[2] < 0 ? '−' : '') + money(Math.abs(l[2])) })]));
+    });
+    c.appendChild(h('div', { class: 'money total' }, [h('span', { text: L.total }), h('b', { text: money(rcpt.total) })]));
+    c.appendChild(h('p', { class: 'iva', text: L.iva }));
+    if (rcpt.payments.length) {
+      c.appendChild(h('p', { class: 'sec-t', text: L.payments }));
+      rcpt.payments.forEach(function (p, i) {
+        c.appendChild(h('div', { class: 'money paidrow' }, [h('span', null, [payLabel(p, i), h('small', { text: payDesc(p) })]), h('b', { text: '−' + money(p.amount) })]));
+      });
+    }
+    c.appendChild(balRow());
+    c.appendChild(pdfBtn());
+    c.appendChild(h('p', { class: 'fine', text: L.notFactura }));
+    return c;
+  }
+  // Pay the balance before the trip: card (Stripe Checkout made by vamos-requests) or transfer. Cash on board also works.
+  function balanceCard() {
+    if (!rcpt || !rcpt.balanceCard || JUST_PAID) return null;
+    var x = f(), num = x['Invoice number'] || '', b = rcpt.balance;
+    var card = h('div', { class: 'card pay-card no-print' });
+    card.appendChild(h('h2', { text: L.payBal + ' · ' + money(b) }));
+    var btn = h('button', { class: 'btn pri', type: 'button', onclick: function () {
+      btn.disabled = true; btn.textContent = '…';
+      fetch(RQ_API + '/pay-balance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ t: TOKEN }) })
+        .then(function (r) { return r.json(); })
+        .then(function (j) { if (j && j.ok && j.url) location.href = j.url; else throw new Error('x'); })
+        .catch(function () { btn.disabled = false; btn.textContent = L.payBalCard + ' · ' + money(b); card.appendChild(h('p', { class: 'msg warn', style: 'margin:12px 0 0', text: L.payErr })); });
+    } }, [L.payBalCard + ' · ' + money(b)]);
+    card.appendChild(btn);
+    if (bank.CLABE) {
+      card.appendChild(h('p', { class: 'or', text: L.orTransfer }));
+      [[L.bank, bank.Bank], [L.holder, bank['Account holder']], [L.clabe, bank.CLABE, true], [L.ref, num, true], [L.amount, money(b)]].forEach(function (r) {
+        if (!r[1]) return;
+        card.appendChild(h('div', { class: 'kv' }, [h('div', null, [h('span', { text: r[0] }), h('b', { text: r[1] })]), r[2] ? copyBtn(String(r[1]).replace(/\s/g, '')) : null]));
+      });
+      card.appendChild(h('a', { class: 'btn wa', href: wa(waNum(), L.balReceipt + num) }, [L.receipt]));
+    }
+    card.appendChild(h('p', { class: 'muted', style: 'font-size:14px;margin-top:10px', text: L.payBalNote }));
+    return card;
+  }
+  // The one-page receipt that "Save as PDF" prints (hidden on screen).
+  function printSheet() {
+    var x = f(), gm = x['Business line'] === 'Good Medicine direct';
+    var last = rcpt.payments.length ? rcpt.payments[rcpt.payments.length - 1].on : '';
+    var s = h('div', { class: 'sheet print-only' });
+    s.appendChild(h('div', { class: 'sh-top' }, [
+      h('div', null, [gm ? h('img', { class: 'sh-gm', src: GM_LOGO, alt: 'Good Medicine La Paz Charters' }) : h('img', { class: 'sh-logo', src: LOGO, alt: 'Vamos a La Paz' }),
+        gm ? h('div', { class: 'sh-via' }, [L.via + ' ', h('img', { src: LOGO, alt: 'Vamos a La Paz' })]) : null]),
+      h('div', { class: 'sh-r' }, [h('div', { class: 'sh-t', text: L.rcptTitle }), h('div', { text: rcpt.number }), last ? h('div', { text: L.issued + ': ' + shortDate(last) }) : null])
+    ]));
+    var stripe = h('div', { class: 'vr-stripe' }); [C.aqua, C.pacific, C.lima, C.gold, C.orange, BRAND].forEach(function (c) { stripe.appendChild(h('i', { style: 'background:' + c })); });
+    s.appendChild(stripe);
+    var dates = isQuick() ? '' : day(x['Trip date']) + (x['End date'] && x['End date'] > x['Trip date'] ? ' – ' + day(x['End date']) : '');
+    s.appendChild(h('div', { class: 'sh-grid' }, [
+      h('div', null, [h('h4', { text: L.billed }), h('p', { text: [x['Billed to'], x.Phone].filter(Boolean).join('\n') })]),
+      h('div', null, [h('h4', { text: L.operated }), h('p', { text: gm ? 'Good Medicine La Paz Charters' : (x.Provider || 'Vamos a La Paz') })]),
+      isQuick() ? null : h('div', null, [h('h4', { text: L.tripL }), h('p', { text: [x.Trip, dates, x.Guests ? x.Guests + ' ' + L.guests : ''].filter(Boolean).join('\n') })]),
+      !isQuick() && x['Meeting point'] ? h('div', null, [h('h4', { text: L.meet }), h('p', { text: [x['Meeting point'], x['Meeting time']].filter(Boolean).join(', ') })]) : null
+    ]));
+    var t1 = h('table', null, [h('tr', null, [h('th', { text: L.descL }), h('th', { text: L.amtL })])]);
+    var lines = isQuick() ? (function () { var li = []; try { li = JSON.parse(x['Line items'] || '[]'); } catch (e) {} return Array.isArray(li) && li.length > 1 ? li.map(function (l) { return [l.d, '', Number(l.a)]; }) : [[x.Trip || L.paymentL, '', rcpt.total]]; })() : itemLines();
+    lines.forEach(function (l) { t1.appendChild(h('tr', null, [h('td', { text: l[0] }), h('td', { text: (l[2] < 0 ? '−' : '') + money(Math.abs(l[2])) })])); });
+    t1.appendChild(h('tr', { class: 'tot' }, [h('td', null, [L.total + ' ', h('span', { class: 'sh-iva', text: '(' + L.iva + ')' })]), h('td', { text: money(rcpt.total) })]));
+    s.appendChild(t1);
+    if (rcpt.payments.length) {
+      var t2 = h('table', null, [h('tr', null, [h('th', { text: L.payments }), h('th', { text: L.whenHow }), h('th', { text: L.amtL })])]);
+      rcpt.payments.forEach(function (p, i) { t2.appendChild(h('tr', null, [h('td', { text: payLabel(p, i) }), h('td', { class: 'sh-m', text: payDesc(p) }), h('td', { text: money(p.amount) })])); });
+      s.appendChild(t2);
+    }
+    s.appendChild(balRow());
+    s.appendChild(h('div', { class: 'sh-fine' }, [isQuick() ? null : h('p', { text: L.cancel + ': ' + (x['Cancellation policy'] || '') }), h('p', { text: L.notFactura })]));
+    s.appendChild(h('div', { class: 'sh-foot' }, [h('span', { text: 'Vamos a La Paz' }), h('span', { text: 'WhatsApp +' + waNum() + ' · vamosalapaz.com' })]));
+    return s;
   }
 
   function tripCard() {

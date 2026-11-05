@@ -55,7 +55,13 @@
   var HOOK_ACTIONS = 'https://hook.us2.make.com/f4uho6gwh1mu94gu4b4y5kbb86if4prm';
   var HOOK_MP = 'https://hook.us2.make.com/zs62953sn02kxysp9i19cc9ettav3ihf';      // makes Mercado Pago links
   var HOOK_MP_PAY = 'https://hook.us2.make.com/2j7cqnppew2crvf4u06ixez1jzmboq05';  // Mercado Pago payment notifications
-  var HOOK_EXTRAS = 'https://hook.us2.make.com/6liy9ne4gixy48wc5d7ev7uhxtx6v0k6';  // line items, Bókun ID, receipt sent
+  var HOOK_EXTRAS = 'https://hook.us2.make.com/6liy9ne4gixy48wc5d7ev7uhxtx6v0k6';
+  var RQ_API = 'https://vamos-requests.solitary-wind-dfb8.workers.dev'; // Nov 5, 2026: Adjust (extras/changes/discounts), cash discount
+  function postJson(path, body) {
+    return fetch(RQ_API + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(function (r) {
+      return r.json().catch(function () { return { ok: false, error: 'server' }; });
+    }).then(function (j) { if (!j || !j.ok) throw new Error((j && j.error && j.error.length > 12 ? j.error : 'Saving failed (' + ((j && j.error) || 'server') + '). Try again.')); return j; });
+  }  // line items, Bókun ID, receipt sent
   var SITE = 'https://vamosalapaz.com';
   var PINK = '#B51E66';           // Bugambilia
   var C = { navy: '#061A2E', foam: '#F3EFE6', aqua: '#00C6C0', pacific: '#156AB3', gulf: '#0B4F6C', lima: '#B5C62E', orange: '#E65A37', gold: '#F3B53F' };
@@ -367,6 +373,10 @@
       h('div', { id: 'vi-comwrap' }, [h('label', { for: 'vi-com', text: 'Your commission' }), h('input', { id: 'vi-com', type: 'number', inputmode: 'numeric', oninput: function () { recalc('com'); } })])
     ]));
     mon.appendChild(h('div', { class: 'hint', id: 'vi-split' }));
+    if (!edit) mon.appendChild(h('div', { class: 'row' }, [
+      h('div', null, [h('label', { for: 'vi-prepaid', text: 'Deposit already paid?' }), sel('vi-prepaid', ['No', 'Cash', 'Bank transfer', 'Other'], 'No')]),
+      h('div', null, [h('label', { for: 'vi-prepaidamt', text: 'Amount received (blank = the deposit)' }), h('input', { id: 'vi-prepaidamt', type: 'number', inputmode: 'numeric' })])
+    ]));
     form.appendChild(mon);
 
     // meeting + notes
@@ -851,6 +861,14 @@
         ownerBalance: v.price - v.dep, boat: boatName, leadGuest: first(v.name), noteToOwner: v.onote
       });
     }).then(function (r) {
+      // Deposit taken before the booking was made (cash or transfer): record it straight away (calendar, ledger, receipt).
+      var pre = !ed && $('#vi-prepaid') ? $('#vi-prepaid').value : 'No';
+      if (pre && pre !== 'No') {
+        var preAmt = Number($('#vi-prepaidamt').value) || v.dep;
+        return post(HOOK_ACTIONS, { k: KEY, action: 'pay', id: r.id, number: r.number, amount: preAmt, method: pre, date: today(), notes: 'Deposit (paid before the booking was created)' }).then(function () { return r; });
+      }
+      return r;
+    }).then(function (r) {
       var id = ed ? ed.inv.id : r.id;
       history.replaceState(null, '', location.pathname + '?k=' + encodeURIComponent(KEY) + '&invoice=' + id);
       root.innerHTML = ''; root.appendChild(h('p', { class: 'sub', text: (ed ? 'Saved. ' : 'Created ' + r.number + '. ') + 'Loading…' }));
@@ -876,7 +894,7 @@
     var d = state.data, f = inv.fields, conf = activeConf();
     var cf = conf ? conf.fields : {};
     var price = n(f['Trip price']), dep = n(f.Deposit), got = n(f['Amount paid']), com = n(f.Commission);
-    var depPaid = dep > 0 && got >= dep, cancelled = !!f['Cancelled at'], ownerFlow = f['Balance collected by'] === 'Owner';
+    var depPaid = dep > 0 && got >= dep, cancelled = !!f['Cancelled at'], ownerFlow = f['Balance collected by'] === 'Owner' && f['Business line'] !== 'Good Medicine direct' && !/good medicine/i.test(f.Provider || '');
     var ownerName = first(cf['Owner name']) || 'the owner';
     root.innerHTML = '';
     root.appendChild(h('p', { class: 'sub', text: (f['Invoice number'] || '') + ' · ' + (f['Billed to'] || '') + ' · ' + (f.Status || '') }));
@@ -958,6 +976,10 @@
      ['Meeting', [f['Meeting point'], f['Meeting time']].filter(Boolean).join(', ') || 'not set'], ['Language', f.Language || ''], ['Status', f.Status || '']]
       .filter(Boolean).forEach(function (kv) { sum.appendChild(h('div', { class: 'kv' }, [h('span', { text: kv[0] }), h('span', { text: kv[1] })])); });
     if (f['Reschedule log']) sum.appendChild(h('div', { class: 'hint', style: 'white-space:pre-line;margin-top:8px', text: 'Date changes:\n' + f['Reschedule log'] }));
+    var adj = []; try { adj = JSON.parse(f.Adjustments || '[]'); } catch (e) { adj = []; }
+    if (adj.length) sum.appendChild(h('div', { class: 'hint', style: 'white-space:pre-line;margin-top:8px', text: 'Price changes (on the receipt):\n' + adj.map(function (x) { return shortDay(x.on) + ' · ' + x.d + ' · ' + (x.a < 0 ? '−' : '+') + money(Math.abs(x.a)); }).join('\n') }));
+    var adjBox = h('div');
+    if (!cancelled) { sum.appendChild(h('button', { class: 'btn sec', type: 'button', style: 'margin-top:10px', onclick: function () { adjustForm(inv, adjBox); } }, ['Adjust price (extra, change, discount)'])); sum.appendChild(adjBox); }
     root.appendChild(sum);
     var rBox = h('div');
     if (!cancelled) root.appendChild(h('button', { class: 'btn sec', type: 'button', onclick: function () { rescheduleForm(inv, conf, rBox); } }, ['Reschedule']));
@@ -1216,13 +1238,42 @@
     box.appendChild(wrap);
   }
   function field(label, input) { return h('div', null, [h('label', { text: label }), input]); }
+  // Cash can carry a discount (Nov 5, 2026): default 10% off what's paid in cash. "Amount" is then the part of the bill the
+  // cash covers; the customer hands over that minus the discount, and the discount is added to the booking as a line.
   function payForm(inv, box, amount, what) {
     var a = h('input', { type: 'number', inputmode: 'numeric', value: amount || '' }), m = sel('vi-pm', ['Bank transfer', 'Cash', 'Other'], 'Bank transfer');
     var dt = h('input', { type: 'date', value: today() }), nt = h('input', { placeholder: 'Reference or note (optional)' });
-    formShell(box, what + ' received', [h('div', { class: 'row' }, [field('Amount', a), field('How', m)]), field('Date', dt), field('Note', nt)], 'Save payment', function () {
+    var pct = h('input', { type: 'number', inputmode: 'decimal', value: '10', min: '0', max: '50' }), out = h('div', { class: 'hint' });
+    var cashRow = h('div', { style: 'display:none' }, [field('Cash discount %', pct), out]);
+    var aLabel = h('label', { text: 'Amount' });
+    function upd() {
+      var cash = m.value === 'Cash'; cashRow.style.display = cash ? '' : 'none';
+      aLabel.textContent = cash ? 'Part of the bill paid in cash' : 'Amount';
+      var c = Number(a.value) || 0, d = Math.round(c * (Number(pct.value) || 0) / 100);
+      out.textContent = cash && d ? 'Collect ' + money(c - d) + ' in cash (' + money(d) + ' off). The discount is added to the booking.' : '';
+    }
+    [a, m, pct].forEach(function (el) { el.addEventListener('input', upd); el.addEventListener('change', upd); });
+    formShell(box, what + ' received', [h('div', { class: 'row' }, [h('div', null, [aLabel, a]), field('How', m)]), cashRow, field('Date', dt), field('Note', nt)], 'Save payment', function () {
       if (!(Number(a.value) > 0)) throw new Error('Enter the amount.');
+      var p = m.value === 'Cash' ? Number(pct.value) || 0 : 0;
+      if (p > 0) return postJson('/admin/pay', { k: KEY, id: inv.id, covered: Number(a.value), pct: p, method: 'Cash', date: dt.value, what: what, note: nt.value })
+        .then(function (j) { return reload(inv, 'Saved: ' + money(j.amount) + ' cash, ' + money(j.discount) + ' discount.'); });
       return post(HOOK_ACTIONS, { k: KEY, action: 'pay', id: inv.id, number: inv.fields['Invoice number'], amount: a.value, method: m.value, date: dt.value, notes: what + (nt.value ? ' · ' + nt.value : '') })
         .then(function () { return reload(inv, 'Saved.'); });
+    });
+    upd();
+  }
+  // Adjust: an extra (upgraded menu), a change (9 → 8 hours) or a discount. Changes the total and the balance due.
+  function adjustForm(inv, box) {
+    var kind = sel('vi-adjk', ['Add (extra)', 'Subtract (change or discount)'], 'Add (extra)');
+    var d = h('input', { placeholder: 'e.g. Menú mejorado, 10 personas / Cambio a 8 horas' }), a = h('input', { type: 'number', inputmode: 'numeric', placeholder: 'Amount' });
+    var es = inv.fields.Language !== 'English';
+    formShell(box, 'Adjust the price', [field('Type', kind), field('Description (the customer sees it' + (es ? ', in Spanish' : '') + ')', d), field('Amount (MXN)', a)], 'Save', function () {
+      var amt = Math.abs(Math.round(Number(a.value) || 0));
+      if (!d.value.trim() || !amt) throw new Error('Enter a description and an amount.');
+      var minus = kind.value.indexOf('Subtract') === 0;
+      return postJson('/admin/adjust', { k: KEY, id: inv.id, d: d.value.trim(), a: minus ? -amt : amt, t: minus ? (/desc|discount/i.test(d.value) ? 'discount' : 'change') : 'extra' })
+        .then(function (j) { return reload(inv, 'Saved. New total ' + money(j.price) + (j.overpaid ? '; the customer has paid ' + money(j.overpaid) + ' more than the total, refund it' : '') + '.'); });
     });
   }
   function transferForm(inv, box, amount, type) {
