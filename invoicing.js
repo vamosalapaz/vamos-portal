@@ -1238,13 +1238,13 @@
     box.appendChild(wrap);
   }
   function field(label, input) { return h('div', null, [h('label', { text: label }), input]); }
-  // Cash can carry a discount (Nov 5, 2026): default 10% off what's paid in cash. "Amount" is then the part of the bill the
+  // Cash can carry a discount (Nov 5, 2026), the exception, not the default: blank = none; enter e.g. 10 for 10% off what's paid in cash. "Amount" is then the part of the bill the
   // cash covers; the customer hands over that minus the discount, and the discount is added to the booking as a line.
   function payForm(inv, box, amount, what) {
     var a = h('input', { type: 'number', inputmode: 'numeric', value: amount || '' }), m = sel('vi-pm', ['Bank transfer', 'Cash', 'Other'], 'Bank transfer');
     var dt = h('input', { type: 'date', value: today() }), nt = h('input', { placeholder: 'Reference or note (optional)' });
-    var pct = h('input', { type: 'number', inputmode: 'decimal', value: '10', min: '0', max: '50' }), out = h('div', { class: 'hint' });
-    var cashRow = h('div', { style: 'display:none' }, [field('Cash discount %', pct), out]);
+    var pct = h('input', { type: 'number', inputmode: 'decimal', value: '', placeholder: '0 (e.g. 10 if you offered it)', min: '0', max: '50' }), out = h('div', { class: 'hint' });
+    var cashRow = h('div', { style: 'display:none' }, [field('Cash discount % (only if you offered one)', pct), out]);
     var aLabel = h('label', { text: 'Amount' });
     function upd() {
       var cash = m.value === 'Cash'; cashRow.style.display = cash ? '' : 'none';
