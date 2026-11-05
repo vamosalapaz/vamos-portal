@@ -39,7 +39,7 @@
       calPick: function (d) { return 'Reservar · ' + d; }, calErr: 'No pudimos cargar el calendario. Escríbenos por WhatsApp para reservar.',
       dep: function (p) { return 'Depósito a pagar hoy (' + p + '%)'; }, depG: 'Depósito a pagar hoy', bal: 'Saldo, se paga el día del viaje',
       h1: 'Pagas el depósito con tarjeta en la página segura de Stripe.', h2: 'Tu fecha queda confirmada al instante y te mandamos tu reservación por WhatsApp.',
-      h3: 'El saldo se paga el día del viaje, antes de zarpar.', h4: '', go: 'Continuar al pago', nightsErr: 'Uno de los días de tu viaje ya está ocupado. Prueba otra fecha o menos noches.' },
+      h3: 'El saldo se paga el día del viaje, antes de zarpar.', h4: '', go: 'Continuar al pago', addT: 'Extras', addWa: 'Pregunta por WhatsApp', addLine: 'Menú mejorado y otros extras: agrégalos después de reservar, por WhatsApp.', nightsErr: 'Uno de los días de tu viaje ya está ocupado. Prueba otra fecha o menos noches.' },
   } : {
     req: 'Request to book', cardT: 'Book directly with the owner', reqHelp: 'We hold a 20% deposit on your card, not charged. The owner confirms within 6 hours, or the hold is released. You can cancel your hold at any time.',
     reqHelpN: function (p) { return 'We hold a ' + p + '% deposit on your card, not charged. The owner confirms within 6 hours, or the hold is released. You can cancel your hold at any time.'; },
@@ -66,7 +66,7 @@
       calPick: function (d) { return 'Book now · ' + d; }, calErr: "Couldn't load the calendar. Message us on WhatsApp to book.",
       dep: function (p) { return 'Deposit due today (' + p + '%)'; }, depG: 'Deposit due today', bal: 'Balance, paid on the day of your trip',
       h1: "You pay the deposit by card on Stripe's secure page.", h2: 'Your date is confirmed instantly and we send your booking on WhatsApp.',
-      h3: 'The balance is paid on the day, before departure.', h4: '', go: 'Continue to payment', nightsErr: 'One of the days of your trip is already booked. Try another date or fewer nights.' },
+      h3: 'The balance is paid on the day, before departure.', h4: '', go: 'Continue to payment', addT: 'Extras', addWa: 'Ask on WhatsApp', addLine: 'Upgraded menu and other extras: add them after booking on WhatsApp.', nightsErr: 'One of the days of your trip is already booked. Try another date or fewer nights.' },
   };
   // Book Now offers set to "Preview" only show with ?booknow=1 (remembered for the visit).
   var PREVIEW = false;
@@ -186,6 +186,7 @@
       '.vlp-rq .st i{flex:none;width:24px;height:24px;border-radius:999px;background:' + PINK + ';color:#fff;font-style:normal;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center}',
       '.vlp-rq .go{width:100%;min-height:52px;font-size:16px;font-weight:700;margin-top:8px}.vlp-rq .go[disabled]{opacity:.6}',
       '.vlp-rq .foot{font-size:13px;color:' + MUTED + ';text-align:center;line-height:1.4;margin:10px 0 0}.vlp-rq .foot a{color:' + PINK + ';font-weight:600}',
+      '.vlp-rq .add{border:1px dashed #C9C1AE;border-radius:12px;padding:12px 14px;font-size:14px;line-height:1.45;color:' + MUTED + ';margin:0 0 16px}.vlp-rq .add b{display:block;color:' + INK + ';font-size:15px;margin:0 0 4px}.vlp-rq .add a{color:' + PINK + ';font-weight:600}',
       '.vlp-rq .err{background:#FDE8EC;color:#8A1C33;border-radius:10px;padding:10px 12px;font-size:14px;margin:0 0 12px}',
       '.vlp-cal{background:#fff;border:1px solid ' + LINE + ';border-radius:12px;padding:10px 10px 8px;max-width:360px;font-family:"DM Sans",system-ui,sans-serif;color:' + INK + '}',
       '.vlp-cal .hd{display:flex;align-items:center;justify-content:space-between;margin:0 0 6px}.vlp-cal .hd strong{font-size:16px}',
@@ -237,6 +238,7 @@
     var waHintEl = el('span', { class: 'hint', text: T.waHint }), noteLblText = document.createTextNode(T.note);
     var h1El = el('span', { text: T.h1 }), h2El = el('span', { text: T.h2 }), h3El = el('span', { text: T.h3 }), h4El = el('p', { class: 'hint', style: 'font-size:13px;color:' + MUTED + ';margin:0 0 8px', text: T.h4 });
     var sum = el('div', { class: 'sum' });
+    var addBox = el('div', { class: 'add', style: 'display:none' });
     var dateLbl = el('label', null, [T.date, dateIn]);
     var calSlot = el('div');
     var err = el('div');
@@ -249,7 +251,7 @@
       el('label', null, [T.name, nameIn]),
       el('label', null, [T.wa, phoneIn, waHintEl]),
       el('label', null, [noteLblText, noteIn]),
-      sum,
+      sum, addBox,
       el('h3', { text: T.how }),
       el('div', { class: 'st' }, [el('i', { text: '1' }), h1El]),
       el('div', { class: 'st' }, [el('i', { text: '2' }), h2El]),
@@ -282,7 +284,12 @@
         calSlot.appendChild(el('label', { style: 'margin:0 0 6px' }, [T.date]));
         calSlot.appendChild(calWidget(cal, dateIn.value, function (iso) { dateIn.value = iso; calc(); }));
       });
-      quote(cur.id).then(function (j) { if (j && j.ok) { q = j; if (isBN(cur)) h4El.textContent = ES ? j.cancellation || '' : j.cancellationEn || ''; calc(); } else { q = null; err.innerHTML = ''; err.appendChild(el('p', { class: 'err', text: T.errs.not_available })); go.disabled = true; } });
+      quote(cur.id).then(function (j) { if (j && j.ok) { q = j; if (isBN(cur)) h4El.textContent = ES ? j.cancellation || '' : j.cancellationEn || '';
+        // Book Now: extras (upgraded menu…) are added afterwards on WhatsApp.
+        var add = isBN(cur) ? (ES ? j.addOnsEs : j.addOns) : '';
+        addBox.innerHTML = ''; addBox.style.display = add ? '' : 'none';
+        if (add) { addBox.appendChild(el('b', { text: T.bn.addT })); addBox.appendChild(el('span', { text: add + ' ' })); addBox.appendChild(el('a', { class: 'whatsapp-link', 'data-wa-source': 'request-addons', target: '_blank', rel: 'noopener', href: waHref(T.waMsg(ES ? cur.nameEs : cur.name, '', '')), text: T.bn.addWa })); }
+        calc(); } else { q = null; err.innerHTML = ''; err.appendChild(el('p', { class: 'err', text: T.errs.not_available })); go.disabled = true; } });
     }
     function calc() {
       if (!q) return;
@@ -366,6 +373,7 @@
         card.insertBefore(calWidget(cal, want, pick), topBtn);
         if (want) pick(want);
       });
+      quote(bySlug[m[1]].id).then(function (j) { if (j && j.ok && isBN(me) && (j.addOns || j.addOnsEs)) card.firstChild.appendChild(el('span', { class: 'vlp-rq-help', style: 'margin-top:6px', text: T.bn.addLine })); });
       quote(bySlug[m[1]].id).then(function (j) { if (j && j.ok && j.depositFixed) [].forEach.call(document.querySelectorAll('.vlp-rq-help'), function (h) { if (h.textContent === T.reqHelp) h.textContent = T.reqHelpG; }); });
     }
     // Bottom: outlined button above the WhatsApp button.
