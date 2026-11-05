@@ -18,8 +18,9 @@
         decides (deposit held, deadline, Cancel my request) and a clear message if it was declined, expired or
         cancelled. State comes from the vamos-requests Worker (/status, /cancel). Accepted requests show the normal page.
    v53: Book Now (Nov 5, 2026): back from Stripe the page shows "confirming" until the booking is "Booked", a date taken during
-        payment shows "Someone just booked that date", and a confirmed booking pushes one "vamos_purchase" event (value = trip
-        price, transaction_id = booking number) for GA4 / Google Ads / Meta through GTM. */
+        payment shows "Someone just booked that date", and a confirmed booking pushes one GA4-style "purchase" event (value = trip
+        price, transaction_id = booking number, booking_source 'vamos') — the same event the Bókun widget sends, so the
+        existing GTM purchase tags (GA4 ecommerce, Google Ads booking, Meta Purchase) pick it up. */
 (function () {
   'use strict';
 
@@ -293,7 +294,7 @@
       (new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/Mazatlan' }) !== new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mazatlan' })
         ? ' (' + new Date(iso).toLocaleDateString(lang === 'en' ? 'en-US' : 'es-MX', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'America/Mazatlan' }) + ')' : '');
   }
-  // Ads and analytics: one "purchase" per booking, when a Book Now or request-to-book booking is confirmed (Nov 5, 2026).
+  // Ads and analytics: one GA4 "purchase" per booking, when a Book Now or request-to-book booking is confirmed (Nov 5, 2026).
   function purchased() {
     try {
       if (!rq || (rq.status !== 'Booked' && rq.status !== 'Accepted') || !depositPaid()) return;
@@ -301,7 +302,7 @@
       if (!id || localStorage.getItem('vlp-purchase-' + id)) return;
       localStorage.setItem('vlp-purchase-' + id, '1');
       (window.dataLayer = window.dataLayer || []).push({ ecommerce: null });
-      window.dataLayer.push({ event: 'vamos_purchase', booking_type: rq.bookNow ? 'book_now' : 'request_to_book',
+      window.dataLayer.push({ event: 'purchase', booking_source: 'vamos', booking_type: rq.bookNow ? 'book_now' : 'request_to_book',
         ecommerce: { transaction_id: id, value: Number(x['Trip price']) || 0, currency: 'MXN', deposit: Number(x.Deposit) || 0,
           items: [{ item_name: x.Trip || '', price: Number(x['Trip price']) || 0, quantity: 1 }] } });
     } catch (e) {}
