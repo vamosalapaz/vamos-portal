@@ -346,7 +346,8 @@
     var me = bySlug[m[1]];
     function mk(cls) { return el('button', { type: 'button', class: cls, 'data-vlp-request': m[1], 'data-vlp-date': p.get('date') || '', 'data-vlp-guests': p.get('guests') || '', text: tx(me, 'req') }); }
     // Book Now replaces the Bókun widget on this page (the widget stays in the CMS, so switching back is one field).
-    if (isBN(me)) [].forEach.call(document.querySelectorAll('.bokunWidget, .vlp-book-note'), function (w) { var box = w.closest('.w-embed') || w; box.style.display = 'none'; });
+    // (CSS rule, because Bókun's loader replaces its own element after we run.)
+    if (isBN(me)) { var hide = el('style', { text: '.offering-detail-widget-block,.bokunWidget,.vlp-book-note{display:none!important}' }); document.head.appendChild(hide); }
     // Top: card under the trip facts (duration, boat, capacity, price).
     var facts = document.querySelector('.offering-detail-facts-row');
     if (facts) {
