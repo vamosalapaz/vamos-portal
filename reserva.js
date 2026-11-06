@@ -327,10 +327,13 @@
       (new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/Mazatlan' }) !== new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mazatlan' })
         ? ' (' + new Date(iso).toLocaleDateString(lang === 'en' ? 'en-US' : 'es-MX', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'America/Mazatlan' }) + ')' : '');
   }
-  // Ads and analytics: one GA4 "purchase" per booking, when a Book Now or request-to-book booking is confirmed (Nov 5, 2026).
+  // Ads and analytics: one GA4 "purchase" per booking — Book Now when confirmed, request to book when the deposit is held (Nov 5, 2026).
   function purchased() {
     try {
-      if (!rq || (rq.status !== 'Booked' && rq.status !== 'Accepted') || !depositPaid()) return;
+      // Request to book counts when the card is held (Nov 5, 2026): the customer's serious attempt to book, and the only moment
+      // they're on the page. Acceptance later reuses the same booking number, so it isn't counted twice.
+      var held = rq && !rq.bookNow && rq.status === 'Waiting for owner';
+      if (!rq || (!held && ((rq.status !== 'Booked' && rq.status !== 'Accepted') || !depositPaid()))) return;
       var x = f(), id = x['Invoice number'] || '';
       if (!id || localStorage.getItem('vlp-purchase-' + id)) return;
       localStorage.setItem('vlp-purchase-' + id, '1');
