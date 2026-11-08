@@ -9,7 +9,9 @@
    tour type / booking), which keeps hiding cards with inline display:none; this script uses its own class.
    URL: /offerings?date=2026-11-21&guests=2[&after=10:00]  or  ?from=2026-11-19&to=2026-11-22&guests=4
    Home (/ and /es): adds the same date + guests box to the hero; it sends people to /offerings with those parameters.
-   v51: first release (Oct 29, 2026). v52 (Nov 4, 2026): whale shark landing copy for ?activity=swimming-with-the-whale-sharks. v53: date box on /activities/<slug> pages. */
+   v51: first release (Oct 29, 2026). v52 (Nov 4, 2026): whale shark landing copy for ?activity=swimming-with-the-whale-sharks. v53: date box on /activities/<slug> pages.
+   v54 (Nov 8, 2026): availability_results dataLayer event once results load (search_from, search_to, guests, search_page,
+   results = experiences shown as open, 0 = nothing available). availability_search itself is unchanged. */
 (function () {
   'use strict';
   var API = 'https://vamos-availability.solitary-wind-dfb8.workers.dev/search';
@@ -244,6 +246,17 @@
   function priceNum(s) { var m = /\$\s?([\d,]+(?:\.\d+)?)/.exec(s || ''); return m ? parseFloat(m[1].replace(/,/g, '')) : null; }
   function money(n) { return '$' + Math.round(n).toLocaleString('en-US') + ' MXN'; }
   function track(ev, params) { try { (window.dataLayer = window.dataLayer || []).push(Object.assign({ event: ev }, params || {})); } catch (e) {} }
+  // v54: home and activity boxes send people to /offerings before results exist; remember the search so the
+  // availability_results event there carries the right search_page. Arriving with a date otherwise counts as 'link'.
+  var ORIGIN_KEY = 'vlp_av_origin';
+  function rememberOrigin(q, page) { try { sessionStorage.setItem(ORIGIN_KEY, JSON.stringify({ from: q.from, to: q.to, guests: q.guests, page: page })); } catch (e) {} }
+  function takeOrigin(q) {
+    try {
+      var o = JSON.parse(sessionStorage.getItem(ORIGIN_KEY) || 'null'); sessionStorage.removeItem(ORIGIN_KEY);
+      if (o && o.from === q.from && o.to === q.to && +o.guests === +q.guests) return o.page;
+    } catch (e) {}
+    return 'link';
+  }
   function waLink(text, slug) {
     var src = '';
     try { src = sessionStorage.getItem('vlp_wa_src') || ''; } catch (e) {}
@@ -365,6 +378,7 @@
       home: true,
       onSearch: function (q) {
         track('availability_search', { search_from: q.from, search_to: q.to, guests: q.guests, search_page: 'home' });
+        rememberOrigin(q, 'home');
         var p = new URLSearchParams();
         if (q.from === q.to) p.set('date', q.from); else { p.set('from', q.from); p.set('to', q.to); }
         p.set('guests', q.guests);
@@ -395,6 +409,7 @@
       home: true,
       onSearch: function (q) {
         track('availability_search', { search_from: q.from, search_to: q.to, guests: q.guests, search_page: 'activity-' + actSlug });
+        rememberOrigin(q, 'activity-' + actSlug);
         var p = new URLSearchParams();
         p.set('activity', actSlug);
         if (q.from === q.to) p.set('date', q.from); else { p.set('from', q.from); p.set('to', q.to); }
@@ -418,6 +433,7 @@
   // ---------------------------------------------------------------- OFFERINGS
   var cards = [], grid, listWrap, box, sumEl, headEl, msgEl, moreEl, askEl;
   var data = null, q = null, showFull = false, pending = 0;
+  var resultsFor = null;   // v54: search_page label for the next availability_results event (set by each new search)
 
   function slugOf(item) {
     var a = item.querySelector('a.offering-card') || item.querySelector('a[href*="/offerings/"]');
@@ -436,7 +452,7 @@
 
     landingCopy();
     q = readQuery();
-    box = buildBox({ q: q, onSearch: function (nq) { q = nq; writeQuery(q); box._showClear(); track('availability_search', { search_from: q.from, search_to: q.to, guests: q.guests, search_page: 'offerings' }); showSummary(); run(); }, onClear: clearAll });
+    box = buildBox({ q: q, onSearch: function (nq) { q = nq; writeQuery(q); box._showClear(); track('availability_search', { search_from: q.from, search_to: q.to, guests: q.guests, search_page: 'offerings' }); resultsFor = 'offerings'; showSummary(); run(); }, onClear: clearAll });
     var root = document.querySelector('.offerings-filter-root');
     var chips = document.querySelector('[data-offerings-chips]');
     if (root && chips && chips.parentNode === root) root.insertBefore(box, chips); else listWrap.parentNode.insertBefore(box, listWrap);
@@ -462,7 +478,7 @@
     cards.forEach(function (c) { mo.observe(c.el, { attributes: true, attributeFilter: ['style'] }); });
     document.addEventListener('vlp-request-ready', function () { if (data) render(); });
 
-    if (q) { showSummary(); run(); }
+    if (q) { resultsFor = takeOrigin(q); showSummary(); run(); }
   }
 
   // Whale shark landing (v52, Nov 4 2026): /offerings?activity=swimming-with-the-whale-sharks (ads link here) gets its own
@@ -504,7 +520,7 @@
         q = { from: d, to: d, guests: q.guests, after: q.after };
         box._set(q); writeQuery(q);
         track('availability_search', { search_from: q.from, search_to: q.to, guests: q.guests, search_page: 'offerings-daynav' });
-        showSummary(); run();
+        resultsFor = 'offerings-daynav'; showSummary(); run();
       });
     });
     sumEl.querySelector('.vlp-av-edit').addEventListener('click', function () {
@@ -531,7 +547,7 @@
   }
 
   function clearAll() {
-    q = null; data = null; showFull = false; writeQuery(null);
+    q = null; data = null; showFull = false; resultsFor = null; writeQuery(null);
     if (sumEl) { sumEl.hidden = true; sumEl.innerHTML = ''; } box.hidden = false;
     document.body.classList.remove('vlp-av-on');
     cards.forEach(function (c) {
@@ -672,6 +688,12 @@
 
     renderAsk(ask);
 
+    // v54: once per search, after the first render (filter changes re-render without a new event)
+    if (resultsFor) {
+      track('availability_results', { search_from: q.from, search_to: q.to, guests: q.guests, search_page: resultsFor, results: open });
+      resultsFor = null;
+    }
+
     if (!open) renderNothing(); else if (!msgEl.classList.contains('vlp-av-warn')) msgEl.hidden = true;
   }
 
@@ -788,7 +810,7 @@
           q = { from: d, to: d, guests: q.guests, after: q.after };
           var fi = box.querySelector('[name=from]'); fi.value = d; fi.parentNode.classList.add('has-val');
           var fx = box.querySelector('[name=flex]'); fx.checked = false; box.querySelector('.vlp-av-tolbl').hidden = true;
-          writeQuery(q); run(); window.scrollTo({ top: box.getBoundingClientRect().top + window.pageYOffset - 120, behavior: 'smooth' });
+          writeQuery(q); resultsFor = 'offerings-nearby'; run(); window.scrollTo({ top: box.getBoundingClientRect().top + window.pageYOffset - 120, behavior: 'smooth' });
         });
       });
     }).catch(function () {});
