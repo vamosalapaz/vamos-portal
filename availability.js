@@ -515,8 +515,8 @@
       '.vlp-wc-btns{display:flex;gap:8px;flex-wrap:wrap}',
       '.vlp-wc-book{min-height:44px;display:inline-flex;align-items:center;background:#1D5FA8;color:#fff!important;border-radius:999px;padding:0 16px;font-size:15px;font-weight:600;text-decoration:none!important;white-space:nowrap}',
       '.vlp-wc-book:hover{background:#17508E}',
-      '.vlp-wc-row{display:flex;justify-content:space-between;align-items:center;gap:10px;border-top:1px solid #EFEAE0;padding-top:10px}',
-      '.vlp-wc-row>div{display:flex;flex-direction:column;gap:2px;min-width:0}.vlp-wc-row b{font-size:16px;font-weight:600}.vlp-wc-row small{font-size:14px;color:#46525C}',
+      '.vlp-wc-row{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 12px;border-top:1px solid #EFEAE0;padding-top:10px}',
+      '.vlp-wc-rt{display:flex;flex-direction:column;gap:2px;flex:1 1 200px;min-width:0}.vlp-wc-row b{font-size:16px;font-weight:600}.vlp-wc-row small{font-size:14px;color:#46525C}.vlp-wc-row .vlp-wc-btns{flex:0 0 auto}',
       '.vlp-wc-tsdb{background:#FFF4E0;border-radius:8px;padding:9px 12px;font-size:13px;color:#6A4300;line-height:1.35}',
       '.vlp-wc-card.up{background:#F4EFE6}.vlp-wc-card.up .vlp-wc-k{color:#B51E66}',
       '.vlp-wc-card.cb{background:#FFFBF3;border-color:#E8D3AE}.vlp-wc-card.cb .vlp-wc-k{color:#7A4A00}.vlp-wc-cbn{font-size:14px;color:#6A4300;line-height:1.4}',
@@ -689,8 +689,8 @@
           h += '<article class="vlp-wc-card"><span class="vlp-wc-k">' + esc(g.op) + ' · ' + esc(W.options(g.items.length)) + '</span>' +
             (tsdb ? '<div class="vlp-wc-tsdb">' + esc(T.tsdbNote) + '</div>' : '') +
             g.items.map(function (x) {
-              return '<div class="vlp-wc-row"><div><b>' + esc(nm(x.o)) + '</b><small>' + esc([x.o.price, unitLabel(x.o.unit)].filter(Boolean).join(' ')) + '</small></div>' +
-                '<div class="vlp-wc-btns" style="flex-direction:row;justify-content:flex-end">' + bookBtns(x.o, x.slots, d) + '</div></div>';
+              return '<div class="vlp-wc-row"><div class="vlp-wc-rt"><b>' + esc(nm(x.o)) + '</b><small>' + esc([x.o.price, unitLabel(x.o.unit)].filter(Boolean).join(' ')) + '</small></div>' +
+                '<div class="vlp-wc-btns">' + bookBtns(x.o, x.slots, d) + '</div></div>';
             }).join('') + '</article>';
         }
       });
