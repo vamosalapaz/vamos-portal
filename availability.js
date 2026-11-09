@@ -498,7 +498,7 @@
       '.vlp-wc-top{display:flex;align-items:center;justify-content:space-between;gap:8px}',
       '.vlp-wc-nav{width:44px;height:44px;flex:none;border:1px solid #E5DFD1;border-radius:999px;background:#fff;display:flex;align-items:center;justify-content:center;color:#17202A;cursor:pointer;padding:0}',
       '.vlp-wc-nav:disabled{color:#A3ABB2;cursor:default}',
-      '.vlp-wc-mo{font-size:17px;font-weight:700;text-transform:capitalize}',
+      '.vlp-wc-mo{font-size:17px;font-weight:700}',
       '.vlp-wc-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}',
       '.vlp-wc-wd{text-align:center;font-size:12px;font-weight:700;color:#46525C;padding:4px 0;text-transform:capitalize}',
       '.vlp-wc-c{height:54px;border:1px solid transparent;border-radius:8px;background:none;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:3px;padding:6px 0 0;font:inherit;font-size:15px;color:#46525C;cursor:pointer}',
@@ -671,7 +671,7 @@
 
     function drawGrid(loading) {
       gEl.textContent = T.guest(guests);
-      moEl.textContent = fmt(month + '-15', { month: 'long', year: 'numeric' });
+      moEl.textContent = fmt(month + '-15', { month: 'long', year: 'numeric' }).replace(/^./, function (x) { return x.toUpperCase(); });
       wrap.querySelector('[data-m="-1"]').disabled = month <= minMonth;
       wrap.querySelector('[data-m="1"]').disabled = month >= maxMonth;
       var first = month + '-01', last = monthEnd(month);
