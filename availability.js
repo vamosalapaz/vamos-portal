@@ -13,7 +13,7 @@
    v54 (Nov 8, 2026): availability_results dataLayer event once results load (search_from, search_to, guests, search_page,
    results = experiences shown as open, 0 = nothing available). availability_search itself is unchanged.
    v55 (Nov 8, 2026): /activities/swimming-with-the-whale-sharks gets a month calendar across all whale shark operators
-   (Worker route /month) instead of the date box, with "Notify me" for call-to-book departures (vamos-requests /waitlist). */
+   (Worker route /month) instead of the date box; call-to-book departures get an "Ask about this departure" WhatsApp button. */
 (function () {
   'use strict';
   var API = 'https://vamos-availability.solitary-wind-dfb8.workers.dev/search';
@@ -438,11 +438,10 @@
   // from the Worker's /month route. Each day shows how many operators have online space for the party (amber ring =
   // a departure listed as "call to book"). Picking a day lists the operators' trips with Book buttons to the offer page.
   // Good Medicine's Whale Shark After Hours shows only on days where another operator has online space and the boat is
-  // free, below their trips, as an upgrade. Call-to-book departures get "Notify me if it opens", which posts to
-  // vamos-requests /waitlist (Waitlist table); Peter is pinged when that departure becomes bookable online.
+  // free, below their trips, as an upgrade. Call-to-book departures get an "Ask about this departure" WhatsApp button
+  // (Nov 8: the automated Notify me / waitlist was rolled back until Peter learns how operators handle call-to-book trips).
   function initWhaleCalendar(hero) {
     var MONTH_API = API.replace(/\/search$/, '/month');
-    var REQ_API = 'https://vamos-requests.solitary-wind-dfb8.workers.dev';
     var W = ES ? {
       title: 'Qué operadores tienen lugar en tu día?', note: 'Todos los operadores de tiburón ballena con los que trabajamos, en vivo desde sus calendarios de reserva.',
       ops: function (n) { return n === 1 ? '1 operador con lugar' : n + ' operadores con lugar'; },
@@ -455,15 +454,9 @@
       book: 'Reservar', bookAt: function (t) { return 'Reservar ' + t; }, options: function (n) { return n + ' opciones'; },
       shared: 'COMPARTIDO', priv: 'PRIVADO', upgrade: 'MEJORA · HAZLO PRIVADO', upgradeNote: 'Solo tu grupo, en el catamarán privado de Good Medicine.',
       callNote: function (t) { return 'La salida de las ' + t + ' está publicada, pero todavía no se puede reservar en línea.'; },
-      notify: 'Avísame si se abre', noSpaceOthers: function (list) { return 'Sin lugar este día: ' + list + '.'; },
+      askDep: 'Preguntar por esta salida', waCall: function (op, what, t, d, g) { return 'Hola! Me interesa ' + what + ' con ' + op + ' a las ' + t + ' ' + d + ' para ' + T.guest(g) + '. Se puede reservar?'; }, noSpaceOthers: function (list) { return 'Sin lugar este día: ' + list + '.'; },
       waAsk: function (d, g) { return 'Hola! Busco un tour de tiburón ballena ' + d + ' para ' + T.guest(g) + '. Me pueden ayudar?'; },
-      waUp: function (d, g) { return 'Hola! Me interesa Whale Shark After Hours ' + d + ' para ' + T.guest(g) + '. Está disponible?'; },
-      nTitle: 'Te avisamos si se abre', nIntro: 'Te escribimos por WhatsApp en cuanto se pueda reservar, o si conseguimos lugar antes.',
-      nName: 'Tu nombre', nPhone: 'Número de WhatsApp', nCode: 'Código de país', nOthers: 'Avísenme también de otros tours de tiburón ballena ese día',
-      nSend: 'Avísame', nSending: 'Enviando…', close: 'Cerrar',
-      nDone: 'Listo, estás en la lista', nDoneNote: function (d) { return 'Te escribimos por WhatsApp sobre ' + d + '.'; },
-      nOpen: 'Buenas noticias: ya se puede reservar en línea.', nErr: 'No pudimos guardar tu solicitud. Escríbenos por WhatsApp y te ayudamos.',
-      nCheck: 'Revisa tu nombre y número de WhatsApp.'
+      waUp: function (d, g) { return 'Hola! Me interesa Whale Shark After Hours ' + d + ' para ' + T.guest(g) + '. Está disponible?'; }
     } : {
       title: 'Who has space on your day?', note: "All whale shark operators we work with, live from their booking calendars.",
       ops: function (n) { return n === 1 ? '1 operator with space' : n + ' operators with space'; },
@@ -476,15 +469,9 @@
       book: 'Book', bookAt: function (t) { return 'Book ' + t; }, options: function (n) { return n + ' options'; },
       shared: 'SHARED', priv: 'PRIVATE', upgrade: 'UPGRADE · MAKE IT PRIVATE', upgradeNote: "Just your group, on Good Medicine's private catamaran.",
       callNote: function (t) { return t + ' departure is listed but not open for online booking yet.'; },
-      notify: 'Notify me if it opens', noSpaceOthers: function (list) { return 'No space this day: ' + list + '.'; },
+      askDep: 'Ask about this departure', waCall: function (op, what, t, d, g) { return "Hi! I'm interested in " + what + ' with ' + op + ' at ' + t + ' ' + d + ' for ' + T.guest(g) + '. Can it be booked?'; }, noSpaceOthers: function (list) { return 'No space this day: ' + list + '.'; },
       waAsk: function (d, g) { return "Hi! I'm looking for a whale shark tour " + d + ' for ' + T.guest(g) + '. Can you help?'; },
-      waUp: function (d, g) { return "Hi! I'm interested in Whale Shark After Hours " + d + ' for ' + T.guest(g) + '. Is it available?'; },
-      nTitle: 'Get a message if this opens', nIntro: "We'll WhatsApp you as soon as it can be booked, or if we can get you a spot sooner.",
-      nName: 'Your name', nPhone: 'WhatsApp number', nCode: 'Country code', nOthers: 'Also tell me about other whale shark trips that day',
-      nSend: 'Notify me', nSending: 'Sending…', close: 'Close',
-      nDone: "You're on the list", nDoneNote: function (d) { return "We'll message you on WhatsApp about " + d + '.'; },
-      nOpen: 'Good news: it just opened for online booking.', nErr: "We couldn't save your request. Message us on WhatsApp and we'll help.",
-      nCheck: 'Please check your name and WhatsApp number.'
+      waUp: function (d, g) { return "Hi! I'm interested in Whale Shark After Hours " + d + ' for ' + T.guest(g) + '. Is it available?'; }
     };
     var CSSW = [
       '.vlp-wc{max-width:1120px;margin:20px 0 8px;font-family:"DM Sans",sans-serif;color:#17202A;box-sizing:border-box}',
@@ -539,24 +526,9 @@
       '.vlp-wc-out.grn{border:0;background:#0F7A3F;color:#fff!important}',
       '.vlp-wc-muted{margin:0;font-size:14px;color:#46525C;line-height:1.4}',
       '.vlp-wc-link{font:inherit;font-size:14px;font-weight:600;color:#B51E66;background:none;border:0;padding:0;cursor:pointer;text-decoration:underline}',
-      '.vlp-wc-help{background:#F4EFE6;border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px}.vlp-wc-help b{font-size:15px}',
-      '.vlp-wc-ov{position:fixed;inset:0;background:rgba(23,32,42,.55);z-index:9999;display:flex;align-items:flex-end;justify-content:center;font-family:"DM Sans",sans-serif;color:#17202A}',
-      '@media (min-width:768px){.vlp-wc-ov{align-items:center}.vlp-wc-sh{border-radius:16px!important}}',
-      '.vlp-wc-sh{background:#fff;width:100%;max-width:440px;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;padding:18px 16px 24px;display:flex;flex-direction:column;gap:14px;box-sizing:border-box}',
-      '.vlp-wc-sh *{box-sizing:border-box}',
-      '.vlp-wc-shh{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.vlp-wc-shh h2{margin:0;font-size:21px;font-weight:700;line-height:1.2}.vlp-wc-shh p{margin:4px 0 0;font-size:14px;color:#46525C;line-height:1.4}',
-      '.vlp-wc-sum{background:#FFFBF3;border:1px solid #E8D3AE;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:2px}.vlp-wc-sum b{font-size:16px}.vlp-wc-sum span{font-size:14px;color:#46525C}',
-      '.vlp-wc-sh label{display:flex;flex-direction:column;gap:6px;font-size:14px;font-weight:600;color:#46525C;margin:0}',
-      '.vlp-wc-sh input[type=text],.vlp-wc-sh input[type=tel],.vlp-wc-sh select{min-height:48px;border:1px solid #C9C1AE;border-radius:8px;padding:0 12px;font:inherit;font-size:16px;color:#17202A;background:#fff;width:100%;margin:0}',
-      '.vlp-wc-ph{display:flex;gap:8px}.vlp-wc-ph select{flex:0 0 100px}.vlp-wc-ph input{flex:1 1 0;min-width:0}',
-      '.vlp-wc-sh label.chk{flex-direction:row;align-items:flex-start;gap:10px;font-weight:400;color:#17202A;line-height:1.4}.vlp-wc-sh label.chk input{width:20px;height:20px;flex:none;margin:1px 0 0;accent-color:#B51E66}',
-      '.vlp-wc-send{min-height:50px;border:0;border-radius:999px;background:#B51E66;color:#fff;font:inherit;font-size:16px;font-weight:600;cursor:pointer}.vlp-wc-send:disabled{opacity:.6}',
-      '.vlp-wc-ok{background:#F2F9F4;border:1px solid #CFE3D5;border-radius:10px;padding:12px;font-size:14px;color:#2D5640;line-height:1.4}.vlp-wc-ok b{display:block;color:#1C6B3A;margin-bottom:2px}',
-      '.vlp-wc-err{font-size:14px;color:#9B1C1C}',
-      '.vlp-wc-hp{position:absolute!important;left:-9999px!important;width:1px;height:1px;overflow:hidden}'
+      '.vlp-wc-help{background:#F4EFE6;border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px}.vlp-wc-help b{font-size:15px}'
     ].join('');
     var CH = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>';
-    var BELL = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg>';
 
     var today = todayLaPaz();
     var p0; try { p0 = new URLSearchParams(location.search); } catch (e) { p0 = { get: function () { return null; } }; }
@@ -732,7 +704,7 @@
         var o = c.o;
         h += '<article class="vlp-wc-card cb"><span class="vlp-wc-k">' + esc(o.op) + ' · ' + esc(o.type === 'private' ? W.priv : W.shared) + '</span>' +
           '<h3>' + esc(nm(o)) + '</h3>' + priceHtml(o) + '<span class="vlp-wc-cbn">' + esc(W.callNote(fmtTime(c.t))) + '</span>' +
-          '<button type="button" class="vlp-wc-out amb" data-notify="' + i + '">' + BELL + esc(W.notify) + '</button></article>';
+          '<a class="vlp-wc-out grn whatsapp-link" data-wa-source="whale-calendar-call" target="_blank" rel="noopener" href="' + esc(waLink(W.waCall(o.op, nm(o), fmtTime(c.t), T.onDay(dayLong(d)), guests), o.slug)) + '">' + WA_ICON + esc(W.askDep) + '</a></article>';
       });
       var noSpace = inf.none.filter(function (op) { return !inf.calls.some(function (c) { return c.o.op === op; }); });
       if (inf.n && noSpace.length) h += '<p class="vlp-wc-muted">' + esc(W.noSpaceOthers(noSpace.join(', '))) + '</p>';
@@ -744,7 +716,6 @@
       h += '<div class="vlp-wc-help"><b>' + esc(W.cantFind) + '</b><a class="vlp-wc-out grn whatsapp-link" data-wa-source="whale-calendar" target="_blank" rel="noopener" href="' +
         esc(waLink(W.waAsk(T.onDay(dayLong(d)), guests), 'whale-calendar')) + '">' + WA_ICON + esc(W.ask) + '</a></div>';
       dayEl.innerHTML = h;
-      dayEl.querySelectorAll('[data-notify]').forEach(function (b) { b.addEventListener('click', function () { openNotify(inf.calls[+b.getAttribute('data-notify')], d, b); }); });
       dayEl.querySelectorAll('[data-go]').forEach(function (b) { b.addEventListener('click', function () { sel = b.getAttribute('data-go'); syncUrl(); draw(); }); });
     }
 
@@ -756,64 +727,6 @@
         if (o.type === 'shared' && s.s != null && s.s <= 5) t += ' · ' + T.left(s.s);
         return '<a class="vlp-wc-book" href="' + esc(offerHref(o, d)) + '">' + esc(W.bookAt(t)) + '</a>';
       }).join('');
-    }
-
-    // ------------------------------------------------ Notify me
-    function openNotify(c, d, opener) {
-      var o = c.o;
-      var ov = el('div', { class: 'vlp-wc-ov' });
-      var codes = ['+52', '+1', '+44', '+49', '+33', '+34', '+39', '+61', '+57', '+54'];
-      ov.innerHTML = '<div class="vlp-wc-sh" role="dialog" aria-modal="true" aria-labelledby="vlp-wc-nt">' +
-        '<div class="vlp-wc-shh"><div><h2 id="vlp-wc-nt">' + esc(W.nTitle) + '</h2><p>' + esc(W.nIntro) + '</p></div>' +
-        '<button type="button" class="vlp-wc-nav" data-x aria-label="' + esc(W.close) + '"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button></div>' +
-        '<div class="vlp-wc-sum"><b>' + esc(nm(o)) + '</b><span>' + esc(o.op + ' · ' + dayShort(d) + ' · ' + fmtTime(c.t)) + '</span></div>' +
-        '<form novalidate style="display:flex;flex-direction:column;gap:14px;margin:0">' +
-        '<label>' + esc(W.nName) + '<input type="text" name="name" autocomplete="name" required maxlength="120"></label>' +
-        '<label>' + esc(W.nPhone) + '<span class="vlp-wc-ph"><select name="cc" aria-label="' + esc(W.nCode) + '">' + codes.map(function (x) { return '<option>' + x + '</option>'; }).join('') + '</select>' +
-          '<input type="tel" name="phone" autocomplete="tel-national" inputmode="tel" required></span></label>' +
-        '<label>' + esc(T.guests.charAt(0) + T.guests.slice(1).toLowerCase()) + '<select name="guests">' + Array.from({ length: 20 }, function (_, i) { return '<option' + (i + 1 === guests ? ' selected' : '') + '>' + (i + 1) + '</option>'; }).join('') + '</select></label>' +
-        '<label class="chk"><input type="checkbox" name="others" checked>' + esc(W.nOthers) + '</label>' +
-        '<label class="vlp-wc-hp" aria-hidden="true">Website<input type="text" name="website" tabindex="-1" autocomplete="off"></label>' +
-        '<span class="vlp-wc-err" role="alert" hidden></span>' +
-        '<button type="submit" class="vlp-wc-send">' + esc(W.nSend) + '</button></form></div>';
-      document.body.appendChild(ov);
-      var prevOverflow = document.body.style.overflow; document.body.style.overflow = 'hidden';
-      var form = ov.querySelector('form'), err = ov.querySelector('.vlp-wc-err'), btn = ov.querySelector('.vlp-wc-send');
-      function close() { document.removeEventListener('keydown', onKey); ov.remove(); document.body.style.overflow = prevOverflow; try { opener.focus(); } catch (e) {} }
-      function onKey(e) { if (e.key === 'Escape') close(); }
-      document.addEventListener('keydown', onKey);
-      ov.addEventListener('click', function (e) { if (e.target === ov) close(); });
-      ov.querySelector('[data-x]').addEventListener('click', close);
-      setTimeout(function () { var f = form.querySelector('[name=name]'); if (f) f.focus(); }, 30);
-      form.addEventListener('submit', function (e) {
-        e.preventDefault();
-        var F = form.elements, name = F['name'].value.trim(), digits = (F['cc'].value + F['phone'].value).replace(/\D/g, '');
-        if (!name || F['phone'].value.replace(/\D/g, '').length < 7) { err.textContent = W.nCheck; err.hidden = false; return; }
-        err.hidden = true; btn.disabled = true; btn.textContent = W.nSending;
-        fetch(REQ_API + '/waitlist', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ slug: o.slug, date: d, time: c.t, name: name, phone: digits, guests: +F['guests'].value, lang: ES ? 'es' : 'en',
-            others: F['others'].checked, page: location.href, hp: F['website'].value })
-        }).then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { ok: r.ok && j.ok, j: j }; }); })
-          .then(function (res) {
-            var sh = ov.querySelector('.vlp-wc-sh');
-            if (res.ok) {
-              track('waitlist_signup', { search_from: d, search_to: d, guests: +F['guests'].value, search_page: 'whale-calendar' });
-              form.outerHTML = '<div class="vlp-wc-ok" role="status"><b>' + esc(W.nDone) + '</b>' + esc(W.nDoneNote(dayShort(d))) + '</div>' +
-                '<button type="button" class="vlp-wc-send" data-x2>' + esc(W.close) + '</button>';
-              sh.querySelector('[data-x2]').addEventListener('click', close);
-            } else if (res.j && res.j.error === 'bookable') {
-              form.outerHTML = '<div class="vlp-wc-ok" role="status"><b>' + esc(W.nOpen) + '</b></div><a class="vlp-wc-book" style="justify-content:center" href="' + esc(offerHref(o, d)) + '">' + esc(W.book) + '</a>';
-              delete cache[month];
-            } else {
-              err.innerHTML = esc(W.nErr) + ' <a href="' + esc(waLink(W.waAsk(T.onDay(dayLong(d)), guests), o.slug)) + '" target="_blank" rel="noopener" class="whatsapp-link" data-wa-source="whale-calendar-notify">' + esc(W.ask) + '</a>';
-              err.hidden = false; btn.disabled = false; btn.textContent = W.nSend;
-            }
-          }).catch(function () {
-            err.innerHTML = esc(W.nErr) + ' <a href="' + esc(waLink(W.waAsk(T.onDay(dayLong(d)), guests), o.slug)) + '" target="_blank" rel="noopener" class="whatsapp-link" data-wa-source="whale-calendar-notify">' + esc(W.ask) + '</a>';
-            err.hidden = false; btn.disabled = false; btn.textContent = W.nSend;
-          });
-      });
     }
 
     load();
