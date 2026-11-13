@@ -68,16 +68,16 @@
 
   var T = {
     es: {
-      title: 'Confirmación de reservación', hi: 'Hola', ask: '¿confirmas este viaje?',
+      title: 'Confirmación de reservación', hi: 'Hola', ask: 'confirmas este viaje?',
       intro: 'Vamos a La Paz tiene un cliente para tu embarcación. Revisa los detalles: son los mismos que recibe el cliente.',
       guests: 'personas', lead: 'a nombre de', meet: 'Punto de encuentro',
       total: 'Precio total del viaje', depositYou: 'Te enviamos el anticipo', balanceYou: 'Cobras al cliente el día del viaje', commission: 'Comisión de Vamos',
       purchase: 'Vamos te paga', includes: 'Incluye', cancel: 'Cancelación', pay: 'Pago', note: 'Nota de Peter',
       agreeText: 'Acepto prestar este viaje con estos términos, conforme a mi acuerdo de socio con Vamos a La Paz.',
       name: 'Tu nombre completo (tu firma)', confirm: 'Confirmar viaje', change: 'Pedir un cambio',
-      changeAsk: '¿Qué hay que cambiar?', send: 'Enviar', back: 'Volver',
+      changeAsk: 'Qué hay que cambiar?', send: 'Enviar', back: 'Volver',
       needAgree: 'Marca la casilla y escribe tu nombre completo.', needNote: 'Escribe qué hay que cambiar.',
-      doneTitle: '¡Listo! Confirmaste el viaje.', doneText: 'Guarda este enlace: aquí puedes volver a ver tu confirmación.',
+      doneTitle: 'Listo! Confirmaste el viaje.', doneText: 'Guarda este enlace: aquí puedes volver a ver tu confirmación.',
       tellPeter: 'Avisarle a Peter por WhatsApp', changeDone: 'Enviamos tu solicitud de cambio.',
       changeDoneText: 'Peter te enviará una nueva confirmación con el cambio.',
       signedBy: 'Confirmado por', on: 'el', requested: 'Pediste este cambio:',
