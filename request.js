@@ -3,6 +3,8 @@
    and extra-night pricing, multi-day trips need every day free, and the Bókun widget is hidden on Book Now offer pages;
    Nov 5 pm: form tidy-up — calendar collapses to the picked date, − / + steppers, country code on WhatsApp, pinned header,
    sticky deposit + pay bar, page behind locked, short extras line, cancellation shown as a reassurance box)
+   Nov 13, 2026: the online booking button on offer pages (.vlp-book-btn from the widget embed code) reads "Book now" /
+   "Reservar ahora" instead of "Check availability" / "Ver disponibilidad" (the note under it already says it's instant).
    Card-hold booking requests for private-owner boats (approved mockup "Vamos request to book").
    - Loads the offers that allow it from the vamos-requests Worker (/eligible).
    - Offer pages (/offerings/<slug>, /es/offerings/<slug>): adds "Request to book" + helper text beside the WhatsApp button.
@@ -460,4 +462,21 @@
   }
 
   window.VamosRequest = { ready: ready, isEligible: function (slug) { return !!bySlug[slug]; }, isBookNow: function (slug) { return isBN(bySlug[slug]); }, open: open, T: T };
+})();
+
+/* Nov 13, 2026: "Book now" label on the online booking button (FareHarbor / Bókun widget embeds render .vlp-book-btn). */
+(function () {
+  'use strict';
+  function relabel() {
+    var es = /^es/i.test(document.documentElement.lang || '') || /^\/es(\/|$)/.test(location.pathname);
+    var btns = document.querySelectorAll('.vlp-book-btn');
+    for (var i = 0; i < btns.length; i++) {
+      var b = btns[i];
+      if (!/disponib|availability/i.test(b.textContent || '')) continue; // only the generic label; custom labels stay
+      b.setAttribute('data-es', 'Reservar ahora');
+      b.textContent = es ? 'Reservar ahora' : 'Book now';
+    }
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', relabel); else relabel();
+  window.addEventListener('load', relabel);
 })();
