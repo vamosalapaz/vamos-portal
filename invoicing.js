@@ -46,7 +46,10 @@
    v21 (release v50): Calendar shows Good Medicine's Bókun bookings (from the Bookings ledger) alongside the Vamos trips
        calendar, with an All / Vamos a La Paz / Good Medicine toggle (All by default). Tap a Good Medicine booking for
        contacts (WhatsApp, call, email), rate, guests, extras, notes, broker/channel, paid and balance, multi-day dates
-       and any linked invoices. Good Medicine invoices already in Bókun show once. */
+       and any linked invoices. Good Medicine invoices already in Bókun show once.
+   Nov 12, 2026: New booking / Edit → "Customer pays": Online (card, Mercado Pago, transfer) or Arranged directly (Venmo, cash…; the
+        customer's page shows no payment buttons and no payment links are made; saved by the extras scenario, action "pays").
+        "Deposit already paid?" removed (record it with Mark paid after creating the booking). Mark paid adds Venmo, Zelle, PayPal. */
 (function () {
   'use strict';
 
@@ -373,10 +376,13 @@
       h('div', { id: 'vi-comwrap' }, [h('label', { for: 'vi-com', text: 'Your commission' }), h('input', { id: 'vi-com', type: 'number', inputmode: 'numeric', oninput: function () { recalc('com'); } })])
     ]));
     mon.appendChild(h('div', { class: 'hint', id: 'vi-split' }));
-    if (!edit) mon.appendChild(h('div', { class: 'row' }, [
-      h('div', null, [h('label', { for: 'vi-prepaid', text: 'Deposit already paid?' }), sel('vi-prepaid', ['No', 'Cash', 'Bank transfer', 'Other'], 'No')]),
-      h('div', null, [h('label', { for: 'vi-prepaidamt', text: 'Amount received (blank = the deposit)' }), h('input', { id: 'vi-prepaidamt', type: 'number', inputmode: 'numeric' })])
-    ]));
+    // How the customer pays (Nov 12, 2026). Arranged directly = money comes in outside the system (Venmo, cash…): the customer's
+    // page shows the booking and receipt with no payment buttons, no payment links are made, and each payment is recorded with Mark paid.
+    // (Replaces "Deposit already paid?": a deposit taken before the booking is recorded with Mark paid after creating it.)
+    mon.appendChild(h('label', { for: 'vi-pays', text: 'Customer pays' }));
+    mon.appendChild(sel('vi-pays', ['Online (card, Mercado Pago, transfer)', 'Arranged directly (Venmo, cash…)'],
+      edit && edit.inv.fields['Customer pays'] === 'Arranged directly' ? 'Arranged directly (Venmo, cash…)' : 'Online (card, Mercado Pago, transfer)'));
+    mon.appendChild(h('div', { class: 'hint', text: 'Arranged directly: their page shows the booking and receipt but no card, Mercado Pago or transfer buttons. Record each payment with Mark paid (Venmo, Zelle, PayPal, cash…); the receipt goes out by itself.' }));
     form.appendChild(mon);
 
     // meeting + notes
@@ -861,13 +867,11 @@
         ownerBalance: v.price - v.dep, boat: boatName, leadGuest: first(v.name), noteToOwner: v.onote
       });
     }).then(function (r) {
-      // Deposit taken before the booking was made (cash or transfer): record it straight away (calendar, ledger, receipt).
-      var pre = !ed && $('#vi-prepaid') ? $('#vi-prepaid').value : 'No';
-      if (pre && pre !== 'No') {
-        var preAmt = Number($('#vi-prepaidamt').value) || v.dep;
-        return post(HOOK_ACTIONS, { k: KEY, action: 'pay', id: r.id, number: r.number, amount: preAmt, method: pre, date: today(), notes: 'Deposit (paid before the booking was created)' }).then(function () { return r; });
-      }
-      return r;
+      // Customer pays (Nov 12, 2026): saved by the extras scenario; blank on the invoice means Online.
+      var pays = $('#vi-pays') && $('#vi-pays').value.indexOf('Arranged') === 0 ? 'Arranged directly' : 'Online';
+      var was = ed ? (ed.inv.fields['Customer pays'] || 'Online') : 'Online';
+      if (pays === was) return r;
+      return post(HOOK_EXTRAS, { k: KEY, action: 'pays', id: ed ? ed.inv.id : r.id, pays: pays }).then(function () { return r; });
     }).then(function (r) {
       var id = ed ? ed.inv.id : r.id;
       history.replaceState(null, '', location.pathname + '?k=' + encodeURIComponent(KEY) + '&invoice=' + id);
@@ -937,7 +941,7 @@
     var depBox = h('div');
     steps.appendChild(step(depPaid ? 'done' : (ready && !cancelled ? 'now' : ''), depPaid ? 'Deposit ' + money(dep) + ' paid' : 'Deposit ' + money(dep),
       (payList ? payList + '\n' : '') + (f['Mercado Pago pending'] && !depPaid ? 'Mercado Pago waiting: ' + f['Mercado Pago pending'] + '\n' : '')
-        + (depPaid ? '' : 'Card and Mercado Pago payments appear here by themselves (tap Refresh). Transfer or cash: Mark paid.'),
+        + (depPaid ? '' : f['Customer pays'] === 'Arranged directly' ? 'Payment arranged directly: when it arrives, Mark paid (Venmo, cash…, amount in pesos). The receipt goes out by itself.' : 'Card and Mercado Pago payments appear here by themselves (tap Refresh). Transfer or cash: Mark paid.'),
       cancelled || depPaid ? null : [h('button', { class: 'btn sec', type: 'button', onclick: function () { payForm(inv, depBox, Math.max(0, dep - got), 'Deposit'); } }, ['Mark paid'])], depBox));
     if (!ownerFlow) {
       var balBox = h('div'), full = price > 0 && got >= price;
@@ -1045,17 +1049,19 @@
     if (!ready) return step('', 'Send to ' + who, 'Unlocks when the owner confirms.');
     var page = customerPage(f);
     var linkOk = !!f['Stripe payment link'] && n(f['Payment link amount']) === dep;
-    var needLink = !depPaid && !cancelled && dep > 0 && !linkOk;
+    var direct = f['Customer pays'] === 'Arranged directly';
+    var needLink = !direct && !depPaid && !cancelled && dep > 0 && !linkOk;
     if (needLink && !state.linking && state.linkFailed !== inv.id) makeLink(inv);
     var mp = mpState(f, dep);
-    var needMp = !depPaid && !cancelled && dep > 0 && (!mp.ok && !mp.expired || state.forceMp === inv.id);
+    var needMp = !direct && !depPaid && !cancelled && dep > 0 && (!mp.ok && !mp.expired || state.forceMp === inv.id);
     if (needMp && !state.mpLinking && state.mpFailed !== inv.id) makeMpLink(inv);
     var sent = f['Sent at'];
     var title = sent ? 'Sent to ' + who : 'Send to ' + who;
     var small = sent ? 'Sent ' + when(sent) + (f['Sent via'] && f['Sent via'].length ? ' by ' + [].concat(f['Sent via']).join(', ') : '') + '.' : f.Kind === 'Quick payment' ? 'Their page has the amount, card payment and transfer details.' : 'Their page has the trip, card payment and transfer details.';
+    if (direct && !sent) small = 'Payment arranged directly: their page shows the booking (and the receipt once you Mark paid), with no payment buttons.';
     if (state.linking) small += ' Making the card payment link…';
     else if (state.linkFailed === inv.id) small += ' The card link could not be made; the page still shows transfer details. Tap Refresh to try again.';
-    if (!depPaid && !cancelled) {
+    if (!depPaid && !cancelled && !direct) {
       if (state.mpLinking) small += ' Making the Mercado Pago link…';
       else if (state.mpFailed === inv.id) small += ' The Mercado Pago link could not be made (' + (state.mpError || 'error') + '); card and transfer still work. Tap Refresh to try again.';
       else if (mp.expired) small += ' The Mercado Pago link expired ' + when(f['Mercado Pago link expires']) + '.';
@@ -1085,6 +1091,9 @@
     if (f.Kind === 'Quick payment') return en
       ? 'Hi ' + first(f['Billed to']) + ', here is the link to pay for ' + f.Trip + ' (' + mxn(dep) + ')' + (f['Extra for booking'] ? ', booking ' + f['Extra for booking'] : '') + '. You can pay by card, Mercado Pago or bank transfer:\n' + page + '\n\nThank you!'
       : 'Hola ' + first(f['Billed to']) + ', aquí está el enlace para pagar ' + f.Trip + ' (' + mxn(dep) + ')' + (f['Extra for booking'] ? ', reservación ' + f['Extra for booking'] : '') + '. Puedes pagar con tarjeta, Mercado Pago o transferencia:\n' + page + '\n\n¡Gracias!';
+    if (f['Customer pays'] === 'Arranged directly') return en
+      ? 'Hi ' + first(f['Billed to']) + ', here is your booking ' + f['Invoice number'] + ': ' + f.Trip + ', ' + fmtDate(f['Trip date'], 'English') + (f.Guests ? ', ' + f.Guests + ' guests' : '') + '.\n\nTotal ' + mxn(f['Trip price']) + ' (IVA included), deposit ' + mxn(dep) + ', paid as we agreed. Your booking page (it shows your receipt once we get your payment):\n' + page + '\n\nAny questions, just message me!'
+      : 'Hola ' + first(f['Billed to']) + ', aquí está tu reservación ' + f['Invoice number'] + ': ' + f.Trip + ', ' + fmtDate(f['Trip date'], 'Español') + (f.Guests ? ', ' + f.Guests + ' personas' : '') + '.\n\nPrecio total ' + mxn(f['Trip price']) + ' (IVA incluido), anticipo de ' + mxn(dep) + ', como lo acordamos. Tu página de reservación (ahí verás tu recibo cuando recibamos tu pago):\n' + page + '\n\nCualquier duda, me escribes.';
     return en
       ? 'Hi ' + first(f['Billed to']) + ', here is your booking ' + f['Invoice number'] + ': ' + f.Trip + ', ' + fmtDate(f['Trip date'], 'English') + (f.Guests ? ', ' + f.Guests + ' guests' : '') + '.\n\nTotal ' + mxn(f['Trip price']) + ' (IVA included). To secure your spot, pay the ' + mxn(dep) + ' deposit by card, Mercado Pago or bank transfer here:\n' + page + '\n\nAny questions, just message me!'
       : 'Hola ' + first(f['Billed to']) + ', aquí está tu reservación ' + f['Invoice number'] + ': ' + f.Trip + ', ' + fmtDate(f['Trip date'], 'Español') + (f.Guests ? ', ' + f.Guests + ' personas' : '') + '.\n\nPrecio total ' + mxn(f['Trip price']) + ' (IVA incluido). Para asegurar tu lugar, paga el anticipo de ' + mxn(dep) + ' con tarjeta, Mercado Pago o transferencia aquí:\n' + page + '\n\n¡Cualquier duda, me escribes!';
@@ -1241,14 +1250,14 @@
   // Cash can carry a discount (Nov 5, 2026), the exception, not the default: blank = none; enter e.g. 10 for 10% off what's paid in cash. "Amount" is then the part of the bill the
   // cash covers; the customer hands over that minus the discount, and the discount is added to the booking as a line.
   function payForm(inv, box, amount, what) {
-    var a = h('input', { type: 'number', inputmode: 'numeric', value: amount || '' }), m = sel('vi-pm', ['Bank transfer', 'Cash', 'Other'], 'Bank transfer');
+    var a = h('input', { type: 'number', inputmode: 'numeric', value: amount || '' }), m = sel('vi-pm', ['Bank transfer', 'Cash', 'Venmo', 'Zelle', 'PayPal', 'Other'], inv.fields['Customer pays'] === 'Arranged directly' ? 'Venmo' : 'Bank transfer');
     var dt = h('input', { type: 'date', value: today() }), nt = h('input', { placeholder: 'Reference or note (optional)' });
     var pct = h('input', { type: 'number', inputmode: 'decimal', value: '', placeholder: '0 (e.g. 10 if you offered it)', min: '0', max: '50' }), out = h('div', { class: 'hint' });
     var cashRow = h('div', { style: 'display:none' }, [field('Cash discount % (only if you offered one)', pct), out]);
-    var aLabel = h('label', { text: 'Amount' });
+    var aLabel = h('label', { text: 'Amount (MXN)' });
     function upd() {
       var cash = m.value === 'Cash'; cashRow.style.display = cash ? '' : 'none';
-      aLabel.textContent = cash ? 'Part of the bill paid in cash' : 'Amount';
+      aLabel.textContent = cash ? 'Part of the bill paid in cash' : 'Amount (MXN)';
       var c = Number(a.value) || 0, d = Math.round(c * (Number(pct.value) || 0) / 100);
       out.textContent = cash && d ? 'Collect ' + money(c - d) + ' in cash (' + money(d) + ' off). The discount is added to the booking.' : '';
     }

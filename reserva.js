@@ -23,7 +23,9 @@
         existing GTM purchase tags (GA4 ecommerce, Google Ads booking, Meta Purchase) pick it up.
    Nov 12, 2026: "Pay your balance" also offers Mercado Pago (vamos-requests /mp-balance makes the link on tap: card,
         Mercado Pago balance, SPEI, and OXXO when the trip is at least 5 days away); an OXXO balance payment waiting to be
-        paid shows as pending there. */
+        paid shows as pending there.
+   Nov 12, 2026: bookings with Customer pays = "Arranged directly" (Venmo, cash… collected outside the system) show no payment
+        buttons or bank details: the deposit card says it's paid as agreed, and there is no "Pay your balance" section. */
 (function () {
   'use strict';
 
@@ -77,7 +79,8 @@
       depositL: 'Anticipo', balanceL: 'Saldo', paymentL: 'Pago',
       payBal: 'Paga tu saldo', payBalCard: 'Pagar saldo con tarjeta', payBalNote: 'También puedes pagar en efectivo a bordo.',
       balReceipt: 'Hola, te envío el comprobante de la transferencia del saldo de la reservación ', confirming: 'Confirmando tu pago…', payErr: 'No pudimos abrir el pago con tarjeta. Intenta de nuevo o escríbenos por WhatsApp.',
-      mpErr: 'No pudimos abrir Mercado Pago. Intenta de nuevo o escríbenos por WhatsApp.'
+      mpErr: 'No pudimos abrir Mercado Pago. Intenta de nuevo o escríbenos por WhatsApp.',
+      directT: 'Anticipo', directNote: 'Se paga como lo acordamos. Tu recibo aparecerá en esta página cuando lo recibamos.'
     },
     en: {
       booking: 'Booking', hi: 'Hi', ready: 'your trip is ready to book',
@@ -113,7 +116,8 @@
       depositL: 'Deposit', balanceL: 'Balance', paymentL: 'Payment',
       payBal: 'Pay your balance', payBalCard: 'Pay balance by card', payBalNote: 'You can also pay in cash on board.',
       balReceipt: 'Hi, here is the transfer receipt for the balance on booking ', confirming: 'Confirming your payment…', payErr: "We couldn't open the card payment. Please try again or message us on WhatsApp.",
-      mpErr: "We couldn't open Mercado Pago. Please try again or message us on WhatsApp."
+      mpErr: "We couldn't open Mercado Pago. Please try again or message us on WhatsApp.",
+      directT: 'Deposit', directNote: 'Paid as we agreed. Your receipt will show on this page once we receive it.'
     }
   };
   var L = T.es, lang = 'es', inv = null, bank = {}, root, top, foot, tries = 0, rcpt = null;
@@ -507,8 +511,10 @@
     return c;
   }
   // Pay the balance before the trip: card (Stripe Checkout made by vamos-requests) or transfer. Cash on board also works.
+  // Payment arranged directly with Peter (Venmo, cash…): no payment buttons anywhere on the page.
+  function direct() { return f()['Customer pays'] === 'Arranged directly'; }
   function balanceCard() {
-    if (!rcpt || !rcpt.balanceCard || JUST_PAID) return null;
+    if (!rcpt || !rcpt.balanceCard || JUST_PAID || direct()) return null;
     var x = f(), num = x['Invoice number'] || '', b = rcpt.balance;
     var card = h('div', { class: 'card pay-card no-print' });
     card.appendChild(h('h2', { text: L.payBal + ' · ' + money(b) }));
@@ -610,6 +616,11 @@
   function payCard() {
     var x = f(), dep = Number(x.Deposit) || 0, num = x['Invoice number'] || '';
     var card = h('div', { class: 'card pay-card' });
+    if (direct()) {
+      card.appendChild(h('h2', { text: L.directT + ' · ' + money(dep) }));
+      card.appendChild(h('p', { class: 'muted', text: L.directNote }));
+      return card;
+    }
     card.appendChild(h('h2', { text: L.payTitle + ' · ' + money(dep) }));
     payButtons(card, dep);
     if (bank.CLABE) {
