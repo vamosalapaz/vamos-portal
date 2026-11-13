@@ -111,7 +111,7 @@
         return true;
       });
     }
-    function tsdb() { return info && info.book && info.book.co === 'thehooklapaz' && /whale|tiburon/.test(SLUG); }
+    function tsdb() { return info && info.book && info.book.co === 'thehooklapaz' && /whale-shark|tiburon/.test(SLUG); }
 
     function load() {
       var ym = month, from = ym === minMonth ? today : ym + '-01', to = monthEnd(ym);
