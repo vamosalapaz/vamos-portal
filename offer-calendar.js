@@ -4,6 +4,7 @@
    FareHarbor checkout straight on that departure (FareHarbor's lightframe, Vamos affiliate code, ref vamosalapaz-<slug>-cal).
    Each Book tap is logged in Vamos Sales → Checkout Link Taps (POST /go beacon) and pushed to the dataLayer
    (offer_calendar_book). If the calendar can't load, the page keeps the normal "Book now" button.
+   Nov 13 (later): no guests stepper (FareHarbor asks for the group size at checkout) and no "see all dates" link.
    PREVIEW: shows only after visiting an offer page with ?cal=1 (remembered in this browser; ?cal=0 turns it off) until LIVE = true. */
 (function () {
   'use strict';
@@ -84,7 +85,8 @@
 
     var today = todayLaPaz();
     var want = /^\d{4}-\d{2}-\d{2}$/.test(qs.get('date') || '') && qs.get('date') >= today ? qs.get('date') : '';
-    var guests = parseInt(qs.get('guests') || qs.get('personas') || '2', 10); if (!(guests >= 1)) guests = 2; if (guests > 40) guests = 40;
+    // Group size is picked in FareHarbor checkout (it can't be passed in the link), so no guests step here (Peter, Nov 13).
+    var guests = 1;
     var minMonth = today.slice(0, 7), maxMonth = addMonths(minMonth, 5), month = (want || today).slice(0, 7);
     var cache = {}, cur = null, sel = want, info = null, shown = false;
 
@@ -94,24 +96,17 @@
       '<div class="vlp-oc-top"><button type="button" class="vlp-oc-nav" data-m="-1" aria-label="' + esc(T.prev) + '">' + CH + '</button>' +
       '<span class="vlp-oc-mo" aria-live="polite"></span><button type="button" class="vlp-oc-nav" data-m="1" aria-label="' + esc(T.next) + '">' +
       CH.replace('M15 6l-6 6 6 6', 'M9 6l6 6-6 6') + '</button></div><div class="vlp-oc-grid" role="group"></div>' +
-      '<div class="vlp-oc-g">' + esc(T.guests) + '<div class="vlp-oc-step" role="group" aria-label="' + esc(T.guests) + '"><button type="button" data-g="-1" aria-label="' + esc(T.fewer) +
-      '">−</button><span aria-live="polite"></span><button type="button" data-g="1" aria-label="' + esc(T.more) + '">+</button></div></div>' +
-      '<div class="vlp-oc-day" aria-live="polite"></div>' +
-      '<a class="vlp-oc-l vlp-oc-all" href="' + esc(btn.getAttribute('href')) + '">' + esc(T.all) + '</a>';
+      '<div class="vlp-oc-day" aria-live="polite"></div>';
     mount.insertBefore(box, btn);
-    var gridEl = box.querySelector('.vlp-oc-grid'), moEl = box.querySelector('.vlp-oc-mo'), dayEl = box.querySelector('.vlp-oc-day'), gEl = box.querySelector('.vlp-oc-step span');
+    var gridEl = box.querySelector('.vlp-oc-grid'), moEl = box.querySelector('.vlp-oc-mo'), dayEl = box.querySelector('.vlp-oc-day');
     box.querySelectorAll('[data-m]').forEach(function (b) {
       b.addEventListener('click', function () { var mm = addMonths(month, +b.getAttribute('data-m')); if (mm < minMonth || mm > maxMonth) return; month = mm; sel = ''; load(); });
-    });
-    box.querySelectorAll('[data-g]').forEach(function (b) {
-      b.addEventListener('click', function () { guests = Math.min(40, Math.max(1, guests + +b.getAttribute('data-g'))); draw(); });
     });
 
     function slotsOn(d) {
       if (!cur) return [];
       return ((cur.days || {})[d] || []).filter(function (s) {
         if (s.s != null && s.s < guests) return false;
-        if (s.s == null && info && info.cap && guests > info.cap) return false;
         return true;
       });
     }
@@ -146,7 +141,6 @@
     function draw() { drawGrid(false); drawDay(); }
 
     function drawGrid(loading) {
-      gEl.textContent = T.guest(guests);
       moEl.textContent = cap1(fmt(month + '-15', { month: 'long', year: 'numeric' }));
       box.querySelector('[data-m="-1"]').disabled = month <= minMonth;
       box.querySelector('[data-m="1"]').disabled = month >= maxMonth;
@@ -163,7 +157,7 @@
       gridEl.querySelectorAll('[data-d]').forEach(function (b) {
         b.addEventListener('click', function () {
           sel = b.getAttribute('data-d'); draw();
-          track('offer_calendar_date', { offer_slug: SLUG, trip_date: sel, guests: guests });
+          track('offer_calendar_date', { offer_slug: SLUG, trip_date: sel });
         });
       });
     }
@@ -203,9 +197,9 @@
       dayEl.querySelectorAll('.vlp-oc-book').forEach(function (a) {
         a.addEventListener('click', function () {
           var s = slots[+a.getAttribute('data-i')];
-          var u = API + '/go?o=' + SLUG + '&d=' + sel + '&t=' + s.t + '&g=' + guests + '&src=web';
+          var u = API + '/go?o=' + SLUG + '&d=' + sel + '&t=' + s.t + '&src=web';
           try { if (!(navigator.sendBeacon && navigator.sendBeacon(u))) fetch(u, { method: 'POST', mode: 'no-cors', keepalive: true }); } catch (e) {}
-          track('offer_calendar_book', { offer_slug: SLUG, trip_date: sel, departure: s.t, guests: guests });
+          track('offer_calendar_book', { offer_slug: SLUG, trip_date: sel, departure: s.t });
         });
       });
     }
