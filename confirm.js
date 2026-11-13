@@ -10,11 +10,41 @@
    v51: request to book (Oct 30, 2026): when the booking came from "Request to book" (the customer's deposit is already
         held on their card), shows the deadline, replaces "ask for a change" with "No puedo ese día" (releases the hold),
         tells the vamos-requests Worker right after the owner signs (so the deposit is captured at once), and says so
-        when the request was cancelled or ran out of time. */
+        when the request was cancelled or ran out of time.
+   Nov 13, 2026: one "Confirmo" tap instead of ticking agree and typing a full name (Signed by = the owner's name on file,
+        Terms version conf-2026-11-13|keep or |full). Owner-collects bookings show "Tú cobras al cliente el día del viaje"
+        in bold and a checkbox "Que Vamos se quede su comisión del depósito y me mande el resto", pre-ticked from the owner's
+        default (vamos-requests GET /owner → payout); the choice is saved first (POST /owner/payout: confirmation, invoice,
+        owner default) and the payment terms shown follow it. */
 (function () {
   'use strict';
   var RQ_API = 'https://vamos-requests.solitary-wind-dfb8.workers.dev';
   var rq = null; // request-to-book state when this confirmation belongs to one
+  var payout = null; // Nov 13, 2026: {deposit, commission, keep, keepDefault, answered} for owner-collects bookings (from /owner)
+  // Deposit payout choice (Nov 13, 2026): the owner picks whether Vamos keeps its commission from the deposit.
+  var PT = {
+    es: { depVamos: 'Depósito (lo cobra Vamos)', youCollect: 'Tú cobras al cliente el día del viaje',
+      keep: function (r) { return 'Que Vamos se quede su comisión del depósito y me mande el resto (' + money(r) + ')'; },
+      full: function (d, c) { return 'Si no lo marcas, te mandamos el depósito completo (' + money(d) + ') en cuanto el cliente pague y nos pagas la comisión (' + money(c) + ') después del viaje.'; },
+      kept: function (r) { return 'Te mandamos ' + money(r) + ' en cuanto el cliente pague. No nos debes nada después del viaje.'; },
+      keptOver: function (x) { return 'Te mandamos $0 y nos pagas ' + money(x) + ' después del viaje.'; },
+      chosenKeep: 'Elegiste que Vamos se quede su comisión del depósito.', chosenFull: 'Elegiste recibir el depósito completo y pagar la comisión después del viaje.',
+      tap: 'Al tocar Confirmo aceptas prestar este viaje con estos términos, conforme a tu acuerdo de socio con Vamos a La Paz.', go: 'Confirmo',
+      terms: function (c, r, b, x) { return 'Nos quedamos con la comisión de Vamos (' + money(c) + ') del anticipo y te enviamos el resto (' + money(r) + ') en cuanto el cliente lo paga; asegura la reservación. El día del viaje cobras el saldo (' + money(b) + ') directamente al cliente, antes de zarpar. ' +
+        (x > 0 ? 'Nos pagas la diferencia de la comisión (' + money(x) + ') el día del viaje o a más tardar 3 días después, en efectivo o por transferencia. ' : 'No nos debes nada después del viaje. '); },
+      cut: 'Si el cliente cancela', after: ' Si el viaje se cancela y te quedas con el anticipo, te enviamos también la comisión que retuvimos.' },
+    en: { depVamos: 'Deposit (collected by Vamos)', youCollect: 'You collect from the customer on the day',
+      keep: function (r) { return 'Vamos keeps its commission from the deposit and sends me the rest (' + money(r) + ')'; },
+      full: function (d, c) { return 'If you leave it unticked, we send you the full deposit (' + money(d) + ') as soon as the customer pays, and you pay us the commission (' + money(c) + ') after the trip.'; },
+      kept: function (r) { return 'We send you ' + money(r) + ' as soon as the customer pays. You owe us nothing after the trip.'; },
+      keptOver: function (x) { return 'We send you $0 and you pay us ' + money(x) + ' after the trip.'; },
+      chosenKeep: 'You chose: Vamos keeps its commission from the deposit.', chosenFull: 'You chose: the full deposit to you, and you pay the commission after the trip.',
+      tap: 'By tapping Confirm you agree to provide this trip on these terms, under your partner agreement with Vamos a La Paz.', go: 'Confirm',
+      terms: function (c, r, b, x) { return 'We keep the Vamos commission (' + money(c) + ') from the deposit and send you the rest (' + money(r) + ') as soon as the customer pays it; it secures the booking. On the day you collect the balance (' + money(b) + ') directly from the customer before departure. ' +
+        (x > 0 ? 'You pay us the rest of the commission (' + money(x) + ') on the day of the trip or no later than 3 days after, in cash or by transfer. ' : 'You owe us nothing after the trip. '); },
+      cut: 'If the customer cancels', after: ' If the trip is cancelled and you keep the deposit, we also send you the commission we kept.' }
+  };
+  var keepNow = false; // the checkbox state on this page
   var RQT = {
     es: { left: function (t, m) { return 'Responde antes de las ' + t + (m ? ' · quedan ' + m : ''); }, held: 'El depósito del cliente ya está retenido en su tarjeta.',
       decline: 'No puedo ese día', declineNote: 'Si no puedes, el cliente no paga nada y le ofrecemos otro barco.',
@@ -30,7 +60,7 @@
 
   var HOOK = 'https://hook.us2.make.com/5fjztbglh5n2romv2hd5hcj5flg43zg4';
   var PETER_WA = '526122903605';  // Vamos a La Paz WhatsApp (from Oct 19, 2026)
-  var TERMS = 'conf-2026-10-09';
+  var TERMS = 'conf-2026-11-13'; // Nov 13, 2026: one Confirmo tap + deposit payout choice (was conf-2026-10-09: tick + typed name)
   var BRAND = '#B51E66', INK = '#061A2E';
   var C = { foam: '#F3EFE6', aqua: '#00C6C0', pacific: '#156AB3', gulf: '#0B4F6C', lima: '#B5C62E', orange: '#E65A37', gold: '#F3B53F' };
   var LOGO = 'https://s3.amazonaws.com/webflow-prod-assets/6a94d97df3061a3b48890971/6ace8f86b04cad21148d4d76_LA-PAZ-master-p-500.png';
@@ -170,6 +200,8 @@
     var rqp = fetch(RQ_API + '/owner?t=' + encodeURIComponent(TOKEN)).then(function (x) { return x.json(); }).catch(function () { return null; });
     Promise.all([post({ action: 'get', t: TOKEN }), rqp]).then(function (both) {
       var r = both[0]; rq = both[1] && both[1].ok && both[1].request ? both[1] : null;
+      payout = both[1] && both[1].ok && both[1].payout ? both[1].payout : null;
+      keepNow = !!(payout && payout.keep);
       conf = r && r.ok && r.conf && r.conf[0];
       if (!conf) return fail();
       lang = conf.fields.Language === 'English' ? 'en' : 'es'; L = T[lang];
@@ -190,7 +222,13 @@
     ]));
     var m = h('div', { class: 'card money-card' });
     if (f['Trip price']) m.appendChild(h('div', { class: 'money total' }, [h('span', { text: L.total }), h('b', { text: money(f['Trip price']) })]));
-    if (f['Balance owner collects'] || f['Commission to Vamos']) {
+    if (payout) {
+      var P = PT[lang], dep = payout.deposit, com = payout.commission, bal = Number(f['Balance owner collects']) || Math.max(0, (Number(f['Trip price']) || 0) - dep);
+      m.appendChild(h('div', { class: 'money' }, [h('span', { text: P.depVamos }), h('b', { text: money(dep) })]));
+      m.appendChild(h('div', { class: 'money', style: 'font-weight:700' }, [h('span', { text: P.youCollect }), h('b', { text: money(bal) })]));
+      m.appendChild(h('div', { class: 'money' }, [h('span', { text: L.commission }), h('b', { text: money(com) })]));
+      if (f.Status === 'Agreed') m.appendChild(h('p', { class: 'muted', style: 'margin-top:8px', text: (f['Vamos keeps commission'] ? P.chosenKeep + ' ' + payNote(true) : P.chosenFull) }));
+    } else if (f['Balance owner collects'] || f['Commission to Vamos']) {
       if (f['Deposit to owner']) m.appendChild(h('div', { class: 'money' }, [h('span', { text: L.depositYou }), h('b', { text: money(f['Deposit to owner']) })]));
       if (f['Balance owner collects']) m.appendChild(h('div', { class: 'money' }, [h('span', { text: L.balanceYou }), h('b', { text: money(f['Balance owner collects']) })]));
       if (f['Commission to Vamos']) m.appendChild(h('div', { class: 'money' }, [h('span', { text: L.commission }), h('b', { text: money(f['Commission to Vamos']) })]));
@@ -199,11 +237,27 @@
     }
     if (m.childNodes.length) wrap.appendChild(m);
     var t = h('div', { class: 'card' });
-    [[L.includes, plain(f["What's included"])], [L.cancel, f['Cancellation policy']], [L.pay, f['Payment terms']], [L.note, f['Note to owner']]].forEach(function (kv) {
-      if (kv[1]) { t.appendChild(h('h2', { text: kv[0] })); t.appendChild(h('p', { class: 'pre', text: kv[1] })); }
+    [[L.includes, plain(f["What's included"])], [L.cancel, f['Cancellation policy']], [L.pay, payTerms(f)], [L.note, f['Note to owner']]].forEach(function (kv) {
+      if (kv[1]) { t.appendChild(h('h2', { text: kv[0] })); t.appendChild(h('p', { class: 'pre' + (kv[0] === L.pay ? ' vc-terms' : ''), text: kv[1] })); }
     });
     if (t.childNodes.length) wrap.appendChild(t);
     return wrap;
+  }
+  // What the owner gets now / owes later under the "Vamos keeps commission" choice.
+  function payNote(keep) {
+    var P = PT[lang], dep = payout.deposit, com = payout.commission;
+    if (!keep) return P.full(dep, com);
+    return com > dep ? P.keptOver(com - dep) : P.kept(dep - com);
+  }
+  // Payment terms as agreed: the stored text, or with "Vamos keeps commission" its first part rewritten (rest kept as is).
+  function payTerms(f) {
+    var txt = f['Payment terms'] || '';
+    var keep = f.Status === 'Agreed' ? !!f['Vamos keeps commission'] : keepNow;
+    if (!payout || !keep || !txt) return txt;
+    var P = PT[lang], dep = payout.deposit, com = payout.commission;
+    var bal = Number(f['Balance owner collects']) || Math.max(0, (Number(f['Trip price']) || 0) - dep);
+    var i = txt.indexOf(P.cut);
+    return P.terms(com, Math.max(0, dep - com), bal, Math.max(0, com - dep)) + (i >= 0 ? txt.slice(i) : '') + P.after;
   }
   function header(title) {
     root.innerHTML = '';
@@ -262,29 +316,45 @@
     root.appendChild(h('p', { class: 'intro', text: L.intro }));
     root.appendChild(details());
 
-    var box = h('div', { class: 'card' });
-    var cb = h('input', { type: 'checkbox', id: 'vc-ok' });
-    box.appendChild(h('label', { class: 'agree', for: 'vc-ok' }, [cb, h('span', { text: L.agreeText })]));
-    box.appendChild(h('label', { class: 'small', for: 'vc-name', text: L.name }));
-    var nm = h('input', { type: 'text', id: 'vc-name', autocomplete: 'name' });
-    box.appendChild(nm);
+    // Nov 13, 2026: one Confirmo tap (no typed name); owner-collects bookings get the deposit payout checkbox first.
+    var P = PT[lang], box = h('div', { class: 'card' }), cb = null, noteEl = null;
+    if (payout) {
+      cb = h('input', { type: 'checkbox', id: 'vc-keep' });
+      cb.checked = keepNow;
+      noteEl = h('p', { class: 'muted', style: 'font-size:15px;margin:0 0 12px' });
+      var sync = function () {
+        keepNow = cb.checked; noteEl.textContent = payNote(keepNow);
+        var tp = root.querySelector('.vc-terms'); if (tp) tp.textContent = payTerms(conf.fields);
+      };
+      cb.addEventListener('change', sync);
+      box.appendChild(h('label', { class: 'agree', for: 'vc-keep' }, [cb, h('span', { text: P.keep(Math.max(0, payout.deposit - payout.commission)) })]));
+      box.appendChild(noteEl);
+      noteEl.textContent = payNote(keepNow);
+    }
+    box.appendChild(h('p', { class: 'muted', style: 'font-size:14px;margin:0 0 10px', text: P.tap }));
     var err = h('div');
     box.appendChild(err);
+    var signer = String(f['Owner name'] || '').trim() || '-';
+    var failed = function () { btn.disabled = false; btn.textContent = P.go; err.appendChild(h('p', { class: 'msg err', text: L.error })); };
     var btn = h('button', { class: 'btn pri', type: 'button', onclick: function () {
       err.innerHTML = '';
-      if (!cb.checked || nm.value.trim().split(/\s+/).length < 2) { err.appendChild(h('p', { class: 'msg err', text: L.needAgree })); return; }
       btn.disabled = true; btn.textContent = L.saving;
-      post({ action: 'agree', t: TOKEN, name: nm.value.trim(), terms: TERMS, ua: navigator.userAgent }).then(function (r) {
+      var keep = !!(cb && cb.checked);
+      var first1 = payout ? fetch(RQ_API + '/owner/payout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ t: TOKEN, keep: keep }) })
+        .then(function (x) { return x.json(); }).then(function (j) { if (!j || !j.ok) throw new Error('payout'); }) : Promise.resolve();
+      first1.then(function () {
+        return post({ action: 'agree', t: TOKEN, name: signer, terms: TERMS + (payout ? (keep ? '|keep' : '|full') : ''), ua: navigator.userAgent });
+      }).then(function (r) {
         if (r.ok) {
-          conf.fields.Status = 'Agreed'; conf.fields['Signed by'] = nm.value.trim(); conf.fields['Responded at'] = new Date().toISOString();
+          conf.fields.Status = 'Agreed'; conf.fields['Signed by'] = signer; conf.fields['Responded at'] = new Date().toISOString(); conf.fields['Vamos keeps commission'] = keep;
           // Request to book: capture the held deposit right away (the Worker's 5-minute timer would catch it anyway).
           if (rq) fetch(RQ_API + '/owner/agreed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ t: TOKEN }), keepalive: true }).catch(function () {});
           return agreedScreen();
         }
         if (r.error === 'state') return mount();
-        btn.disabled = false; btn.textContent = L.confirm; err.appendChild(h('p', { class: 'msg err', text: L.error }));
-      }, function () { btn.disabled = false; btn.textContent = L.confirm; err.appendChild(h('p', { class: 'msg err', text: L.error })); });
-    } }, [L.confirm]);
+        failed();
+      }).catch(failed);
+    } }, [P.go]);
     box.appendChild(btn);
     root.appendChild(box);
     if (rq && rq.status === 'Waiting for owner') {
