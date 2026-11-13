@@ -227,7 +227,7 @@
       m.appendChild(h('div', { class: 'money' }, [h('span', { text: P.depVamos }), h('b', { text: money(dep) })]));
       m.appendChild(h('div', { class: 'money', style: 'font-weight:700' }, [h('span', { text: P.youCollect }), h('b', { text: money(bal) })]));
       m.appendChild(h('div', { class: 'money' }, [h('span', { text: L.commission }), h('b', { text: money(com) })]));
-      if (f.Status === 'Agreed') m.appendChild(h('p', { class: 'muted', style: 'margin-top:8px', text: (f['Vamos keeps commission'] ? P.chosenKeep + ' ' + payNote(true) : P.chosenFull) }));
+      if (f.Status === 'Agreed') m.appendChild(h('p', { class: 'muted', style: 'margin-top:8px', text: (keptChoice(f) ? P.chosenKeep + ' ' + payNote(true) : P.chosenFull) }));
     } else if (f['Balance owner collects'] || f['Commission to Vamos']) {
       if (f['Deposit to owner']) m.appendChild(h('div', { class: 'money' }, [h('span', { text: L.depositYou }), h('b', { text: money(f['Deposit to owner']) })]));
       if (f['Balance owner collects']) m.appendChild(h('div', { class: 'money' }, [h('span', { text: L.balanceYou }), h('b', { text: money(f['Balance owner collects']) })]));
@@ -243,6 +243,8 @@
     if (t.childNodes.length) wrap.appendChild(t);
     return wrap;
   }
+  // The choice the owner made (set on this page just now, else as saved: GET /owner returns it once answered).
+  function keptChoice(f) { return f['Vamos keeps commission'] !== undefined ? !!f['Vamos keeps commission'] : !!(payout && payout.keep); }
   // What the owner gets now / owes later under the "Vamos keeps commission" choice.
   function payNote(keep) {
     var P = PT[lang], dep = payout.deposit, com = payout.commission;
@@ -252,7 +254,7 @@
   // Payment terms as agreed: the stored text, or with "Vamos keeps commission" its first part rewritten (rest kept as is).
   function payTerms(f) {
     var txt = f['Payment terms'] || '';
-    var keep = f.Status === 'Agreed' ? !!f['Vamos keeps commission'] : keepNow;
+    var keep = f.Status === 'Agreed' ? keptChoice(f) : keepNow;
     if (!payout || !keep || !txt) return txt;
     var P = PT[lang], dep = payout.deposit, com = payout.commission;
     var bal = Number(f['Balance owner collects']) || Math.max(0, (Number(f['Trip price']) || 0) - dep);

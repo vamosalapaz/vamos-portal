@@ -49,7 +49,10 @@
        and any linked invoices. Good Medicine invoices already in Bókun show once.
    Nov 12, 2026: New booking / Edit → "Customer pays": Online (card, Mercado Pago, transfer) or Arranged directly (Venmo, cash…; the
         customer's page shows no payment buttons and no payment links are made; saved by the extras scenario, action "pays").
-        "Deposit already paid?" removed (record it with Mark paid after creating the booking). Mark paid adds Venmo, Zelle, PayPal. */
+        "Deposit already paid?" removed (record it with Mark paid after creating the booking). Mark paid adds Venmo, Zelle, PayPal.
+   Nov 13, 2026: owner-collects bookings follow the owner's deposit payout choice (Invoices → Vamos keeps commission, set when
+        the owner taps Confirmo): "Pass the deposit" asks for the deposit less the commission, and "Settle at the dock" only
+        asks for any commission left over (none when the deposit covered it). */
 (function () {
   'use strict';
 
@@ -954,7 +957,9 @@
     // 4–5. managed booking: pass the deposit on, settle at the dock
     if (ownerFlow) {
       var toOwner = n(f['Paid to owner']), owed = n(f['Owner deposit owed']), comGot = n(f['Commission received']);
-      var passed = depPaid && toOwner > 0 && owed <= 0;
+      // Nov 13, 2026: the owner may choose (on /confirmar) that Vamos keeps its commission from the deposit.
+      var keep = !!f['Vamos keeps commission'], kept = keep ? Math.min(dep, com) : 0, comDue = Math.max(0, com - kept);
+      var passed = depPaid && owed <= 0 && (toOwner > 0 || (keep && com >= dep));
       var trList = (d.transfers || []).map(function (t) { var x = t.fields; return shortDay(x['Paid on']) + ' · ' + (x.Type || '') + ' · ' + money(x.Amount) + (x.Method ? ' · ' + x.Method : ''); }).join('\n');
       var passBox = h('div');
       var oPhone = cf['Owner phone'], cLink = cf['Page token'] ? SITE + '/confirmar?k=' + cf['Page token'] : '';
@@ -962,14 +967,16 @@
         ? 'Hi ' + first(cf['Owner name']) + ', ' + first(f['Billed to']) + ' paid the deposit for booking ' + f['Invoice number'] + ' (' + (cf.Trip || f.Trip) + ', ' + fmtDate(f['Trip date'], 'English') + '). I\'m sending you ' + money(owed || dep) + '.' + (cLink ? ' Their name and WhatsApp are now on your confirmation: ' + cLink : '')
         : 'Hola ' + first(cf['Owner name']) + ', ' + first(f['Billed to']) + ' ya pagó el anticipo de la reservación ' + f['Invoice number'] + ' (' + (cf.Trip || f.Trip) + ', ' + fmtDate(f['Trip date'], 'Español') + '). Te envío ' + money(owed || dep) + '.' + (cLink ? ' Ya puedes ver su nombre y WhatsApp en tu confirmación: ' + cLink : '');
       steps.appendChild(step(passed ? 'done' : (depPaid && !cancelled ? 'now' : ''), passed ? 'Deposit passed to ' + ownerName : 'Pass the deposit to ' + ownerName,
-        !depPaid ? 'After the customer pays the deposit.' : passed ? '' : 'Send ' + ownerName + ' ' + money(owed) + ', then Mark sent.',
+        !depPaid ? (keep ? ownerName + ' chose: you keep your ' + money(kept) + ' commission from the deposit and send the rest. ' : '') + 'After the customer pays the deposit.'
+          : passed ? (keep ? 'You kept your ' + money(kept) + ' commission from the deposit (' + ownerName + '\'s choice).' : '')
+          : 'Send ' + ownerName + ' ' + money(owed) + (keep ? ' (deposit less your ' + money(kept) + ' commission, as ' + ownerName + ' chose)' : '') + ', then Mark sent.',
         cancelled || !depPaid || passed ? null : [
           oPhone ? h('button', { class: 'btn sec', type: 'button', onclick: function () { openWhatsApp(oPhone, oMsg); } }, ['WhatsApp ' + ownerName]) : null,
           h('button', { class: 'btn sec', type: 'button', onclick: function () { transferForm(inv, passBox, owed, 'Deposit'); } }, ['Mark sent'])], passBox));
-      var settled = !!f['Balance settled with owner'], comLeft = Math.max(0, com - comGot), done5 = settled && comLeft <= 0;
+      var settled = !!f['Balance settled with owner'], comLeft = Math.max(0, comDue - comGot), done5 = settled && comLeft <= 0;
       var setBox = h('div');
       steps.appendChild(step(done5 ? 'done' : (passed && !cancelled ? 'now' : ''), done5 ? 'Settled at the dock' : 'Settle at the dock',
-        'Customer pays ' + ownerName + ' ' + money(price - dep) + (settled ? ' ✓' : '') + '; ' + ownerName + ' pays you ' + money(com) + (comGot ? ' (received ' + money(comGot) + ')' : '') + '.' + (trList ? '\n' + trList : ''),
+        'Customer pays ' + ownerName + ' ' + money(price - dep) + (settled ? ' ✓' : '') + '; ' + (comDue > 0 ? ownerName + ' pays you ' + money(comDue) + (keep ? ' (the rest of your commission; you kept ' + money(kept) + ' from the deposit)' : '') + (comGot ? ' (received ' + money(comGot) + ')' : '') : 'no commission to collect: you kept it from the deposit') + '.' + (trList ? '\n' + trList : ''),
         cancelled || done5 || !depPaid ? null : [h('button', { class: 'btn sec', type: 'button', onclick: function () { settleForm(inv, setBox, settled, comLeft); } }, ['Settle'])], setBox));
     }
     root.appendChild(steps);
