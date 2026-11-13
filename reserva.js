@@ -20,7 +20,10 @@
    v53: Book Now (Nov 5, 2026): back from Stripe the page shows "confirming" until the booking is "Booked", a date taken during
         payment shows "Someone just booked that date", and a confirmed booking pushes one GA4-style "purchase" event (value = trip
         price, transaction_id = booking number, booking_source 'vamos') — the same event the Bókun widget sends, so the
-        existing GTM purchase tags (GA4 ecommerce, Google Ads booking, Meta Purchase) pick it up. */
+        existing GTM purchase tags (GA4 ecommerce, Google Ads booking, Meta Purchase) pick it up.
+   Nov 12, 2026: "Pay your balance" also offers Mercado Pago (vamos-requests /mp-balance makes the link on tap: card,
+        Mercado Pago balance, SPEI, and OXXO when the trip is at least 5 days away); an OXXO balance payment waiting to be
+        paid shows as pending there. */
 (function () {
   'use strict';
 
@@ -73,7 +76,8 @@
       m: { 'Card (Stripe)': 'Tarjeta', 'Mercado Pago': 'Mercado Pago', 'Bank transfer': 'Transferencia', Cash: 'Efectivo', Other: 'Otro' },
       depositL: 'Anticipo', balanceL: 'Saldo', paymentL: 'Pago',
       payBal: 'Paga tu saldo', payBalCard: 'Pagar saldo con tarjeta', payBalNote: 'También puedes pagar en efectivo a bordo.',
-      balReceipt: 'Hola, te envío el comprobante de la transferencia del saldo de la reservación ', confirming: 'Confirmando tu pago…', payErr: 'No pudimos abrir el pago con tarjeta. Intenta de nuevo o escríbenos por WhatsApp.'
+      balReceipt: 'Hola, te envío el comprobante de la transferencia del saldo de la reservación ', confirming: 'Confirmando tu pago…', payErr: 'No pudimos abrir el pago con tarjeta. Intenta de nuevo o escríbenos por WhatsApp.',
+      mpErr: 'No pudimos abrir Mercado Pago. Intenta de nuevo o escríbenos por WhatsApp.'
     },
     en: {
       booking: 'Booking', hi: 'Hi', ready: 'your trip is ready to book',
@@ -108,7 +112,8 @@
       m: { 'Card (Stripe)': 'Card', 'Mercado Pago': 'Mercado Pago', 'Bank transfer': 'Bank transfer', Cash: 'Cash', Other: 'Other' },
       depositL: 'Deposit', balanceL: 'Balance', paymentL: 'Payment',
       payBal: 'Pay your balance', payBalCard: 'Pay balance by card', payBalNote: 'You can also pay in cash on board.',
-      balReceipt: 'Hi, here is the transfer receipt for the balance on booking ', confirming: 'Confirming your payment…', payErr: "We couldn't open the card payment. Please try again or message us on WhatsApp."
+      balReceipt: 'Hi, here is the transfer receipt for the balance on booking ', confirming: 'Confirming your payment…', payErr: "We couldn't open the card payment. Please try again or message us on WhatsApp.",
+      mpErr: "We couldn't open Mercado Pago. Please try again or message us on WhatsApp."
     }
   };
   var L = T.es, lang = 'es', inv = null, bank = {}, root, top, foot, tries = 0, rcpt = null;
@@ -515,6 +520,18 @@
         .catch(function () { btn.disabled = false; btn.textContent = L.payBalCard + ' · ' + money(b); card.appendChild(h('p', { class: 'msg warn', style: 'margin:12px 0 0', text: L.payErr })); });
     } }, [L.payBalCard + ' · ' + money(b)]);
     card.appendChild(btn);
+    // Mercado Pago for the balance (Nov 12, 2026): the link is made on tap for the balance due right now.
+    if (x['Mercado Pago pending']) card.appendChild(h('p', { class: 'msg ok', style: 'margin:12px 0 0', text: L.mpPending }));
+    else if (MP_PENDING_BACK) card.appendChild(h('p', { class: 'msg ok', style: 'margin:12px 0 0', text: L.mpBack }));
+    var mpBtn = h('button', { class: 'btn mp', type: 'button', onclick: function () {
+      mpBtn.disabled = true; mpBtn.textContent = '…';
+      fetch(RQ_API + '/mp-balance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ t: TOKEN }) })
+        .then(function (r) { return r.json(); })
+        .then(function (j) { if (j && j.ok && j.url) location.href = j.url; else throw new Error('x'); })
+        .catch(function () { mpBtn.disabled = false; mpBtn.textContent = L.payMp; card.insertBefore(h('p', { class: 'msg warn', style: 'margin:12px 0 0', text: L.mpErr }), mpSub.nextSibling); });
+    } }, [L.payMp]);
+    var mpSub = h('p', { class: 'mp-sub', text: L.mpSub });
+    card.appendChild(mpBtn); card.appendChild(mpSub);
     if (bank.CLABE) {
       card.appendChild(h('p', { class: 'or', text: L.orTransfer }));
       [[L.bank, bank.Bank], [L.holder, bank['Account holder']], [L.clabe, bank.CLABE, true], [L.ref, num, true], [L.amount, money(b)]].forEach(function (r) {
