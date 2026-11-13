@@ -5,10 +5,10 @@
    Each Book tap is logged in Vamos Sales → Checkout Link Taps (POST /go beacon) and pushed to the dataLayer
    (offer_calendar_book). If the calendar can't load, the page keeps the normal "Book now" button.
    Nov 13 (later): no guests stepper (FareHarbor asks for the group size at checkout) and no "see all dates" link.
-   PREVIEW: shows only after visiting an offer page with ?cal=1 (remembered in this browser; ?cal=0 turns it off) until LIVE = true. */
+   LIVE since Nov 13, 2026. With LIVE = false it shows only after ?cal=1 (remembered in this browser; ?cal=0 turns it off). */
 (function () {
   'use strict';
-  var LIVE = false;
+  var LIVE = true; // Nov 13, 2026: on for everyone (Peter)
   var API = 'https://vamos-requests.solitary-wind-dfb8.workers.dev';
   var m = /^\/(?:es\/)?offerings\/([a-z0-9-]+)\/?$/.exec(location.pathname);
   if (!m || window.__vlpOfferCal) return;
