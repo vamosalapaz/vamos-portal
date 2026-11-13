@@ -5,6 +5,7 @@
    Each Book tap is logged in Vamos Sales → Checkout Link Taps (POST /go beacon) and pushed to the dataLayer
    (offer_calendar_book). If the calendar can't load, the page keeps the normal "Book now" button.
    Nov 13 (later): no guests stepper (FareHarbor asks for the group size at checkout) and no "see all dates" link.
+   If the current month has no open dates, the first visit jumps to the first month that has some.
    LIVE since Nov 13, 2026. With LIVE = false it shows only after ?cal=1 (remembered in this browser; ?cal=0 turns it off). */
 (function () {
   'use strict';
@@ -88,7 +89,7 @@
     // Group size is picked in FareHarbor checkout (it can't be passed in the link), so no guests step here (Peter, Nov 13).
     var guests = 1;
     var minMonth = today.slice(0, 7), maxMonth = addMonths(minMonth, 5), month = (want || today).slice(0, 7);
-    var cache = {}, cur = null, sel = want, info = null, shown = false;
+    var cache = {}, cur = null, sel = want, info = null, shown = false, auto = !want;
 
     var box = document.createElement('section');
     box.className = 'vlp-oc'; box.setAttribute('aria-label', T.title); box.hidden = true;
@@ -130,6 +131,9 @@
           for (var d = from; d <= to; d = addDays(d, 1)) if (slotsOn(d).length) { sel = d; break; }
           if (keep && !sel) sel = keep;
         }
+        // First visit, nothing open this month (gray whales before the season): jump ahead to the first month with space.
+        if (!sel && auto && month < maxMonth) { month = addMonths(month, 1); load(); return; }
+        auto = false;
         draw();
       }).catch(function () {
         if (!shown) { box.remove(); return; } // first load failed: the normal Book now button stays
