@@ -30,7 +30,7 @@
         link (the invoicing screen's expires after 7 days), the button asks vamos-requests /mp-pay to make one on tap.
    Nov 14, 2026: PARTNER PAGE. A booking sold by a broker (Invoices → Broker) shows the broker's page instead: branded, with the
         price and payments (their receipt), "En colaboración con <broker>" (tap to change; saved to Brokers → Display name via
-        vamos-requests POST /broker-name), an optional "Preparado para" customer name (PDF only) and editable departure time (both stay on
+        vamos-requests POST /broker-name), an optional "Preparado para" customer name (PDF only) and editable notes (start from Note to customer; departure time is locked) (both stay on
         the broker's phone, never sent to us), copy buttons for each trip detail, "Copiar todo para WhatsApp", an ES / EN switch,
         "Ocultar precios" and "Descargar PDF" (a print-only sheet built from what's on screen). The footer line "Hecho con Vamos a
         La Paz" links to /for-operators and is never in the PDF. */
@@ -709,13 +709,13 @@
   // ---------- partner page for brokers (Nov 14, 2026) ----------
   var PT = {
     es: { title: 'Reservación', partner: 'En colaboración con', forL: 'Preparado para', forPh: 'Nombre del cliente (opcional)', tapEdit: 'toca para editar',
-      trip: 'Viaje', date: 'Fecha', dep: 'Hora de salida', meet: 'Punto de encuentro', map: 'Mapa', dur: 'Duración', guests: 'Personas',
+      trip: 'Viaje', date: 'Fecha', dep: 'Hora de salida', meet: 'Punto de encuentro', map: 'Mapa', dur: 'Duración', guests: 'Personas', notePh: 'Agrega notas para tu cliente (opcional)',
       inc: 'Incluye', cancel: 'Política de cancelación', note: 'Notas', copyAll: 'Copiar todo para WhatsApp', copied: 'Copiado',
       hide: 'Ocultar precios', show: 'Mostrar precios', pdf: 'Descargar PDF', pdfHint: 'Si no se abre, abre esta página en Safari o Chrome.',
       prices: 'Precio y pagos', made: 'Hecho con Vamos a La Paz', makeYours: 'Herramientas para operadores',
       saved: 'Guardado', ppl: 'personas', cancelled: 'Esta reservación fue cancelada.' },
     en: { title: 'Booking', partner: 'In partnership with', forL: 'Prepared for', forPh: 'Customer name (optional)', tapEdit: 'tap to edit',
-      trip: 'Trip', date: 'Date', dep: 'Departure time', meet: 'Meeting point', map: 'Map', dur: 'Duration', guests: 'Guests',
+      trip: 'Trip', date: 'Date', dep: 'Departure time', meet: 'Meeting point', map: 'Map', dur: 'Duration', guests: 'Guests', notePh: 'Add notes for your customer (optional)',
       inc: "What's included", cancel: 'Cancellation policy', note: 'Notes', copyAll: 'Copy all for WhatsApp', copied: 'Copied',
       hide: 'Hide prices', show: 'Show prices', pdf: 'Download PDF', pdfHint: "If it doesn't open, open this page in Safari or Chrome.",
       prices: 'Price and payments', made: 'Made with Vamos a La Paz', makeYours: 'Tools for operators',
@@ -725,17 +725,17 @@
   function pState() {
     if (ps) return ps;
     var x = f();
-    ps = { lang: lang, hide: false, partner: clean(x['Broker display name']) || clean(x['Broker name']), forName: '', dep: x['Meeting time'] || '' };
+    ps = { lang: lang, hide: false, partner: clean(x['Broker display name']) || clean(x['Broker name']), forName: '', note: x['Note to customer'] || '' };
     return ps;
   }
   function pDetails() {
     var x = f(), P = PT[ps.lang];
     var dates = day(x['Trip date']) + (x['End date'] && x['End date'] > x['Trip date'] ? ' – ' + day(x['End date']) : '');
     return [
-      ['trip', P.trip, x.Trip || ''], ['date', P.date, dates], ['dep', P.dep, ps.dep], ['meet', P.meet, x['Meeting point'] || ''],
+      ['trip', P.trip, x.Trip || ''], ['date', P.date, dates], ['dep', P.dep, x['Meeting time'] || ''], ['meet', P.meet, x['Meeting point'] || ''],
       ['map', P.map, x['Meeting map link'] || ''], ['dur', P.dur, x.Duration || ''], ['guests', P.guests, x.Guests ? x.Guests + ' ' + P.ppl : ''],
-      ['inc', P.inc, x["What's included"] || ''], ['cancel', P.cancel, x['Cancellation policy'] || ''], ['note', P.note, x['Note to customer'] || '']
-    ].filter(function (r) { return String(r[2] || '').trim(); });
+      ['inc', P.inc, x["What's included"] || ''], ['cancel', P.cancel, x['Cancellation policy'] || ''], ['note', P.note, ps.note]
+    ].filter(function (r) { return r[0] === 'note' || String(r[2] || '').trim(); });
   }
   function pMessage() {
     var P = PT[ps.lang], d = {}; pDetails().forEach(function (r) { d[r[0]] = r[2]; });
@@ -747,7 +747,7 @@
     if (d.guests) out.push('👥 ' + d.guests);
     if (d.dur) out.push('⏱ ' + P.dur + ': ' + d.dur);
     if (d.inc) out.push('✅ ' + P.inc + ':\n' + d.inc);
-    if (d.note) out.push('📝 ' + d.note);
+    if (String(d.note || '').trim()) out.push('📝 ' + d.note.trim());
     if (d.cancel) out.push(P.cancel + ': ' + d.cancel);
     return out.join('\n\n');
   }
@@ -756,11 +756,14 @@
     (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(done, function () { prompt(label, text); });
   }
   // A tap-to-edit line. onSave runs when the field loses focus.
-  function pEdit(value, placeholder, onSave) {
-    var e = h('span', { class: 'p-edit', contenteditable: 'true', role: 'textbox', 'data-ph': placeholder, spellcheck: 'false' });
+  function pEdit(value, placeholder, onSave, multi) {
+    var e = h(multi ? 'div' : 'span', { class: 'p-edit' + (multi ? ' p-multi' : ''), contenteditable: 'true', role: 'textbox', 'data-ph': placeholder, spellcheck: 'false' });
     e.textContent = value || '';
-    e.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); e.blur(); } });
-    e.addEventListener('blur', function () { var v = clean(e.textContent).slice(0, 80); e.textContent = v; onSave(v); });
+    if (!multi) e.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); e.blur(); } });
+    e.addEventListener('blur', function () {
+      var v = multi ? String(e.innerText || '').replace(/\n{3,}/g, '\n\n').trim().slice(0, 1500) : clean(e.textContent).slice(0, 80);
+      e.textContent = v; onSave(v);
+    });
     return e;
   }
   function pCss() {
@@ -771,6 +774,7 @@
       '.vr .p-seg{display:flex;border:1px solid #c9c1b4;border-radius:12px;overflow:hidden;flex:1 1 45%}.vr .p-seg button{flex:1;border:0;border-radius:0;margin:0;padding:11px 0;background:#fff;color:' + INK + ';font:inherit;font-weight:600;cursor:pointer}',
       '.vr .p-seg button.on{background:' + INK + ';color:#fff}',
       '.vr .p-edit{display:inline-block;min-width:8em;border-bottom:1.5px dashed #9aa5ae;padding:2px 2px;outline:none;font-weight:700}.vr .p-edit:empty:before{content:attr(data-ph);color:#9aa5ae;font-weight:400}',
+      '.vr .p-multi{display:block;min-height:2.6em;white-space:pre-line;font-weight:400;border:1.5px dashed #c9c1b4;border-radius:10px;padding:8px;margin-top:4px}',
       '.vr .p-row{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px solid #f0ebe3}.vr .p-row:first-of-type{border-top:0}',
       '.vr .p-row .p-k{font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:#5b6772}.vr .p-row .p-v{white-space:pre-line;margin-top:2px}',
       '.vr .p-row > div{flex:1;min-width:0}.vr .p-hint{font-size:13px;color:#5b6772;margin:6px 0 0}',
@@ -814,11 +818,11 @@
     // trip details with copy buttons
     var det = h('div', { class: 'card' });
     pDetails().forEach(function (r) {
-      var val = r[0] === 'dep' ? pEdit(ps.dep, '—', function (v) { ps.dep = v; })
+      var val = r[0] === 'note' ? pEdit(ps.note, P.notePh, function (v) { ps.note = v; }, true)
         : r[0] === 'map' ? h('a', { class: 'map', href: r[2], target: '_blank', rel: 'noopener' }, [L.directions || P.map]) : h('div', { class: 'p-v', text: r[2] });
       var b = h('button', { class: 'cp', type: 'button' }, [L.copy]);
-      b.onclick = function () { pCopy(r[0] === 'dep' ? ps.dep : r[2], b, L.copy); };
-      det.appendChild(h('div', { class: 'p-row' }, [h('div', null, [h('div', { class: 'p-k', text: r[1] }), r[0] === 'dep' ? h('div', { class: 'p-v' }, [val]) : val]), b]));
+      b.onclick = function () { pCopy(r[0] === 'note' ? ps.note : r[2], b, L.copy); };
+      det.appendChild(h('div', { class: 'p-row' }, [h('div', null, [h('div', { class: 'p-k', text: r[1] + (r[0] === 'note' ? ' ✎' : '') }), val]), b]));
     });
     root.appendChild(det);
 
@@ -853,7 +857,7 @@
       ps.partner ? h('div', null, [h('h4', { text: P.partner }), h('p', { text: ps.partner })]) : null,
       ps.forName ? h('div', null, [h('h4', { text: P.forL }), h('p', { text: ps.forName })]) : null
     ]);
-    pDetails().forEach(function (r) { if (r[0] !== 'map') grid.appendChild(h('div', { style: r[0] === 'inc' || r[0] === 'cancel' || r[0] === 'note' ? 'grid-column:1/-1' : null }, [h('h4', { text: r[1] }), h('p', { text: r[0] === 'meet' && x['Meeting map link'] ? r[2] + '\n' + x['Meeting map link'] : r[2] })])); });
+    pDetails().forEach(function (r) { if (r[0] !== 'map' && String(r[2] || '').trim()) grid.appendChild(h('div', { style: r[0] === 'inc' || r[0] === 'cancel' || r[0] === 'note' ? 'grid-column:1/-1' : null }, [h('h4', { text: r[1] }), h('p', { text: r[0] === 'meet' && x['Meeting map link'] ? r[2] + '\n' + x['Meeting map link'] : r[2] })])); });
     s.appendChild(grid);
     if (!ps.hide) {
       var price = Number(x['Trip price']) || 0, got = Number(x['Amount paid']) || 0;
