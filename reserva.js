@@ -25,7 +25,9 @@
         Mercado Pago balance, SPEI, and OXXO when the trip is at least 5 days away); an OXXO balance payment waiting to be
         paid shows as pending there.
    Nov 12, 2026: bookings with Customer pays = "Arranged directly" (Venmo, cash… collected outside the system) show no payment
-        buttons or bank details: the deposit card says it's paid as agreed, and there is no "Pay your balance" section. */
+        buttons or bank details: the deposit card says it's paid as agreed, and there is no "Pay your balance" section.
+   Nov 13, 2026: the deposit / quick-payment card always offers Mercado Pago next to the card button. When there is no valid
+        link (the invoicing screen's expires after 7 days), the button asks vamos-requests /mp-pay to make one on tap. */
 (function () {
   'use strict';
 
@@ -648,8 +650,20 @@
     if (mpOk) {
       card.appendChild(h('a', { class: 'btn mp', href: mp }, [L.payMp]));
       card.appendChild(h('p', { class: 'mp-sub', text: L.mpSub }));
+    } else if (amount > 0) {
+      // Nov 13, 2026: no valid link (the invoicing screen's lasts 7 days): vamos-requests /mp-pay makes one on tap,
+      // so Mercado Pago is always offered next to the card, like in "Pay your balance".
+      var mpBtn = h('button', { class: 'btn mp', type: 'button', onclick: function () {
+        mpBtn.disabled = true; mpBtn.textContent = '…';
+        fetch(RQ_API + '/mp-pay', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ t: TOKEN }) })
+          .then(function (r) { return r.json(); })
+          .then(function (j) { if (j && j.ok && j.url) location.href = j.url; else throw new Error('x'); })
+          .catch(function () { mpBtn.disabled = false; mpBtn.textContent = L.payMp; card.insertBefore(h('p', { class: 'msg warn', style: 'margin:12px 0 0', text: L.mpErr }), mpSub.nextSibling); });
+      } }, [L.payMp]);
+      var mpSub = h('p', { class: 'mp-sub', text: L.mpSub });
+      card.appendChild(mpBtn); card.appendChild(mpSub);
     }
-    if (!linkOk && !mpOk) card.appendChild(h('p', { class: 'msg warn', text: L.linkPending }));
+    if (!linkOk) card.appendChild(h('p', { class: 'msg warn', text: L.linkPending }));
   }
 
   // Captain's contact: the server only includes it once the deposit is paid and the owner has confirmed.
