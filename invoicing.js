@@ -388,6 +388,11 @@
     mon.appendChild(h('div', { class: 'hint', text: 'Arranged directly: their page shows the booking and receipt but no card, Mercado Pago or transfer buttons. Record each payment with Mark paid (Venmo, Zelle, PayPal, cash…); the receipt goes out by itself.' }));
     form.appendChild(mon);
 
+    // Sold by broker (Nov 13, 2026). Net rate is the default deal (Peter: most common): Trip price = the net you receive and the
+    // broker resells at a price you don't know. Commission = Trip price is what the customer pays and the broker earns a cut.
+    // Some brokers use both, so the deal is chosen on every booking. The trip sheet defaults to Unbranded (white label).
+    form.appendChild(brokerCard(edit));
+
     // meeting + notes
     var meet = h('div', { class: 'card' });
     meet.appendChild(h('div', { class: 'row' }, [
@@ -876,6 +881,14 @@
       if (pays === was) return r;
       return post(HOOK_EXTRAS, { k: KEY, action: 'pays', id: ed ? ed.inv.id : r.id, pays: pays }).then(function () { return r; });
     }).then(function (r) {
+      // Broker (Nov 13, 2026): saved by the extras scenario (action broker); a new name creates the Brokers row.
+      var b = brokerValues(), was = ed ? ed.inv.fields : {};
+      var same = b.name === (was['Broker name'] || '') && (!b.name || (b.deal === (was['Broker deal'] || 'Net rate') && n(b.commission) === n(was['Broker commission'])
+        && b.branding === (was['Trip sheet branding'] || 'Unbranded') && b.message === !!was['Message customer']));
+      if (same) return r;
+      return post(HOOK_EXTRAS, { k: KEY, action: 'broker', id: ed ? ed.inv.id : r.id, brokerName: b.name, deal: b.deal, brokerCommission: b.commission,
+        branding: b.branding, messageCustomer: b.message }).then(function () { return r; });
+    }).then(function (r) {
       var id = ed ? ed.inv.id : r.id;
       history.replaceState(null, '', location.pathname + '?k=' + encodeURIComponent(KEY) + '&invoice=' + id);
       root.innerHTML = ''; root.appendChild(h('p', { class: 'sub', text: (ed ? 'Saved. ' : 'Created ' + r.number + '. ') + 'Loading…' }));
@@ -908,6 +921,7 @@
     root.appendChild(h('h1', { text: (f.Trip || '') + ', ' + fmtDate(f['Trip date'], 'English') + (f.Guests ? ', ' + f.Guests + ' guests' : '') }));
     if (cancelled) root.appendChild(h('p', { class: 'warn', style: 'margin:0 0 12px', text: 'Cancelled ' + when(f['Cancelled at']) + '.' }));
     var steps = h('div', { class: 'card' });
+    var bStep = brokerStep(inv, cancelled); if (bStep) steps.appendChild(bStep);
 
     // 1. owner sign-off
     var so = f['Owner sign-off'], agreed = conf && cf.Status === 'Agreed';
@@ -1051,6 +1065,79 @@
   }
 
   /* customer send: makes the card link first when it is missing or the deposit changed */
+  /* ---------- brokers (Nov 13, 2026) ---------- */
+  var NEW_BROKER = '+ New broker…', NO_BROKER = 'No broker (direct sale)';
+  function brokerList() { return (state.data && state.data.brokers || []).map(function (b) { return b.fields.Name; }).filter(Boolean); }
+  function brokerRec(name) { return (state.data && state.data.brokers || []).filter(function (b) { return b.fields.Name === name; })[0]; }
+  function brokerCard(edit) {
+    var e = edit ? edit.inv.fields : {}, cur = e['Broker name'] || '';
+    var names = brokerList(); if (cur && names.indexOf(cur) < 0) names.push(cur);
+    var c = h('div', { class: 'card' });
+    c.appendChild(h('label', { for: 'vi-broker', text: 'Sold by broker' }));
+    var s = sel('vi-broker', [NO_BROKER].concat(names, [NEW_BROKER]), cur || NO_BROKER);
+    s.onchange = brokerUi; c.appendChild(s);
+    c.appendChild(h('input', { id: 'vi-bnew', placeholder: 'Broker name', style: 'display:none;margin-top:8px' }));
+    var w = h('div', { id: 'vi-bwrap', style: 'display:none' });
+    w.appendChild(h('label', { for: 'vi-bdeal', text: 'Deal on this booking' }));
+    var d = sel('vi-bdeal', ['Net rate', 'Commission'], e['Broker deal'] || 'Net rate'); d.onchange = brokerUi; w.appendChild(d);
+    w.appendChild(h('div', { class: 'hint', id: 'vi-bdealhint' }));
+    w.appendChild(h('div', { id: 'vi-bcomwrap' }, [h('label', { for: 'vi-bcom', text: 'Broker commission (MXN)' }), h('input', { id: 'vi-bcom', type: 'number', inputmode: 'numeric', value: e['Broker commission'] || '' })]));
+    w.appendChild(h('label', { for: 'vi-bbrand', text: 'Trip sheet for their customer' }));
+    w.appendChild(sel('vi-bbrand', ['Unbranded', 'Branded'], e['Trip sheet branding'] || 'Unbranded'));
+    w.appendChild(h('div', { class: 'hint', text: 'Unbranded: no Vamos / Good Medicine name, logo or links (white label). Prices are never on the trip sheet.' }));
+    w.appendChild(h('label', { style: 'display:flex;gap:8px;align-items:center;margin-top:10px;font-weight:400' }, [
+      h('input', { id: 'vi-bmsg', type: 'checkbox', checked: e['Message customer'] ? 'checked' : null, style: 'width:auto' }),
+      'Send automatic WhatsApp messages (receipts, trip reminder) to the phone on this booking']));
+    w.appendChild(h('div', { class: 'hint', text: 'Leave off unless that phone is someone who should get them. With a broker the name and phone above can be the broker\'s or blank.' }));
+    c.appendChild(w);
+    setTimeout(brokerUi, 0);
+    return c;
+  }
+  function brokerUi() {
+    var s = $('#vi-broker'); if (!s) return;
+    var isNew = s.value === NEW_BROKER, on = s.value !== NO_BROKER;
+    $('#vi-bnew').style.display = isNew ? '' : 'none';
+    $('#vi-bwrap').style.display = on ? '' : 'none';
+    var com = $('#vi-bdeal').value === 'Commission';
+    $('#vi-bcomwrap').style.display = com ? '' : 'none';
+    $('#vi-bdealhint').textContent = com ? 'Trip price is what the customer pays; the broker earns the commission (you pay it, or they keep it from what they collect).'
+      : 'Trip price is the net you receive. The broker resells at their own price; no commission is owed.';
+    if (com && !$('#vi-bcom').value) {
+      var rec = brokerRec(s.value), pct = rec && n(rec.fields['Default commission %']) || 0.15, price = n($('#vi-price') && $('#vi-price').value);
+      if (price) $('#vi-bcom').value = Math.round(price * pct);
+    }
+  }
+  function brokerValues() {
+    var s = $('#vi-broker'); if (!s || s.value === NO_BROKER) return { name: '' };
+    var name = s.value === NEW_BROKER ? ($('#vi-bnew').value || '').trim() : s.value;
+    if (!name) return { name: '' };
+    var deal = $('#vi-bdeal').value === 'Commission' ? 'Commission' : 'Net rate';
+    return { name: name, deal: deal, commission: deal === 'Commission' ? n($('#vi-bcom').value) : 0,
+      branding: $('#vi-bbrand').value === 'Branded' ? 'Branded' : 'Unbranded', message: !!$('#vi-bmsg').checked };
+  }
+  function tripSheet(f) { return customerPage(f) + '&hoja=1'; }
+  // Tracker card for a broker booking: deal, commission to settle, and the trip sheet to forward.
+  function brokerStep(inv, cancelled) {
+    var f = inv.fields, name = f['Broker name']; if (!name) return null;
+    var com = f['Broker deal'] === 'Commission', amt = n(f['Broker commission']), st = f['Broker commission settled'] || '';
+    var sheet = tripSheet(f), es = f.Language !== 'English';
+    var msg = es ? 'Hola, aquí están los detalles del viaje para tu cliente (' + (f.Trip || '') + ', ' + fmtDate(f['Trip date'], 'Español') + '): ' + sheet
+      : 'Hi, here are the trip details for your customer (' + (f.Trip || '') + ', ' + fmtDate(f['Trip date'], 'English') + '): ' + sheet;
+    var small = (com ? 'Commission deal: ' + money(amt) + ' to ' + name + (st ? ' · ' + st : ' · not settled yet') + '.' : 'Net rate: the price here is your net; ' + name + ' sets the customer price.')
+      + '\nTrip sheet (' + (f['Trip sheet branding'] || 'Unbranded').toLowerCase() + ', no prices) to forward to their customer.'
+      + (f['Message customer'] ? '' : '\nNo automatic messages go to the phone on this booking.');
+    var btns = [h('button', { class: 'btn sec', type: 'button', onclick: function () { copy(msg); } }, ['Copy trip sheet message']),
+      h('a', { class: 'btn sec', href: sheet, target: '_blank', rel: 'noopener' }, ['Trip sheet'])];
+    if (com && !cancelled && !st) {
+      btns.push(h('button', { class: 'btn sec', type: 'button', onclick: function () { brokerSettle(inv, 'Paid to broker'); } }, ['Paid ' + name]));
+      btns.push(h('button', { class: 'btn sec', type: 'button', onclick: function () { brokerSettle(inv, 'Broker keeps it'); } }, [name + ' kept it']));
+    }
+    return step(com && !st && !cancelled ? 'now' : 'done', 'Sold by ' + name, small, btns);
+  }
+  function brokerSettle(inv, how) {
+    return post(HOOK_EXTRAS, { k: KEY, action: 'brokersettled', id: inv.id, settled: how }).then(function () { return reload(inv, 'Saved.'); }).catch(showFatal);
+  }
+
   function customerStep(inv, ready, depPaid, cancelled) {
     var f = inv.fields, who = first(f['Billed to']) || 'the customer', dep = n(f.Deposit);
     if (!ready) return step('', 'Send to ' + who, 'Unlocks when the owner confirms.');
