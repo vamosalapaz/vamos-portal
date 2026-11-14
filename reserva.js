@@ -30,7 +30,7 @@
         link (the invoicing screen's expires after 7 days), the button asks vamos-requests /mp-pay to make one on tap.
    Nov 14, 2026: PARTNER PAGE. A booking sold by a broker (Invoices → Broker) shows the broker's page instead: branded, with the
         price and payments (their receipt), "En colaboración con <broker>" (tap to change; saved to Brokers → Display name via
-        vamos-requests POST /broker-name), an optional "Preparado para" customer name and editable departure time (both stay on
+        vamos-requests POST /broker-name), an optional "Preparado para" customer name (PDF only) and editable departure time (both stay on
         the broker's phone, never sent to us), copy buttons for each trip detail, "Copiar todo para WhatsApp", an ES / EN switch,
         "Ocultar precios" and "Descargar PDF" (a print-only sheet built from what's on screen). The footer line "Hecho con Vamos a
         La Paz" links to /for-operators and is never in the PDF. */
@@ -712,14 +712,14 @@
       trip: 'Viaje', date: 'Fecha', dep: 'Hora de salida', meet: 'Punto de encuentro', map: 'Mapa', dur: 'Duración', guests: 'Personas',
       inc: 'Incluye', cancel: 'Política de cancelación', note: 'Notas', copyAll: 'Copiar todo para WhatsApp', copied: 'Copiado',
       hide: 'Ocultar precios', show: 'Mostrar precios', pdf: 'Descargar PDF', pdfHint: 'Si no se abre, abre esta página en Safari o Chrome.',
-      prices: 'Precio y pagos', made: 'Hecho con Vamos a La Paz', makeYours: 'Herramientas para operadores', hello: 'Hola', here: 'aquí están los detalles de tu viaje:',
-      arrive: 'Llega 15 minutos antes de la salida.', saved: 'Guardado', ppl: 'personas', cancelled: 'Esta reservación fue cancelada.' },
+      prices: 'Precio y pagos', made: 'Hecho con Vamos a La Paz', makeYours: 'Herramientas para operadores',
+      saved: 'Guardado', ppl: 'personas', cancelled: 'Esta reservación fue cancelada.' },
     en: { title: 'Booking', partner: 'In partnership with', forL: 'Prepared for', forPh: 'Customer name (optional)', tapEdit: 'tap to edit',
       trip: 'Trip', date: 'Date', dep: 'Departure time', meet: 'Meeting point', map: 'Map', dur: 'Duration', guests: 'Guests',
       inc: "What's included", cancel: 'Cancellation policy', note: 'Notes', copyAll: 'Copy all for WhatsApp', copied: 'Copied',
       hide: 'Hide prices', show: 'Show prices', pdf: 'Download PDF', pdfHint: "If it doesn't open, open this page in Safari or Chrome.",
-      prices: 'Price and payments', made: 'Made with Vamos a La Paz', makeYours: 'Tools for operators', hello: 'Hi', here: 'here are your trip details:',
-      arrive: 'Please arrive 15 minutes before departure.', saved: 'Saved', ppl: 'guests', cancelled: 'This booking was cancelled.' }
+      prices: 'Price and payments', made: 'Made with Vamos a La Paz', makeYours: 'Tools for operators',
+      saved: 'Saved', ppl: 'guests', cancelled: 'This booking was cancelled.' }
   };
   var ps = null; // partner page state: language, hidden prices, and the broker's own edits (kept on their phone)
   function pState() {
@@ -740,7 +740,6 @@
   function pMessage() {
     var P = PT[ps.lang], d = {}; pDetails().forEach(function (r) { d[r[0]] = r[2]; });
     var out = [];
-    if (ps.forName) out.push(P.hello + ' ' + ps.forName + ', ' + P.here);
     out.push('*' + (d.trip || '') + '*');
     if (d.date) out.push('📅 ' + d.date);
     if (d.dep) out.push('🕘 ' + P.dep + ': ' + d.dep);
@@ -749,7 +748,6 @@
     if (d.dur) out.push('⏱ ' + P.dur + ': ' + d.dur);
     if (d.inc) out.push('✅ ' + P.inc + ':\n' + d.inc);
     if (d.note) out.push('📝 ' + d.note);
-    out.push(P.arrive);
     if (d.cancel) out.push(P.cancel + ': ' + d.cancel);
     return out.join('\n\n');
   }
@@ -866,7 +864,6 @@
       t.appendChild(h('tr', { class: 'tot' }, [h('td', { text: L.balanceLeft }), h('td', { text: money(Math.max(0, price - got)) })]));
       s.appendChild(t);
     }
-    s.appendChild(h('div', { class: 'sh-fine' }, [h('p', { text: P.arrive })]));
     root.appendChild(s);
     var hint = root.querySelector('.p-pdfhint');
     try { window.print(); } catch (e) { if (!hint) root.appendChild(h('p', { class: 'p-hint p-pdfhint', text: P.pdfHint })); }
