@@ -47,6 +47,10 @@
        calendar, with an All / Vamos a La Paz / Good Medicine toggle (All by default). Tap a Good Medicine booking for
        contacts (WhatsApp, call, email), rate, guests, extras, notes, broker/channel, paid and balance, multi-day dates
        and any linked invoices. Good Medicine invoices already in Bókun show once.
+   Nov 15, 2026: owner-collects bookings default to CARD HOLD FIRST (New booking / Edit → Order): vamos-requests /admin/hold marks
+        the booking "Hold ready"; the customer holds the deposit on their card from their page, then the owner gets /confirmar with
+        a deadline and the deposit is charged on Confirmo (request-to-book engine). "Owner confirms first" keeps the old order.
+        Arranged-directly bookings may have a $0 deposit.
    Nov 12, 2026: New booking / Edit → "Customer pays": Online (card, Mercado Pago, transfer) or Arranged directly (Venmo, cash…; the
         customer's page shows no payment buttons and no payment links are made; saved by the extras scenario, action "pays").
         "Deposit already paid?" removed (record it with Mark paid after creating the booking). Mark paid adds Venmo, Zelle, PayPal.
@@ -386,6 +390,19 @@
     mon.appendChild(sel('vi-pays', ['Online (card, Mercado Pago, transfer)', 'Arranged directly (Venmo, cash…)'],
       edit && edit.inv.fields['Customer pays'] === 'Arranged directly' ? 'Arranged directly (Venmo, cash…)' : 'Online (card, Mercado Pago, transfer)'));
     mon.appendChild(h('div', { class: 'hint', text: 'Arranged directly: their page shows the booking and receipt but no card, Mercado Pago or transfer buttons. Record each payment with Mark paid (Venmo, Zelle, PayPal, cash…); the receipt goes out by itself.' }));
+    // Card hold first (Nov 15, 2026; Peter, Nov 13: the default for owner-collects bookings). The customer holds the deposit on
+    // their card (vamos-requests /hold, Stripe manual capture), then the owner gets the confirmation with a deadline and the
+    // deposit is captured when they tap Confirmo. Transfer and Mercado Pago can't be held: choose "Owner confirms first".
+    var rqSt = edit ? edit.inv.fields['Request status'] || '' : '';
+    var holdWrap = h('div', { id: 'vi-holdwrap' });
+    holdWrap.appendChild(h('label', { for: 'vi-hold', text: 'Order' }));
+    holdWrap.appendChild(sel('vi-hold', ['Card hold first, then the owner confirms', 'Owner confirms first (transfer, Mercado Pago)'],
+      !edit || rqSt === 'Hold ready' ? 'Card hold first, then the owner confirms' : 'Owner confirms first (transfer, Mercado Pago)'));
+    holdWrap.appendChild(h('div', { class: 'hint', text: 'Card hold: send the link to the customer now; they hold the deposit on their card (not charged), then the owner gets the confirmation automatically (6 hours to answer, 2 if the trip is tomorrow) and the deposit is charged when they confirm. Owner confirms first: the old order, and the customer can pay by card, Mercado Pago or transfer.' }));
+    if (rqSt && rqSt !== 'Hold ready') holdWrap.style.display = 'none';
+    mon.appendChild(holdWrap);
+    mon.querySelector('#vi-pays').addEventListener('change', function () { refresh(); });
+    mon.querySelector('#vi-hold').addEventListener('change', function () { refresh(); });
     form.appendChild(mon);
 
     // Sold by broker (Nov 13, 2026). Net rate is the default deal (Peter: most common): Trip price = the net you receive and the
@@ -608,10 +625,20 @@
     }
     $('#vi-split').textContent = split;
     var ed = !!state.edit;
-    $('#vi-go').textContent = !c ? (ed ? 'Save' : 'Create') : gm ? (ed ? 'Save' : 'Create invoice') : (ed ? 'Save · send to owner again' : 'Create · send to owner first');
+    var arranged = $('#vi-pays') && $('#vi-pays').value.indexOf('Arranged') === 0;
+    var holdOn = holdChosen();
+    if ($('#vi-holdwrap') && !(state.edit && state.edit.inv.fields['Request status'] && state.edit.inv.fields['Request status'] !== 'Hold ready')) $('#vi-holdwrap').style.display = gm || arranged ? 'none' : '';
+    $('#vi-go').textContent = !c ? (ed ? 'Save' : 'Create') : gm ? (ed ? 'Save' : 'Create invoice') : holdOn ? (ed ? 'Save' : 'Create · customer holds the deposit first') : (ed ? 'Save · send to owner again' : 'Create · send to owner first');
     $('#vi-skip').textContent = ed ? 'Save without owner sign-off' : 'Skip owner sign-off';
   }
 
+  // Card hold first chosen and possible (owner-collects booking paid online). Nov 15, 2026.
+  function holdChosen() {
+    var c = state.ctx;
+    if (!c || c.gm || c.custom) return false;
+    if ($('#vi-pays') && $('#vi-pays').value.indexOf('Arranged') === 0) return false;
+    return !!$('#vi-hold') && $('#vi-hold').value.indexOf('Card hold') === 0 && $('#vi-holdwrap').style.display !== 'none';
+  }
   function lookupPhone() {
     var ph = $('#vi-phone').value;
     if (digits(ph).length < 8 || state.inquiry || state.edit) return;
@@ -894,6 +921,13 @@
       return post(HOOK_EXTRAS, { k: KEY, action: 'broker', id: ed ? ed.inv.id : r.id, brokerName: b.name, deal: b.deal, brokerCommission: b.commission,
         messageCustomer: b.message, included: included }).then(function () { return r; });
     }).then(function (r) {
+      // Card hold first (Nov 15, 2026): vamos-requests marks the booking "Hold ready" (or back to owner-first). A refusal
+      // doesn't undo the save: the booking then simply follows the owner-first order and the reason shows on the tracker.
+      var id = ed ? ed.inv.id : r.id, was = ed ? ed.inv.fields['Request status'] || '' : '';
+      var want = holdChosen() && signoff === 'Required' && v.dep > 0;
+      if (want === (was === 'Hold ready') || (!want && was !== 'Hold ready')) return r;
+      return postJson('/admin/hold', { k: KEY, id: id, on: want }).then(function () { state.holdErr = ''; return r; }, function (e) { state.holdErr = e.message; return r; });
+    }).then(function (r) {
       var id = ed ? ed.inv.id : r.id;
       history.replaceState(null, '', location.pathname + '?k=' + encodeURIComponent(KEY) + '&invoice=' + id);
       root.innerHTML = ''; root.appendChild(h('p', { class: 'sub', text: (ed ? 'Saved. ' : 'Created ' + r.number + '. ') + 'Loading…' }));
@@ -930,7 +964,20 @@
 
     // 1. owner sign-off
     var so = f['Owner sign-off'], agreed = conf && cf.Status === 'Agreed';
-    if (so === 'Required') {
+    var rqs = f['Request status'] || ''; // Nov 15, 2026: card hold first (Hold ready → Waiting for owner → Accepted / Declined / Expired)
+    if (state.holdErr) { steps.appendChild(h('p', { class: 'warn', style: 'margin:0 0 10px', text: 'Card hold not set: ' + state.holdErr + ' This booking follows the owner-first order.' })); state.holdErr = ''; }
+    if (so === 'Required' && rqs === 'Hold ready') {
+      steps.appendChild(step('', 'Then ' + ownerName + ' confirms', 'Once the customer holds the ' + money(dep) + ' deposit on their card, ' + ownerName + ' gets the confirmation on WhatsApp automatically, with 6 hours to answer (2 if the trip is tomorrow). The deposit is charged when they tap Confirmo; if they decline or don\'t answer, the hold is released and the booking cancelled.',
+        cancelled ? null : [h('button', { class: 'btn sec', type: 'button', onclick: function (e) {
+          e.currentTarget.disabled = true;
+          postJson('/admin/hold', { k: KEY, id: inv.id, on: false }).then(function () { return reload(inv, 'Switched to owner confirms first.'); }).catch(function (er) { alert(er.message); reload(inv); });
+        } }, ['Owner confirms first instead'])]));
+    } else if (so === 'Required' && rqs && rqs !== 'Accepted' && rqs !== 'Booked') {
+      var rqTitle = rqs === 'Waiting for owner' ? 'Deposit held · waiting for ' + ownerName : rqs === 'Capture failed' ? ownerName + ' confirmed, but charging the deposit failed' : 'Request ' + rqs.toLowerCase();
+      var rqSmall = rqs === 'Waiting for owner' ? ownerName + ' has until ' + when(f['Request deadline']) + '. WhatsApp pings have Remind / Add 2 hours / Release links.' : rqs === 'Capture failed' ? 'Send the customer a normal payment link (Edit → Owner confirms first).' : 'The hold was released and the booking cancelled.';
+      var cLink = cf['Page token'] ? SITE + '/confirmar?k=' + cf['Page token'] : '';
+      steps.appendChild(step(rqs === 'Waiting for owner' ? 'now' : '', rqTitle, rqSmall, cLink ? [h('a', { class: 'btn sec', href: cLink, target: '_blank', rel: 'noopener' }, ['Owner page'])] : null));
+    } else if (so === 'Required') {
       var link = cf['Page token'] ? SITE + '/confirmar?k=' + cf['Page token'] : '';
       var oEs = cf.Language !== 'English';
       var msg = oEs
@@ -955,7 +1002,7 @@
     }
 
     // 2. send to the customer
-    var ready = so !== 'Required' || agreed;
+    var ready = so !== 'Required' || agreed || !!rqs;
     steps.appendChild(customerStep(inv, ready, depPaid, cancelled));
 
     // 3. deposit (and, when Vamos collects, the balance)
@@ -967,7 +1014,7 @@
     } else
     steps.appendChild(step(depPaid ? 'done' : (ready && !cancelled ? 'now' : ''), depPaid ? 'Deposit ' + money(dep) + ' paid' : 'Deposit ' + money(dep),
       (payList ? payList + '\n' : '') + (f['Mercado Pago pending'] && !depPaid ? 'Mercado Pago waiting: ' + f['Mercado Pago pending'] + '\n' : '')
-        + (depPaid ? '' : f['Customer pays'] === 'Arranged directly' ? 'Payment arranged directly: when it arrives, Mark paid (Venmo, cash…, amount in pesos). The receipt goes out by itself.' : 'Card and Mercado Pago payments appear here by themselves (tap Refresh). Transfer or cash: Mark paid.'),
+        + (depPaid ? '' : rqs === 'Hold ready' ? 'The customer holds it on their card from their page; it is charged when the owner confirms.' : rqs === 'Waiting for owner' ? 'Held on their card (not charged yet). Charged automatically when the owner confirms.' : f['Customer pays'] === 'Arranged directly' ? 'Payment arranged directly: when it arrives, Mark paid (Venmo, cash…, amount in pesos). The receipt goes out by itself.' : 'Card and Mercado Pago payments appear here by themselves (tap Refresh). Transfer or cash: Mark paid.'),
       cancelled || depPaid ? null : [h('button', { class: 'btn sec', type: 'button', onclick: function () { payForm(inv, depBox, Math.max(0, dep - got), 'Deposit'); } }, ['Mark paid'])], depBox));
     if (!ownerFlow) {
       var balBox = h('div'), full = price > 0 && got >= price;
@@ -1146,18 +1193,20 @@
     var page = customerPage(f);
     var linkOk = !!f['Stripe payment link'] && n(f['Payment link amount']) === dep;
     var direct = f['Customer pays'] === 'Arranged directly';
-    var needLink = !direct && !depPaid && !cancelled && dep > 0 && !linkOk;
+    var hold = !!f['Request status']; // Nov 15, 2026: card hold first: no payment links (the page has the hold button)
+    var needLink = !hold && !direct && !depPaid && !cancelled && dep > 0 && !linkOk;
     if (needLink && !state.linking && state.linkFailed !== inv.id) makeLink(inv);
     var mp = mpState(f, dep);
-    var needMp = !direct && !depPaid && !cancelled && dep > 0 && (!mp.ok && !mp.expired || state.forceMp === inv.id);
+    var needMp = !hold && !direct && !depPaid && !cancelled && dep > 0 && (!mp.ok && !mp.expired || state.forceMp === inv.id);
     if (needMp && !state.mpLinking && state.mpFailed !== inv.id) makeMpLink(inv);
     var sent = f['Sent at'];
     var title = sent ? 'Sent to ' + who : 'Send to ' + who;
     var small = sent ? 'Sent ' + when(sent) + (f['Sent via'] && f['Sent via'].length ? ' by ' + [].concat(f['Sent via']).join(', ') : '') + '.' : f.Kind === 'Quick payment' ? 'Their page has the amount, card payment and transfer details.' : 'Their page has the trip, card payment and transfer details.';
+    if (hold && !sent) small = 'Card hold first: their page has the trip and a "Hold the deposit on my card" button (card only, not charged until the owner confirms).';
     if (direct && !sent) small = 'Payment arranged directly: their page shows the booking (and the receipt once you Mark paid), with no payment buttons.';
     if (state.linking) small += ' Making the card payment link…';
     else if (state.linkFailed === inv.id) small += ' The card link could not be made; the page still shows transfer details. Tap Refresh to try again.';
-    if (!depPaid && !cancelled && !direct) {
+    if (!depPaid && !cancelled && !direct && !hold) {
       if (state.mpLinking) small += ' Making the Mercado Pago link…';
       else if (state.mpFailed === inv.id) small += ' The Mercado Pago link could not be made (' + (state.mpError || 'error') + '); card and transfer still work. Tap Refresh to try again.';
       else if (mp.expired) small += ' The Mercado Pago link expired ' + when(f['Mercado Pago link expires']) + '.';
@@ -1190,6 +1239,9 @@
     if (f['Customer pays'] === 'Arranged directly') return en
       ? 'Hi ' + first(f['Billed to']) + ', here is your booking ' + f['Invoice number'] + ': ' + f.Trip + ', ' + fmtDate(f['Trip date'], 'English') + (f.Guests ? ', ' + f.Guests + ' guests' : '') + '.\n\nTotal ' + mxn(f['Trip price']) + ' (IVA included), ' + (dep > 0 ? 'deposit ' + mxn(dep) + ', ' : '') + 'paid as we agreed. Your booking page (it shows your receipt once we get your payment):\n' + page + '\n\nAny questions, just message me!'
       : 'Hola ' + first(f['Billed to']) + ', aquí está tu reservación ' + f['Invoice number'] + ': ' + f.Trip + ', ' + fmtDate(f['Trip date'], 'Español') + (f.Guests ? ', ' + f.Guests + ' personas' : '') + '.\n\nPrecio total ' + mxn(f['Trip price']) + ' (IVA incluido), ' + (dep > 0 ? 'anticipo de ' + mxn(dep) + ', como lo acordamos' : 'pago como lo acordamos') + '. Tu página de reservación (ahí verás tu recibo cuando recibamos tu pago):\n' + page + '\n\nCualquier duda, me escribes.';
+    if (f['Request status'] === 'Hold ready') return en
+      ? 'Hi ' + first(f['Billed to']) + ', here is your booking ' + f['Invoice number'] + ': ' + f.Trip + ', ' + fmtDate(f['Trip date'], 'English') + (f.Guests ? ', ' + f.Guests + ' guests' : '') + '.\n\nTotal ' + mxn(f['Trip price']) + ' (IVA included). To hold your date, hold the ' + mxn(f.Deposit) + ' deposit on your card here. Nothing is charged until the captain confirms, and if they can\'t, the hold is released:\n' + page + '\n\nAny questions, just message me!'
+      : 'Hola ' + first(f['Billed to']) + ', aquí está tu reservación ' + f['Invoice number'] + ': ' + f.Trip + ', ' + fmtDate(f['Trip date'], 'Español') + (f.Guests ? ', ' + f.Guests + ' personas' : '') + '.\n\nPrecio total ' + mxn(f['Trip price']) + ' (IVA incluido). Para apartar tu fecha, retén el anticipo de ' + mxn(f.Deposit) + ' en tu tarjeta aquí. No se cobra nada hasta que el capitán confirme, y si no puede, se libera la retención:\n' + page + '\n\nCualquier duda, me escribes.';
     return en
       ? 'Hi ' + first(f['Billed to']) + ', here is your booking ' + f['Invoice number'] + ': ' + f.Trip + ', ' + fmtDate(f['Trip date'], 'English') + (f.Guests ? ', ' + f.Guests + ' guests' : '') + '.\n\nTotal ' + mxn(f['Trip price']) + ' (IVA included). To secure your spot, pay the ' + mxn(dep) + ' deposit by card, Mercado Pago or bank transfer here:\n' + page + '\n\nAny questions, just message me!'
       : 'Hola ' + first(f['Billed to']) + ', aquí está tu reservación ' + f['Invoice number'] + ': ' + f.Trip + ', ' + fmtDate(f['Trip date'], 'Español') + (f.Guests ? ', ' + f.Guests + ' personas' : '') + '.\n\nPrecio total ' + mxn(f['Trip price']) + ' (IVA incluido). Para asegurar tu lugar, paga el anticipo de ' + mxn(dep) + ' con tarjeta, Mercado Pago o transferencia aquí:\n' + page + '\n\n¡Cualquier duda, me escribes!';

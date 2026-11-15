@@ -14,6 +14,8 @@
    v48: new master logo (new L photo).
    v50: Vamos a La Paz has its own WhatsApp (+52 612 290 3605) since Oct 19, 2026; Good Medicine payments keep
         Good Medicine's WhatsApp (+52 612 219 4779). The "Questions?" and receipt buttons use waNum().
+   Nov 15, 2026: "Hold ready" bookings (made on the invoicing screen, card hold first) show the normal page with
+        "Hold the deposit on my card" (vamos-requests POST /hold); no $0 deposit line on arranged-directly bookings.
    v51: request to book (Oct 30, 2026): bookings made with "Request to book" show a waiting view while the owner
         decides (deposit held, deadline, Cancel my request) and a clear message if it was declined, expired or
         cancelled. State comes from the vamos-requests Worker (/status, /cancel). Accepted requests show the normal page.
@@ -88,6 +90,8 @@
       payBal: 'Paga tu saldo', payBalCard: 'Pagar saldo con tarjeta', payBalNote: 'También puedes pagar en efectivo a bordo.',
       balReceipt: 'Hola, te envío el comprobante de la transferencia del saldo de la reservación ', confirming: 'Confirmando tu pago…', payErr: 'No pudimos abrir el pago con tarjeta. Intenta de nuevo o escríbenos por WhatsApp.',
       mpErr: 'No pudimos abrir Mercado Pago. Intenta de nuevo o escríbenos por WhatsApp.',
+      holdT: 'Aparta tu fecha', holdBtn: 'Retener el anticipo en mi tarjeta', holdP: 'Retenemos el anticipo en tu tarjeta, no se cobra. Le pedimos al capitán que confirme y solo se cobra cuando confirme. Si no puede, liberamos la retención y no pagas nada.',
+      holdAlt: 'Prefieres pagar por transferencia o Mercado Pago? Escríbenos y lo cambiamos.', holdAltMsg: 'Hola, prefiero pagar el anticipo por transferencia o Mercado Pago. Reservación ', holdErr: 'No pudimos abrir el pago con tarjeta. Intenta de nuevo o escríbenos por WhatsApp.',
       directT: 'Anticipo', directT0: 'Pago', directNote: 'Se paga como lo acordamos. Tu recibo aparecerá en esta página cuando lo recibamos.'
     },
     en: {
@@ -125,6 +129,8 @@
       payBal: 'Pay your balance', payBalCard: 'Pay balance by card', payBalNote: 'You can also pay in cash on board.',
       balReceipt: 'Hi, here is the transfer receipt for the balance on booking ', confirming: 'Confirming your payment…', payErr: "We couldn't open the card payment. Please try again or message us on WhatsApp.",
       mpErr: "We couldn't open Mercado Pago. Please try again or message us on WhatsApp.",
+      holdT: 'Hold your date', holdBtn: 'Hold the deposit on my card', holdP: "We hold the deposit on your card; nothing is charged yet. We ask the captain to confirm, and you're only charged once they do. If they can't, we release the hold and you pay nothing.",
+      holdAlt: 'Prefer to pay by bank transfer or Mercado Pago? Message us and we will switch it.', holdAltMsg: 'Hi, I would rather pay the deposit by bank transfer or Mercado Pago. Booking ', holdErr: "We couldn't open the card payment. Please try again or message us on WhatsApp.",
       directT: 'Deposit', directT0: 'Payment', directNote: 'Paid as we agreed. Your receipt will show on this page once we receive it.'
     }
   };
@@ -283,10 +289,11 @@
   function render() {
     var x = f(), st = x.Status;
     if (isQuick()) return renderQuick();
-    if (x['Broker name'] && !(rq && rq.status && rq.status !== 'Accepted' && rq.status !== 'Booked')) return renderPartner();
+    if (x['Broker name'] && !(rq && rq.status && rq.status !== 'Accepted' && rq.status !== 'Booked' && rq.status !== 'Hold ready')) return renderPartner();
     // Book Now: back from Stripe while we check the calendar and take the deposit, show the normal "confirming" view.
     var bnPending = rq && rq.bookNow && rq.status === 'Awaiting card' && JUST_PAID;
-    if (rq && rq.status !== 'Accepted' && rq.status !== 'Capture failed' && rq.status !== 'Booked' && !bnPending) return renderRequest();
+    // Nov 15, 2026: "Hold ready" = booking made on the invoicing screen, card hold first: the normal page with a hold button.
+    if (rq && rq.status !== 'Accepted' && rq.status !== 'Capture failed' && rq.status !== 'Booked' && rq.status !== 'Hold ready' && !bnPending) return renderRequest();
     root.innerHTML = '';
     root.appendChild(h('p', { class: 'eyebrow', text: eyebrowName() + ' · ' + L.booking + ' ' + (x['Invoice number'] || '') }));
     if (st === 'Cancelled') {
@@ -629,6 +636,22 @@
     if (direct()) {
       card.appendChild(h('h2', { text: dep > 0 ? L.directT + ' · ' + money(dep) : L.directT0 })); // Nov 15, 2026: no "Anticipo · $0" when there's no deposit
       card.appendChild(h('p', { class: 'muted', text: L.directNote }));
+      return card;
+    }
+    if (rq && rq.status === 'Hold ready') {
+      // Nov 15, 2026: card hold first (vamos-requests POST /hold → Stripe Checkout, manual capture). Charged when the captain confirms.
+      card.appendChild(h('h2', { text: L.holdT + ' · ' + money(dep) }));
+      card.appendChild(h('p', { class: 'muted', text: L.holdP }));
+      var hb = h('button', { class: 'btn pri', type: 'button', onclick: function () {
+        hb.disabled = true; hb.textContent = '…';
+        fetch(RQ_API + '/hold', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ t: TOKEN }) })
+          .then(function (r) { return r.json(); })
+          .then(function (j) { if (j && j.ok && j.url) location.href = j.url; else if (j && j.requestStatus) location.reload(); else throw new Error('x'); })
+          .catch(function () { hb.disabled = false; hb.textContent = L.holdBtn + ' · ' + money(dep); card.insertBefore(h('p', { class: 'msg warn', style: 'margin:12px 0 0', text: L.holdErr }), hb.nextSibling); });
+      } }, [L.holdBtn + ' · ' + money(dep)]);
+      card.appendChild(hb);
+      card.appendChild(h('p', { class: 'muted', style: 'font-size:14px;margin-top:10px', text: L.holdAlt }));
+      card.appendChild(h('a', { class: 'btn wa', href: wa(waNum(), L.holdAltMsg + num) }, [L.questions]));
       return card;
     }
     card.appendChild(h('h2', { text: L.payTitle + ' · ' + money(dep) }));
