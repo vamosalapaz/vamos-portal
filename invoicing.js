@@ -823,7 +823,9 @@
     if (!c) missing.push('the experience');
     if (!v.date) missing.push('the date');
     if (!v.price) missing.push('the trip price');
-    if (!v.dep) missing.push('the deposit');
+    // Nov 15, 2026: arranged-directly bookings may have no deposit (e.g. a broker pays everything on the day): blank or 0 = $0.
+    var arranged = $('#vi-pays') && $('#vi-pays').value.indexOf('Arranged') === 0;
+    if (!v.dep && !arranged) missing.push('the deposit');
     if (!v.mp && !c.custom) missing.push('the meeting point');
     if (missing.length) { err.appendChild(h('p', { class: 'err', text: 'Add ' + missing.join(', ') + '.' })); return; }
     if (v.end && v.date && v.end < v.date) { err.appendChild(h('p', { class: 'err', text: 'The last day is before the trip date.' })); return; }
@@ -959,14 +961,19 @@
     // 3. deposit (and, when Vamos collects, the balance)
     var payList = (d.payments || []).map(function (p) { var x = p.fields; return shortDay(x['Received on']) + ' · ' + (x.Method || '') + ' · ' + money(x.Amount); }).join('\n');
     var depBox = h('div');
+    if (!(dep > 0) && f['Customer pays'] === 'Arranged directly') {
+      // Nov 15, 2026: no deposit on this booking (arranged directly, e.g. a broker paying everything on the day).
+      steps.appendChild(step('done', 'No deposit', 'Paid as arranged' + (ownerFlow ? '.' : ': record it on the day under Balance (Mark paid).') + (payList ? '\n' + payList : '')));
+    } else
     steps.appendChild(step(depPaid ? 'done' : (ready && !cancelled ? 'now' : ''), depPaid ? 'Deposit ' + money(dep) + ' paid' : 'Deposit ' + money(dep),
       (payList ? payList + '\n' : '') + (f['Mercado Pago pending'] && !depPaid ? 'Mercado Pago waiting: ' + f['Mercado Pago pending'] + '\n' : '')
         + (depPaid ? '' : f['Customer pays'] === 'Arranged directly' ? 'Payment arranged directly: when it arrives, Mark paid (Venmo, cash…, amount in pesos). The receipt goes out by itself.' : 'Card and Mercado Pago payments appear here by themselves (tap Refresh). Transfer or cash: Mark paid.'),
       cancelled || depPaid ? null : [h('button', { class: 'btn sec', type: 'button', onclick: function () { payForm(inv, depBox, Math.max(0, dep - got), 'Deposit'); } }, ['Mark paid'])], depBox));
     if (!ownerFlow) {
       var balBox = h('div'), full = price > 0 && got >= price;
-      steps.appendChild(step(full ? 'done' : (depPaid && !cancelled ? 'now' : ''), full ? 'Balance paid' : 'Balance ' + money(Math.max(0, price - got)) + ' on the day', '',
-        cancelled || full || !depPaid ? null : [h('button', { class: 'btn sec', type: 'button', onclick: function () { payForm(inv, balBox, Math.max(0, price - got), 'Balance'); } }, ['Mark paid'])], balBox));
+      var balOpen = depPaid || (!(dep > 0) && f['Customer pays'] === 'Arranged directly'); // Nov 15, 2026: $0 deposit → balance step open from the start
+      steps.appendChild(step(full ? 'done' : (balOpen && !cancelled ? 'now' : ''), full ? 'Balance paid' : 'Balance ' + money(Math.max(0, price - got)) + ' on the day', '',
+        cancelled || full || !balOpen ? null : [h('button', { class: 'btn sec', type: 'button', onclick: function () { payForm(inv, balBox, Math.max(0, price - got), 'Balance'); } }, ['Mark paid'])], balBox));
     }
 
     if (got > 0 && !cancelled) steps.appendChild(receiptStep(inv));
@@ -1181,8 +1188,8 @@
       ? 'Hi ' + first(f['Billed to']) + ', here is the link to pay for ' + f.Trip + ' (' + mxn(dep) + ')' + (f['Extra for booking'] ? ', booking ' + f['Extra for booking'] : '') + '. You can pay by card, Mercado Pago or bank transfer:\n' + page + '\n\nThank you!'
       : 'Hola ' + first(f['Billed to']) + ', aquí está el enlace para pagar ' + f.Trip + ' (' + mxn(dep) + ')' + (f['Extra for booking'] ? ', reservación ' + f['Extra for booking'] : '') + '. Puedes pagar con tarjeta, Mercado Pago o transferencia:\n' + page + '\n\n¡Gracias!';
     if (f['Customer pays'] === 'Arranged directly') return en
-      ? 'Hi ' + first(f['Billed to']) + ', here is your booking ' + f['Invoice number'] + ': ' + f.Trip + ', ' + fmtDate(f['Trip date'], 'English') + (f.Guests ? ', ' + f.Guests + ' guests' : '') + '.\n\nTotal ' + mxn(f['Trip price']) + ' (IVA included), deposit ' + mxn(dep) + ', paid as we agreed. Your booking page (it shows your receipt once we get your payment):\n' + page + '\n\nAny questions, just message me!'
-      : 'Hola ' + first(f['Billed to']) + ', aquí está tu reservación ' + f['Invoice number'] + ': ' + f.Trip + ', ' + fmtDate(f['Trip date'], 'Español') + (f.Guests ? ', ' + f.Guests + ' personas' : '') + '.\n\nPrecio total ' + mxn(f['Trip price']) + ' (IVA incluido), anticipo de ' + mxn(dep) + ', como lo acordamos. Tu página de reservación (ahí verás tu recibo cuando recibamos tu pago):\n' + page + '\n\nCualquier duda, me escribes.';
+      ? 'Hi ' + first(f['Billed to']) + ', here is your booking ' + f['Invoice number'] + ': ' + f.Trip + ', ' + fmtDate(f['Trip date'], 'English') + (f.Guests ? ', ' + f.Guests + ' guests' : '') + '.\n\nTotal ' + mxn(f['Trip price']) + ' (IVA included), ' + (dep > 0 ? 'deposit ' + mxn(dep) + ', ' : '') + 'paid as we agreed. Your booking page (it shows your receipt once we get your payment):\n' + page + '\n\nAny questions, just message me!'
+      : 'Hola ' + first(f['Billed to']) + ', aquí está tu reservación ' + f['Invoice number'] + ': ' + f.Trip + ', ' + fmtDate(f['Trip date'], 'Español') + (f.Guests ? ', ' + f.Guests + ' personas' : '') + '.\n\nPrecio total ' + mxn(f['Trip price']) + ' (IVA incluido), ' + (dep > 0 ? 'anticipo de ' + mxn(dep) + ', como lo acordamos' : 'pago como lo acordamos') + '. Tu página de reservación (ahí verás tu recibo cuando recibamos tu pago):\n' + page + '\n\nCualquier duda, me escribes.';
     return en
       ? 'Hi ' + first(f['Billed to']) + ', here is your booking ' + f['Invoice number'] + ': ' + f.Trip + ', ' + fmtDate(f['Trip date'], 'English') + (f.Guests ? ', ' + f.Guests + ' guests' : '') + '.\n\nTotal ' + mxn(f['Trip price']) + ' (IVA included). To secure your spot, pay the ' + mxn(dep) + ' deposit by card, Mercado Pago or bank transfer here:\n' + page + '\n\nAny questions, just message me!'
       : 'Hola ' + first(f['Billed to']) + ', aquí está tu reservación ' + f['Invoice number'] + ': ' + f.Trip + ', ' + fmtDate(f['Trip date'], 'Español') + (f.Guests ? ', ' + f.Guests + ' personas' : '') + '.\n\nPrecio total ' + mxn(f['Trip price']) + ' (IVA incluido). Para asegurar tu lugar, paga el anticipo de ' + mxn(dep) + ' con tarjeta, Mercado Pago o transferencia aquí:\n' + page + '\n\n¡Cualquier duda, me escribes!';

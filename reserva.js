@@ -88,7 +88,7 @@
       payBal: 'Paga tu saldo', payBalCard: 'Pagar saldo con tarjeta', payBalNote: 'También puedes pagar en efectivo a bordo.',
       balReceipt: 'Hola, te envío el comprobante de la transferencia del saldo de la reservación ', confirming: 'Confirmando tu pago…', payErr: 'No pudimos abrir el pago con tarjeta. Intenta de nuevo o escríbenos por WhatsApp.',
       mpErr: 'No pudimos abrir Mercado Pago. Intenta de nuevo o escríbenos por WhatsApp.',
-      directT: 'Anticipo', directNote: 'Se paga como lo acordamos. Tu recibo aparecerá en esta página cuando lo recibamos.'
+      directT: 'Anticipo', directT0: 'Pago', directNote: 'Se paga como lo acordamos. Tu recibo aparecerá en esta página cuando lo recibamos.'
     },
     en: {
       booking: 'Booking', hi: 'Hi', ready: 'your trip is ready to book',
@@ -125,7 +125,7 @@
       payBal: 'Pay your balance', payBalCard: 'Pay balance by card', payBalNote: 'You can also pay in cash on board.',
       balReceipt: 'Hi, here is the transfer receipt for the balance on booking ', confirming: 'Confirming your payment…', payErr: "We couldn't open the card payment. Please try again or message us on WhatsApp.",
       mpErr: "We couldn't open Mercado Pago. Please try again or message us on WhatsApp.",
-      directT: 'Deposit', directNote: 'Paid as we agreed. Your receipt will show on this page once we receive it.'
+      directT: 'Deposit', directT0: 'Payment', directNote: 'Paid as we agreed. Your receipt will show on this page once we receive it.'
     }
   };
   var L = T.es, lang = 'es', inv = null, bank = {}, root, top, foot, tries = 0, rcpt = null;
@@ -614,7 +614,7 @@
     var m = h('div', { class: 'card money-card' });
     m.appendChild(h('div', { class: 'money total' }, [h('span', { text: L.total }), h('b', { text: money(price) })]));
     m.appendChild(h('p', { class: 'iva', text: L.iva }));
-    m.appendChild(h('div', { class: 'money' }, [h('span', { text: L.deposit }), h('b', { text: money(dep) })]));
+    if (dep > 0) m.appendChild(h('div', { class: 'money' }, [h('span', { text: L.deposit }), h('b', { text: money(dep) })])); // Nov 15, 2026: no $0 deposit line
     if (owner) m.appendChild(h('div', { class: 'money' }, [h('span', { text: L.balanceOwner }), h('b', { text: money(price - dep) })]));
     else {
       if (got > 0) m.appendChild(h('div', { class: 'money' }, [h('span', { text: L.paid }), h('b', { text: money(got) })]));
@@ -627,7 +627,7 @@
     var x = f(), dep = Number(x.Deposit) || 0, num = x['Invoice number'] || '';
     var card = h('div', { class: 'card pay-card' });
     if (direct()) {
-      card.appendChild(h('h2', { text: L.directT + ' · ' + money(dep) }));
+      card.appendChild(h('h2', { text: dep > 0 ? L.directT + ' · ' + money(dep) : L.directT0 })); // Nov 15, 2026: no "Anticipo · $0" when there's no deposit
       card.appendChild(h('p', { class: 'muted', text: L.directNote }));
       return card;
     }
